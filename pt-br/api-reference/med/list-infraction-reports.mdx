@@ -1,0 +1,245 @@
+---
+title: "Listar notificações de infração"
+description: "Consulte a lista de notificações de infração dentro do escopo de autorização para localizar notificações e tarefas associadas."
+api: "POST /v3/infractions/list"
+keywords: ["/v3/infractions/list"]
+---
+
+## Funcionamento e tratamento
+
+Consulte as notificações de infração e suas tarefas associadas às transações recebidas pela conta-alvo autorizada. Os resultados correspondem à titularidade, ao ISPB e ao número da conta recebedora. Notificações de outras contas do mesmo caso MED são excluídas. Os resultados são ordenados pela data e hora de criação, dos mais recentes para os mais antigos. <Badge color="blue" size="sm">Complementado · api-21-F01</Badge>
+
+## Permissões e titularidade da conta
+
+Use credenciais `ACCOUNT` para a conta vinculada a elas, ou credenciais `USER` com `X-ISPB` e `X-Account-Number`. O `USER` deve ser titular da conta-alvo e de sua hierarquia de contas. Com credenciais `ACCOUNT`, omita os dois headers da conta-alvo ou informe ambos com os valores da conta vinculada. Credenciais `PLATFORM` não são aceitas. Credenciais `USER` também podem consultar uma conta encerrada elegível dentro do mesmo escopo de titularidade. <Badge color="blue" size="sm">Complementado · api-21-F02</Badge> As requisições devem seguir as orientações de [Ambientes e credenciais](/pt-br/environments-and-credentials).
+
+## Parâmetros da requisição
+
+<ParamField body="page" type="integer">
+**Obrigatório:** Não (não obrigatório nesta camada). Número da página, começando em 1. O padrão é 1 quando o campo é omitido ou recebe 0 ou um valor negativo. <Badge color="blue" size="sm">Complementado · api-21-F03</Badge>
+</ParamField>
+
+<ParamField body="page_size" type="integer">
+**Obrigatório:** Não (não obrigatório nesta camada). Itens por página. O padrão é 20 quando o campo é omitido ou recebe 0 ou um valor negativo. A consulta é limitada a 100 itens por página. Use valores de 1 a 100: um valor positivo maior ainda é informado em `data.page.page_size`, embora a consulta use 100, e `total_pages` é calculado com base no valor informado na resposta. <Badge color="blue" size="sm">Complementado · api-21-F04</Badge>
+</ParamField>
+
+<ParamField body="status" type="integer">
+**Obrigatório:** Não (não obrigatório nesta camada). Filtro pelo status da tarefa de notificação de infração. Omita este campo para incluir todos os status; informar `0` filtra por `UNSPECIFIED`. Valores: `0 UNSPECIFIED`; `1 RECEIVED`; `2 BLOCKING_PENDING`; `3 BLOCKED`; `4 ANALYSIS_PENDING`; `5 CLOSED_AGREED`; `6 CLOSED_DISAGREED`; `7 CANCELLED`; `8 FAILED` <Badge color="blue" size="sm">Complementado · api-21-F05</Badge>
+</ParamField>
+
+<ParamField body="start_time" type="integer">
+**Obrigatório:** Não (não obrigatório nesta camada). Limite inferior inclusivo para a data e hora de criação da tarefa de notificação de infração, em timestamp Unix UTC em milissegundos. Se o campo for omitido ou receber 0 ou um valor negativo, esse limite inferior não será aplicado. <Badge color="blue" size="sm">Complementado · api-21-F06</Badge>
+</ParamField>
+
+<ParamField body="end_time" type="integer">
+**Obrigatório:** Não (não obrigatório nesta camada). Limite superior inclusivo para a data e hora de criação da tarefa de notificação de infração, em timestamp Unix UTC em milissegundos. Se o campo for omitido ou receber 0 ou um valor negativo, esse limite superior não será aplicado. Se os dois limites forem positivos e `start_time` for maior que `end_time`, a consulta não retornará registros correspondentes. <Badge color="blue" size="sm">Complementado · api-21-F07</Badge>
+</ParamField>
+
+<ParamField body="case_id" type="string">
+**Obrigatório:** Não (não obrigatório nesta camada). ID do caso MED
+</ParamField>
+
+<ParamField body="infraction_report_id" type="string">
+**Obrigatório:** Não (não obrigatório nesta camada). ID da notificação no provedor
+</ParamField>
+
+<ParamField body="connected_transaction_id" type="string">
+**Obrigatório:** Não (não obrigatório nesta camada). ID da transação associada
+</ParamField>
+
+## Exemplo de requisição cURL
+
+O exemplo usa credenciais de nível ACCOUNT. Preencha os parâmetros reais e gere a assinatura com base no body.json final.
+
+## Campos da resposta
+
+Os caminhos dos campos partem da raiz da resposta. `[]` indica um elemento de array. Os valores monetários usam strings decimais. Os enums são interpretados conforme cada campo. A estrutura abaixo representa os dados de uma resposta de sucesso. Um valor nulo ou 0, por si só, não indica a conclusão da operação.
+
+<ResponseField name="code" type="integer">
+Código de resultado de negócio; 200 indica sucesso. Os erros de negócio são retornados neste campo, que não equivale ao código de status HTTP.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Descrição do resultado de negócio; em caso de falha, analise esta descrição junto com o campo code para identificar a causa.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Objeto de dados da resposta de sucesso; pode ser null em respostas de erro.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Horário da resposta, em timestamp Unix UTC em milissegundos.
+</ResponseField>
+
+<ResponseField name="data.items" type="array">
+Lista de resultados da consulta.
+</ResponseField>
+
+<ResponseField name="data.items[].infraction_id" type="string">
+ID da tarefa de notificação de infração; use este valor para consultar os detalhes da notificação de infração. É diferente de `infraction_report_id`, que identifica a notificação no provedor. <Badge color="orange" size="sm">Corrigido · api-21-F10</Badge>
+</ResponseField>
+
+<ResponseField name="data.items[].connected_transaction_id" type="string">
+ID da transação associada.
+</ResponseField>
+
+<ResponseField name="data.items[].account" type="string">
+Número da conta recebedora associada à notificação de infração. <Badge color="orange" size="sm">Corrigido · api-21-F08</Badge>
+</ResponseField>
+
+<ResponseField name="data.items[].status" type="integer">
+Status de negócio atual, interpretado conforme os valores de enum listados neste campo. Enum: 0 MED_INFRACTION_TASK_STATUS_UNSPECIFIED; 1 MED_INFRACTION_TASK_STATUS_RECEIVED; 2 MED_INFRACTION_TASK_STATUS_BLOCKING_PENDING; 3 MED_INFRACTION_TASK_STATUS_BLOCKED; 4 MED_INFRACTION_TASK_STATUS_ANALYSIS_PENDING; 5 MED_INFRACTION_TASK_STATUS_CLOSED_AGREED; 6 MED_INFRACTION_TASK_STATUS_CLOSED_DISAGREED; 7 MED_INFRACTION_TASK_STATUS_CANCELLED; 8 MED_INFRACTION_TASK_STATUS_FAILED.
+</ResponseField>
+
+<ResponseField name="data.items[].status_display" type="string">
+Texto de exibição do status de negócio.
+</ResponseField>
+
+<ResponseField name="data.items[].amount" type="string">
+Valor solicitado na notificação de infração, como string decimal. Não corresponde necessariamente ao valor da transação original nem ao valor efetivamente bloqueado ou devolvido. <Badge color="orange" size="sm">Corrigido · api-21-F09</Badge>
+</ResponseField>
+
+<ResponseField name="data.items[].created_time" type="integer">
+Data e hora de criação, em timestamp Unix UTC em milissegundos. Pode ser 0 se a criação não ocorreu ou se a data e hora não foram informadas.
+</ResponseField>
+
+<ResponseField name="data.items[].updated_time" type="integer">
+Data e hora da última atualização, em timestamp Unix UTC em milissegundos. Pode ser 0 se não houve atualização ou se a data e hora não foram informadas.
+</ResponseField>
+
+<ResponseField name="data.items[].case_id" type="string">
+ID do caso MED.
+</ResponseField>
+
+<ResponseField name="data.items[].infraction_report_id" type="string">
+Identificador de negócio da notificação de infração.
+</ResponseField>
+
+<ResponseField name="data.page" type="object">
+Informações de paginação.
+</ResponseField>
+
+<ResponseField name="data.page.page" type="integer">
+Informações de paginação.
+</ResponseField>
+
+<ResponseField name="data.page.total" type="integer">
+Número total de registros.
+</ResponseField>
+
+<ResponseField name="data.page.page_size" type="integer">
+Número de registros por página.
+</ResponseField>
+
+<ResponseField name="data.page.total_pages" type="integer">
+Número total de páginas.
+</ResponseField>
+
+## Respostas
+
+Consulte os exemplos de resposta pelo `code` de negócio no JSON. Verifique o status HTTP e o code de negócio separadamente. Uma resposta HTTP 200 também pode retornar um erro de negócio. Um JSON malformado ou um tipo de campo JSON incompatível pode retornar HTTP 400 com uma mensagem de erro em texto simples. Verifique o status HTTP e o `Content-Type` da resposta antes de interpretar a resposta JSON de negócio. <Badge color="blue" size="sm">Complementado · api-21-F16</Badge>
+
+| `code` | Significado | Ação recomendada |
+| --- | --- | --- |
+| `200` | Requisição bem-sucedida | Leia data e avalie o resultado do processamento conforme o status de negócio deste endpoint. |
+| `400` | Falha na requisição ou validação | Problema nos parâmetros. Verifique e corrija os parâmetros da requisição. |
+| `500` | Erro do sistema | Registre a resposta e confirme primeiro o resultado de negócio. |
+
+Os exemplos ilustram a estrutura da resposta. Os valores de message e do status de negócio devem ser obtidos da resposta efetiva. Para outros erros de parâmetros, permissões e serviço, consulte [Catálogo de erros](/pt-br/api-reference/error-catalog). Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados. <Badge color="orange" size="sm">Corrigido · api-21-F14</Badge>
+
+<Tip>
+Para testar este endpoint, envie o exemplo de requisição para a Base URL do Sandbox `https://ebanking-openapi-sandbox.pagsmile.com.br` com sua AK/SK de Sandbox. Assine cada requisição conforme descrito em [Ambientes e credenciais](/pt-br/environments-and-credentials#assinatura-de-requisições-à-api).
+</Tip>
+
+
+<Accordion title="Correções em relação ao documento original (12)" icon="clipboard-check">
+Esta página foi conferida com o código-fonte da Pagsmile Open API em 2026-11-10. Cada alteração abaixo está marcada na página com um selo que mostra o seu ID.
+
+| ID | Alteração | Local | Texto do documento original | Texto atualizado |
+| --- | --- | --- | --- | --- |
+| api-21-F01 | Complementado (ausente no original) | Behavior and handling | Consulte a lista de notificações de infração dentro do escopo de autorização para localizar notificações e tarefas associadas. | Consulte as notificações de infração e suas tarefas associadas às transações recebidas pela conta-alvo autorizada. Os resultados correspondem à titularidade, ao ISPB e ao número da conta recebedora. Notificações de outras contas do mesmo caso MED são excluídas. Os resultados são ordenados pela data e hora de criação, dos mais recentes para os mais antigos. |
+| api-21-F02 | Complementado (ausente no original) | Permissions and account ownership | ACCOUNT, ou USER com o header da conta-alvo. | Use credenciais ACCOUNT para a conta vinculada a elas, ou credenciais USER com `X-ISPB` e `X-Account-Number`. O USER deve ser titular da conta-alvo e de sua hierarquia de contas. Com credenciais ACCOUNT, omita os dois headers da conta-alvo ou informe ambos com os valores da conta vinculada. Credenciais PLATFORM não são aceitas. Credenciais USER também podem consultar uma conta encerrada elegível dentro do mesmo escopo de titularidade. |
+| api-21-F03 | Complementado (ausente no original) | Request parameters | Condições de paginação/número da página, diferenciados pelo tipo | Número da página, começando em 1. O padrão é 1 quando o campo é omitido ou recebe 0 ou um valor negativo. |
+| api-21-F04 | Complementado (ausente no original) | Request parameters | Itens por página | Itens por página. O padrão é 20 quando o campo é omitido ou recebe 0 ou um valor negativo. A consulta é limitada a 100 itens por página. Use valores de 1 a 100: um valor positivo maior ainda é informado em `data.page.page_size`, embora a consulta use 100, e `total_pages` é calculado com base no valor informado na resposta. |
+| api-21-F05 | Complementado (ausente no original) | Request parameters | Status do recurso, interpretado conforme o enum do objeto. Valores: 0 UNSPECIFIED; 1 RECEIVED; 2 BLOCKING_PENDING; 3 BLOCKED; 4 ANALYSIS_PENDING; 5 CLOSED_AGREED; 6 CLOSED_DISAGREED; 7 CANCELLED; 8 FAILED | Filtro pelo status da tarefa de notificação de infração. Omita este campo para incluir todos os status; informar 0 filtra por UNSPECIFIED. Valores: 0 UNSPECIFIED; 1 RECEIVED; 2 BLOCKING_PENDING; 3 BLOCKED; 4 ANALYSIS_PENDING; 5 CLOSED_AGREED; 6 CLOSED_DISAGREED; 7 CANCELLED; 8 FAILED |
+| api-21-F06 | Complementado (ausente no original) | Request parameters | Data e hora de início do filtro | Limite inferior inclusivo para a data e hora de criação da tarefa de notificação de infração, em timestamp Unix UTC em milissegundos. Se o campo for omitido ou receber 0 ou um valor negativo, esse limite inferior não será aplicado. |
+| api-21-F07 | Complementado (ausente no original) | Request parameters | Data e hora de fim do filtro | Limite superior inclusivo para a data e hora de criação da tarefa de notificação de infração, em timestamp Unix UTC em milissegundos. Se o campo for omitido ou receber 0 ou um valor negativo, esse limite superior não será aplicado. Se os dois limites forem positivos e `start_time` for maior que `end_time`, a consulta não retornará registros correspondentes. |
+| api-21-F08 | Corrigido (não correspondia ao código) | Response fields | Dados da conta bancária. | Número da conta recebedora associada à notificação de infração. |
+| api-21-F09 | Corrigido (não correspondia ao código) | Response fields | Valor da transação, como string decimal. | Valor solicitado na notificação de infração, como string decimal. Não corresponde necessariamente ao valor da transação original nem ao valor efetivamente bloqueado ou devolvido. |
+| api-21-F10 | Corrigido (não correspondia ao código) | Response fields | ID da notificação de infração; usado para consultar os detalhes da notificação de infração. | ID da tarefa de notificação de infração; use este valor para consultar os detalhes da notificação de infração. É diferente de `infraction_report_id`, que identifica a notificação no provedor. |
+| api-21-F14 | Corrigido (não correspondia ao código) | Responses / Request succeeded example | "page": \{ "page": 0, "page_size": 0, "total": 0, "total_pages": 0 \} | "page": \{ "page": 1, "page_size": 20, "total": 1, "total_pages": 1 \}, "error": null, "result": null |
+| api-21-F16 | Complementado (ausente no original) | Responses | Uma resposta HTTP 200 também pode retornar um erro de negócio. | Uma resposta HTTP 200 também pode retornar um erro de negócio. Um JSON malformado ou um tipo de campo JSON incompatível pode retornar HTTP 400 com uma mensagem de erro em texto simples. Verifique o status HTTP e o Content-Type da resposta antes de interpretar a resposta JSON de negócio. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "page": 1,
+  "page_size": 20
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/infractions/list' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${ACCOUNT_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Requisição bem-sucedida
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "items": [
+      {
+        "infraction_id": "infraction_01a0c7f5-8617-58c0-5566-e3c4a839c37b",
+        "connected_transaction_id": "TX20260922062827438N0003C211C4AE",
+        "account": "55641152",
+        "status": 5,
+        "status_display": "INFRACTION_REPORT_STATUS_CLOSED",
+        "amount": "203.00000000",
+        "created_time": 1790061157075,
+        "updated_time": 1790061378233,
+        "case_id": "med_case_1790061113863921625",
+        "infraction_report_id": "01a0c7f5-8617-58c0-5566-e3c4a839c37b"
+      }
+    ],
+    "page": {
+      "page": 1,
+      "page_size": 20,
+      "total": 1,
+      "total_pages": 1
+    },
+    "error": null,
+    "result": null
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Falha na requisição ou validação
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 Erro do sistema
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

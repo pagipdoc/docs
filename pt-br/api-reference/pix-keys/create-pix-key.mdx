@@ -1,0 +1,158 @@
+---
+title: "Criar chave Pix"
+description: "Crie uma chave Pix para a conta-alvo, como identificador para recebimentos via Pix. A chave aleatória (EVP) é gerada pelo servidor."
+api: "POST /v3/pix_keys/create"
+keywords: ["/v3/pix_keys/create"]
+---
+
+## Funcionamento e tratamento
+
+Crie uma chave Pix para a conta-alvo, como identificador para recebimentos via Pix. A criação da chave é recusada se a conta estiver encerrada ou se houver uma operação de encerramento da conta em andamento. <Badge color="blue" size="sm">Complementado · api-25-F07</Badge> A chave aleatória (EVP) é gerada pelo servidor. Para os demais tipos, informe o valor da chave de acordo com o tipo.
+
+Os tipos aceitos são CPF, CNPJ, EMAIL, PHONE e EVP. Consulte os valores a informar na tabela de parâmetros. Após a criação, salve a chave retornada e consulte a conta bancária para conferir as chaves válidas. A criação de um valor que já esteja `ACTIVE` falha, inclusive quando ele pertence à mesma conta. Um valor existente que não esteja ativo pode passar pelo fluxo de recriação, sujeito às verificações de registro. Este endpoint não possui uma chave de idempotência informada pelo cliente. Repetir uma requisição `EVP` sem o valor da chave solicita uma nova chave aleatória; portanto, consulte a conta antes de tentar novamente uma requisição cujo resultado seja desconhecido. <Badge color="blue" size="sm">Complementado · api-25-F06</Badge>
+
+## Permissões e titularidade da conta
+
+Use credenciais `ACCOUNT` para a conta vinculada a essas credenciais ou credenciais `USER` com os headers `X-ISPB` e `X-Account-Number` de uma conta pertencente a esse `USER`. Com credenciais `ACCOUNT`, os headers da conta são opcionais; se informados, ambos devem corresponder à conta vinculada. Credenciais `PLATFORM` não podem chamar este endpoint. <Badge color="orange" size="sm">Corrigido · api-25-F01</Badge> As requisições devem seguir as orientações de [Ambientes e credenciais](/pt-br/environments-and-credentials).
+
+## Parâmetros da requisição
+
+<ParamField body="pix_key_type" type="integer" required>
+Tipo de chave Pix. Valores: 1 CPF; 2 CNPJ; 3 EMAIL; 4 PHONE; 5 EVP
+</ParamField>
+
+<ParamField body="pix_key_value" type="string">
+**Obrigatório:** Obrigatório sob condição. Obrigatório para tipos diferentes de `EVP`. `CPF` deve conter exatamente 11 dígitos. `CNPJ` deve conter exatamente 14 caracteres: 12 letras maiúsculas/dígitos seguidos de 2 dígitos, sem pontuação nem espaços internos; os espaços em branco no início e no fim são removidos e os valores que correspondem ao formato são convertidos para maiúsculas. `EMAIL` deve corresponder a `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]\{2,\}$`; confirme o comprimento máximo aceito antes de enviar endereços excepcionalmente longos. `PHONE` deve corresponder a `^\+55[1-9][0-9]9[0-9]\{8\}$`, incluindo o código de país `+55`. Para `EVP`, omita o campo ou envie uma string vazia para gerar uma chave; `GENERATE_EVP` também solicita a geração. Se um valor `EVP` for informado, ele deve ser um UUID de 36 caracteres em letras minúsculas que corresponda a `^[a-f0-9]\{8\}-[a-f0-9]\{4\}-[a-f0-9]\{4\}-[a-f0-9]\{4\}-[a-f0-9]\{12\}$` <Badge color="blue" size="sm">Complementado · api-25-F02</Badge>
+</ParamField>
+
+## Exemplo de requisição cURL
+
+O exemplo usa credenciais de nível ACCOUNT. Preencha os parâmetros reais e gere a assinatura com base no body.json final.
+
+## Campos da resposta
+
+Os caminhos dos campos partem da raiz da resposta. `[]` indica um elemento de array. Os valores monetários usam strings decimais. Os enums são interpretados conforme cada campo. A estrutura abaixo representa os dados de uma resposta de sucesso. Um valor nulo ou 0, por si só, não indica a conclusão da operação.
+
+<ResponseField name="code" type="integer">
+Código de resultado de negócio; 200 indica sucesso. Os erros de negócio são retornados neste campo, que não equivale ao código de status HTTP.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Descrição do resultado de negócio; em caso de falha, analise esta descrição junto com o campo code para identificar a causa.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Objeto de dados da resposta de sucesso; pode ser null em respostas de erro.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Horário da resposta, em timestamp Unix UTC em milissegundos.
+</ResponseField>
+
+<ResponseField name="data.pix_key" type="string">
+Valor da chave Pix.
+</ResponseField>
+
+<ResponseField name="data.pix_key_type" type="integer">
+Tipo de chave Pix. Enum: 0 PIX_KEY_TYPE_UNSPECIFIED; 1 PIX_KEY_TYPE_CPF; 2 PIX_KEY_TYPE_CNPJ; 3 PIX_KEY_TYPE_EMAIL; 4 PIX_KEY_TYPE_PHONE; 5 PIX_KEY_TYPE_EVP.
+</ResponseField>
+
+<ResponseField name="data.status" type="integer">
+Status atual da chave Pix. Enum: `0` `PIX_KEY_STATUS_UNSPECIFIED`; `1` `PIX_KEY_STATUS_ACTIVE`; `2` `PIX_KEY_STATUS_INACTIVE`; `3` `PIX_KEY_STATUS_BLOCKED`; `4` `PIX_KEY_STATUS_DELETED`. A criação pode retornar `ACTIVE` (`1`), `INACTIVE` (`2`) ou `BLOCKED` (`3`). `BLOCKED` inclui chaves que aguardam validação de identidade ou registro, portanto não significa necessariamente um bloqueio por fraude. Considere utilizável apenas uma chave `ACTIVE` e consulte a conta bancária se o status retornado não for `ACTIVE`. <Badge color="blue" size="sm">Complementado · api-25-F05</Badge>
+</ResponseField>
+
+<ResponseField name="data.created_at" type="integer">
+Data e hora de criação, em timestamp Unix UTC em milissegundos. Uma resposta de sucesso contém um timestamp diferente de zero; se o timestamp de criação não estiver disponível, será retornado o timestamp atual do servidor. <Badge color="orange" size="sm">Corrigido · api-25-F03</Badge>
+</ResponseField>
+
+## Respostas
+
+Consulte os exemplos de resposta pelo `code` de negócio no JSON. Verifique o status HTTP e o code de negócio separadamente. Uma resposta HTTP 200 também pode retornar um erro de negócio. <Badge color="orange" size="sm">Corrigido · api-25-F04</Badge>
+
+| `code` | Significado | Ação recomendada |
+| --- | --- | --- |
+| `200` | Requisição bem-sucedida | Leia data e avalie o resultado do processamento conforme o status de negócio deste endpoint. |
+| `400` | Falha na requisição ou validação | Problema nos parâmetros. Verifique e corrija os parâmetros da requisição. |
+| `500` | Erro do sistema | Registre a resposta e confirme primeiro o resultado de negócio. |
+
+Os exemplos ilustram respostas JSON de negócio. Um JSON malformado ou uma falha na leitura do corpo da requisição pode retornar HTTP `400` com uma mensagem de erro em texto simples. Verifique o status HTTP e o `Content-Type` antes de interpretar a resposta como JSON. <Badge color="blue" size="sm">Complementado · api-25-F08</Badge> Os valores de message e do status de negócio devem ser obtidos da resposta efetiva. Para outros erros de parâmetros, permissões e serviço, consulte [Catálogo de erros](/pt-br/api-reference/error-catalog). Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados.
+
+## Exemplo de acesso ao Sandbox
+
+Considere a resposta real como referência para os dados da transação ou do recurso, o status do processamento e as informações de erro.
+
+`X-Client-ID` usa a AK informada. O timestamp, o nonce, o hash do corpo da requisição e a assinatura são gerados automaticamente. A SK é usada apenas para assinar localmente, não é enviada na requisição nem armazenada. A visualização não envia a requisição; o botão de acesso envia uma requisição real. Se o resultado for desconhecido, consulte antes de tentar novamente. Não há novas tentativas automáticas. O acesso pelo navegador deve atender aos requisitos de CORS, IP e credenciais do Sandbox.
+
+<Tip>
+Para testar este endpoint, envie o exemplo de requisição para a Base URL do Sandbox `https://ebanking-openapi-sandbox.pagsmile.com.br` com sua AK/SK de Sandbox. Assine cada requisição conforme descrito em [Ambientes e credenciais](/pt-br/environments-and-credentials#assinatura-de-requisições-à-api).
+</Tip>
+
+
+<Accordion title="Correções em relação ao documento original (8)" icon="clipboard-check">
+Esta página foi conferida com o código-fonte da Pagsmile Open API em 2026-11-10. Cada alteração abaixo está marcada na página com um selo que mostra o seu ID.
+
+| ID | Alteração | Local | Texto do documento original | Texto atualizado |
+| --- | --- | --- | --- | --- |
+| api-25-F01 | Corrigido (não correspondia ao código) | Permissions and account ownership | ACCOUNT com o header da conta-alvo. | Use credenciais ACCOUNT para a conta vinculada a essas credenciais ou credenciais USER com os headers `X-ISPB` e `X-Account-Number` de uma conta pertencente a esse USER. Com credenciais ACCOUNT, os headers da conta são opcionais; se informados, ambos devem corresponder à conta vinculada. Credenciais PLATFORM não podem chamar este endpoint. |
+| api-25-F02 | Complementado (ausente no original) | Request parameters / pix_key_value description cell | Obrigatório para tipos diferentes de EVP; a chave EVP pode ser gerada pelo serviço downstream. Para o tipo CNPJ, remova primeiro os espaços em branco no início e no fim. Se o valor seguir o formato de 12 letras/dígitos seguidos de 2 dígitos, converta-o para maiúsculas, sem pontuação nem espaços internos | Obrigatório para tipos diferentes de EVP. CPF deve conter exatamente 11 dígitos. CNPJ deve conter exatamente 14 caracteres: 12 letras maiúsculas/dígitos seguidos de 2 dígitos, sem pontuação nem espaços internos; os espaços em branco no início e no fim são removidos e os valores que correspondem ao formato são convertidos para maiúsculas. EMAIL deve corresponder a `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]\{2,\}$`; confirme o comprimento máximo aceito antes de enviar endereços excepcionalmente longos. PHONE deve corresponder a `^\\+55[1-9][0-9]9[0-9]\{8\}$`, incluindo o código de país `+55`. Para EVP, omita o campo ou envie uma string vazia para gerar uma chave; `GENERATE_EVP` também solicita a geração. Se um valor EVP for informado, ele deve ser um UUID de 36 caracteres em letras minúsculas que corresponda a `^[a-f0-9]\{8\}-[a-f0-9]\{4\}-[a-f0-9]\{4\}-[a-f0-9]\{4\}-[a-f0-9]\{12\}$` |
+| api-25-F03 | Corrigido (não correspondia ao código) | Response fields / data.created_at description cell | Data e hora de criação, em timestamp Unix UTC em milissegundos. Pode ser 0 se a criação não ocorreu ou se a data e hora não foram informadas. | Data e hora de criação, em timestamp Unix UTC em milissegundos. Uma resposta de sucesso contém um timestamp diferente de zero; se o timestamp de criação não estiver disponível, será retornado o timestamp atual do servidor. |
+| api-25-F04 | Corrigido (não correspondia ao código) | Responses / Request succeeded JSON example | `{ "code": 200, "message": "success", "data": { "pix_key": "example-pix_key", "pix_key_type": 0, "status": 0, "created_at": 0 }, "time": 1791792000000 }` | `{ "code": 200, "message": "success", "data": { "pix_key": "8e67c99a-7c55-4e91-9557-512b5e198561", "pix_key_type": 5, "status": 1, "created_at": 1791792000000 }, "time": 1791792000000 }` |
+| api-25-F05 | Complementado (ausente no original) | Response fields / data.status description cell | Status de negócio atual, interpretado conforme os valores do enum deste campo. Enum: 0 PIX_KEY_STATUS_UNSPECIFIED; 1 PIX_KEY_STATUS_ACTIVE; 2 PIX_KEY_STATUS_INACTIVE; 3 PIX_KEY_STATUS_BLOCKED; 4 PIX_KEY_STATUS_DELETED. | Status atual da chave Pix. Enum: 0 PIX_KEY_STATUS_UNSPECIFIED; 1 PIX_KEY_STATUS_ACTIVE; 2 PIX_KEY_STATUS_INACTIVE; 3 PIX_KEY_STATUS_BLOCKED; 4 PIX_KEY_STATUS_DELETED. A criação pode retornar ACTIVE (1), INACTIVE (2) ou BLOCKED (3). BLOCKED inclui chaves que aguardam validação de identidade ou registro, portanto não significa necessariamente um bloqueio por fraude. Considere utilizável apenas uma chave ACTIVE e consulte a conta bancária se o status retornado não for ACTIVE. |
+| api-25-F06 | Complementado (ausente no original) | Behavior and handling / after-creation guidance | Após a criação, salve a chave retornada e consulte a conta bancária para conferir as chaves válidas. | Após a criação, salve a chave retornada e consulte a conta bancária para conferir as chaves válidas. A criação de um valor que já esteja ACTIVE falha, inclusive quando ele pertence à mesma conta. Um valor existente que não esteja ativo pode passar pelo fluxo de recriação, sujeito às verificações de registro. Este endpoint não possui uma chave de idempotência informada pelo cliente. Repetir uma requisição EVP sem o valor da chave solicita uma nova chave aleatória; portanto, consulte a conta antes de tentar novamente uma requisição cujo resultado seja desconhecido. |
+| api-25-F07 | Complementado (ausente no original) | Behavior and handling / first sentence | Crie uma chave Pix para a conta-alvo, como identificador para recebimentos via Pix. | Crie uma chave Pix para a conta-alvo, como identificador para recebimentos via Pix. A criação da chave é recusada se a conta estiver encerrada ou se houver uma operação de encerramento da conta em andamento. |
+| api-25-F08 | Complementado (ausente no original) | Responses / explanation after examples | Os exemplos ilustram a estrutura da resposta. | Os exemplos ilustram respostas JSON de negócio. Um JSON malformado ou uma falha na leitura do corpo da requisição pode retornar HTTP 400 com uma mensagem de erro em texto simples. Verifique o status HTTP e o Content-Type antes de interpretar a resposta como JSON. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "pix_key_type": 5
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/pix_keys/create' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${ACCOUNT_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Requisição bem-sucedida
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "pix_key": "8e67c99a-7c55-4e91-9557-512b5e198561",
+    "pix_key_type": 5,
+    "status": 1,
+    "created_at": 1791792000000
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Falha na requisição ou validação
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 Erro do sistema
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

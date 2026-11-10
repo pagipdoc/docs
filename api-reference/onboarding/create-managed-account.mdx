@@ -1,0 +1,79 @@
+---
+title: "Create managed account"
+description: "Use the same POST endpoint to create an MOR, VA, or PA. Select the request description below for your account type."
+---
+
+## Behavior and handling
+
+Use the same POST endpoint to create an MOR, VA, or PA. Select the request description below for your account type.
+
+| Account type | Account opening requirements | Request description |
+| --- | --- | --- |
+| MOR operating account | Reuse the parent MA's approved compliance information. The MA must have a compliance record with `APPROVED` or `FORCE_APPROVED` status. Do not submit `compliance_mode`, `compliance_payload`, `provider_session_info`, `return_url`, or `linked_account` <Badge color="blue" size="sm">Added · api-36-F01</Badge> | [Create MOR](/api-reference/onboarding/create-mor-account) |
+| VA managed account | The USER credentials determine the parent MA; submit the VA's own entity details | [Create VA](/api-reference/onboarding/create-va-account) |
+| PA payment account | Specify `linked_account` using the parent account's `ispb` and `account_number`; submit the PA's own entity details. The parent must be the owning USER's `ACTIVE` MA or an `ACTIVE` VA directly under that MA, with a valid `ACTIVE` bank account. MOR and PA cannot be selected as the parent <Badge color="blue" size="sm">Added · api-36-F02</Badge> | [Create PA](/api-reference/onboarding/create-pa-account) |
+
+Use the credentials of the USER that owns the MA. Do not include the bank account header. The owning user must have the managed account feature enabled and exactly one valid MA with ACTIVE status.
+
+## Response fields
+
+Field paths start at the response root. `[]` indicates an array element. Amounts use decimal strings. Enum values are defined separately for each field. The structure below describes a success response. A null value or 0 alone does not indicate that processing is complete.
+
+<Accordion title="Expand response fields table">
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `code` | integer | Business result code. A value of 200 indicates success. Business errors are returned in this field. It is not the HTTP status code. |
+| `message` | string | Business result description. On failure, use this with code to determine the cause. |
+| `data` | object | Data object in a successful response. Can be null in an error response. |
+| `time` | integer | Response time as a UTC Unix timestamp in milliseconds. |
+| `data.reference_id` | string | Resource reference ID supplied by the caller when creating the managed account. Save it and keep it unchanged, together with the original request parameters, for technical retries of the same account opening request. Reusing it for a different creation request can be rejected. Regenerate the signature headers for each retry. <Badge color="blue" size="sm">Added · api-36-F04</Badge> |
+| `data.model` | integer | Managed account model. Enum: 0 VA_ACCOUNT_MODEL_UNSPECIFIED; 1 VA_ACCOUNT_MODEL_MOR; 2 VA_ACCOUNT_MODEL_VA; 3 VA_ACCOUNT_MODEL_PA. |
+| `data.status` | integer | Current business status, interpreted using the enum values listed for this field. Enum: 0 MANAGED_ACCOUNT_STATUS_V3_UNSPECIFIED; 1 MANAGED_ACCOUNT_STATUS_V3_PENDING; 2 MANAGED_ACCOUNT_STATUS_V3_ACTIVE; 3 MANAGED_ACCOUNT_STATUS_V3_FROZEN; 4 MANAGED_ACCOUNT_STATUS_V3_CLOSED; 5 MANAGED_ACCOUNT_STATUS_V3_REJECTED; 6 MANAGED_ACCOUNT_STATUS_V3_EXPIRED; 7 MANAGED_ACCOUNT_STATUS_V3_PENDING_SUBMISSION. |
+| `data.verification_url` | string | Identity verification URL. Can be empty if external verification is not required or the URL has not yet been generated. |
+</Accordion>
+
+## Responses
+
+View response examples by the business `code` in the JSON response. Check the HTTP status and business code separately. An HTTP 200 response can also return a business error.
+
+| `code` | Meaning | Recommended action |
+| --- | --- | --- |
+| `200` | Request succeeded<br />Successful responses are shown by account type. See the 200 examples for [MOR](/api-reference/onboarding/create-mor-account), [VA](/api-reference/onboarding/create-va-account), and [PA](/api-reference/onboarding/create-pa-account). | Read data and determine the result using the business status defined for this endpoint. |
+| `400` | Request or validation failed | Parameter issue. Check and correct the request parameters. |
+| `500` | System error | Log the response and confirm the business result first. |
+
+The examples illustrate the response structure. Use the actual response for message and business status values. See [Error Catalog](/api-reference/error-catalog) for other parameter, permission, and service errors. This section does not imply that the endpoint returns only these three code values.
+
+Managed account creation is subject to the configured account opening fee. A fee failure returns a business error even when HTTP status is `200`. Code `4001999` indicates insufficient balance; add funds and retry the same request with the same `reference_id`. Code `4004004` can indicate missing fee configuration; contact support. Invalid fee configuration can return code `400`, and temporarily unavailable fee configuration can return code `501`. Use `message` to distinguish these conditions from other errors sharing the same code, and do not treat the failed call as completed account opening. <Badge color="blue" size="sm">Added · api-36-F03</Badge>
+
+
+<Accordion title="Corrections to the source document (4)" icon="clipboard-check">
+This page was checked against the Pagsmile Open API source code on 2026-11-10. Each change below is marked in the page with a badge that shows its ID.
+
+| ID | Change | Location | Source document text | Updated text |
+| --- | --- | --- | --- | --- |
+| api-36-F01 | Added (missing in the source) | Behavior and handling / MOR operating account row | Reuse the parent MA's compliance information. Do not submit a compliance mode or entity details | Reuse the parent MA's approved compliance information. The MA must have a compliance record with APPROVED or FORCE_APPROVED status. Do not submit compliance_mode, compliance_payload, provider_session_info, return_url, or linked_account |
+| api-36-F02 | Added (missing in the source) | Behavior and handling / PA payment account row | Specify the parent MA/VA; submit the PA's own entity details | Specify linked_account using the parent account's ispb and account_number; submit the PA's own entity details. The parent must be the owning USER's ACTIVE MA or an ACTIVE VA directly under that MA, with a valid ACTIVE bank account. MOR and PA cannot be selected as the parent |
+| api-36-F03 | Added (missing in the source) | Responses / final explanatory paragraph; append an account-opening fee paragraph | This section does not imply that the endpoint returns only these three code values. | This section does not imply that the endpoint returns only these three code values. Managed account creation is subject to the configured account opening fee. A fee failure returns a business error even when HTTP status is 200. Code 4001999 indicates insufficient balance; add funds and retry the same request with the same reference_id. Code 4004004 can indicate missing fee configuration; contact support. Invalid fee configuration can return code 400, and temporarily unavailable fee configuration can return code 501. Use message to distinguish these conditions from other errors sharing the same code, and do not treat the failed call as completed account opening. |
+| api-36-F04 | Added (missing in the source) | Response fields / data.reference_id meaning cell | Resource reference ID supplied by the caller when creating the managed account. | Resource reference ID supplied by the caller when creating the managed account. Save it and keep it unchanged, together with the original request parameters, for technical retries of the same account opening request. Reusing it for a different creation request can be rejected. Regenerate the signature headers for each retry. |
+</Accordion>
+
+<ResponseExample>
+```json 400 Request or validation failed
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 System error
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

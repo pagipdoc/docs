@@ -1,0 +1,316 @@
+---
+title: "Consultar detalhes da notificação de infração"
+description: "Consulte os detalhes da notificação de infração indicada. Confira a notificação, o caso e a transação original associados."
+api: "POST /v3/infractions/detail"
+keywords: ["/v3/infractions/detail"]
+---
+
+## Funcionamento e tratamento
+
+Consulte os detalhes da notificação de infração indicada. Confira a notificação, o caso e a transação original associados.
+
+## Permissões e titularidade da conta
+
+`ACCOUNT`, ou `USER` com os headers `X-ISPB` e `X-Account-Number` de uma conta pertencente a esse `USER`. Credenciais `PLATFORM` não são aceitas. Credenciais `ACCOUNT` usam a conta vinculada; se os headers da conta-alvo forem enviados, ambos devem estar preenchidos e corresponder a essa conta. A notificação de infração deve estar associada a uma transação recebida pela conta selecionada. <Badge color="blue" size="sm">Complementado · api-22-F05</Badge> As requisições devem seguir as orientações de [Ambientes e credenciais](/pt-br/environments-and-credentials).
+
+## Parâmetros da requisição
+
+<ParamField body="infraction_id" type="string" required>
+ID do registro da notificação de infração, obtido em `data.items[].infraction_id` na resposta da listagem. Use esse valor exatamente; ele é diferente de `infraction_report_id` e `dict_infraction_report_id`. <Badge color="blue" size="sm">Complementado · api-22-F06</Badge>
+</ParamField>
+
+<Info>
+**Origem dos parâmetros**
+
+O `infraction_id` é obtido em `data.items[].infraction_id` na resposta de sucesso de [Listar notificações de infração](/pt-br/api-reference/med/list-infraction-reports) (`/v3/infractions/list`).
+</Info>
+
+## Exemplo de requisição cURL
+
+O exemplo usa credenciais de nível ACCOUNT. Preencha os parâmetros reais e gere a assinatura com base no body.json final.
+
+## Campos da resposta
+
+Os caminhos dos campos partem da raiz da resposta. `[]` indica um elemento de array. Os valores monetários usam strings decimais. Os enums são interpretados conforme cada campo. A estrutura abaixo representa os dados de uma resposta de sucesso. Um valor nulo ou 0, por si só, não indica a conclusão da operação.
+
+<ResponseField name="code" type="integer">
+Código de resultado de negócio; 200 indica sucesso. Os erros de negócio são retornados neste campo, que não equivale ao código de status HTTP.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Descrição do resultado de negócio; em caso de falha, analise esta descrição junto com o campo code para identificar a causa.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Objeto de dados da resposta de sucesso; pode ser null em respostas de erro.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Horário da resposta, em timestamp Unix UTC em milissegundos.
+</ResponseField>
+
+<ResponseField name="data.infraction" type="object">
+Detalhes da notificação de infração.
+</ResponseField>
+
+<ResponseField name="data.infraction.infraction_id" type="string">
+ID da notificação de infração; usado para consultar os detalhes da notificação de infração.
+</ResponseField>
+
+<ResponseField name="data.infraction.connected_transaction_id" type="string">
+ID da transação associada.
+</ResponseField>
+
+<ResponseField name="data.infraction.root_end_to_end_id" type="string">
+Identificador fim a fim da transação Pix original.
+</ResponseField>
+
+<ResponseField name="data.infraction.account" type="string">
+Número da conta associada à notificação de infração, normalmente a conta recebedora da transação original. <Badge color="orange" size="sm">Corrigido · api-22-F02</Badge>
+</ResponseField>
+
+<ResponseField name="data.infraction.status" type="integer">
+Status de negócio atual, interpretado conforme os valores de enum listados neste campo. Enum: 0 MED_INFRACTION_TASK_STATUS_UNSPECIFIED; 1 MED_INFRACTION_TASK_STATUS_RECEIVED; 2 MED_INFRACTION_TASK_STATUS_BLOCKING_PENDING; 3 MED_INFRACTION_TASK_STATUS_BLOCKED; 4 MED_INFRACTION_TASK_STATUS_ANALYSIS_PENDING; 5 MED_INFRACTION_TASK_STATUS_CLOSED_AGREED; 6 MED_INFRACTION_TASK_STATUS_CLOSED_DISAGREED; 7 MED_INFRACTION_TASK_STATUS_CANCELLED; 8 MED_INFRACTION_TASK_STATUS_FAILED.
+</ResponseField>
+
+<ResponseField name="data.infraction.status_display" type="string">
+Texto de exibição do status de negócio.
+</ResponseField>
+
+<ResponseField name="data.infraction.amount" type="string">
+Valor solicitado na notificação de infração, como string decimal. Pode ser diferente do valor da transação original associada. <Badge color="orange" size="sm">Corrigido · api-22-F01</Badge>
+</ResponseField>
+
+<ResponseField name="data.infraction.blocked_amount" type="string">
+Valor bloqueado, em string decimal.
+</ResponseField>
+
+<ResponseField name="data.infraction.created_time" type="integer">
+Data e hora de criação, em timestamp Unix UTC em milissegundos. Pode ser 0 se a criação não ocorreu ou se a data e hora não foram informadas.
+</ResponseField>
+
+<ResponseField name="data.infraction.updated_time" type="integer">
+Data e hora da última atualização, em timestamp Unix UTC em milissegundos. Pode ser 0 se não houve atualização ou se a data e hora não foram informadas.
+</ResponseField>
+
+<ResponseField name="data.infraction.case_id" type="string">
+ID do caso MED.
+</ResponseField>
+
+<ResponseField name="data.infraction.infraction_report_id" type="string">
+Identificador de negócio da notificação de infração.
+</ResponseField>
+
+<ResponseField name="data.infraction.dict_infraction_report_id" type="string">
+Identificador da notificação de infração no DICT.
+</ResponseField>
+
+<ResponseField name="data.infraction.freeze_id" type="string">
+ID do registro de bloqueio.
+</ResponseField>
+
+<ResponseField name="data.infraction.freeze_reference_id" type="string">
+Identificador de referência da operação de bloqueio de recursos. Nos detalhes da infração, é o identificador da tarefa associada.
+</ResponseField>
+
+<ResponseField name="data.infraction.freeze_target_amount" type="string">
+Valor pretendido para bloqueio, como string decimal.
+</ResponseField>
+
+<ResponseField name="data.infraction.freeze_effective_amount" type="string">
+Valor efetivamente bloqueado, em string decimal.
+</ResponseField>
+
+<ResponseField name="data.infraction.freeze_shortfall_amount" type="string">
+Valor faltante para bloqueio, em string decimal.
+</ResponseField>
+
+<ResponseField name="data.infraction.freeze_status" type="string">
+Status do bloqueio de recursos, em string. Os valores podem incluir `FREEZE_STATUS_UNSPECIFIED`, `FREEZE_STATUS_ACTIVE`, `FREEZE_STATUS_RELEASED`, `FREEZE_STATUS_EXPIRED`, `RELEASED` e `ACCOUNT_CLOSED`. Pode estar vazio antes de haver um status de bloqueio registrado. Interprete-o separadamente de `status`. <Badge color="blue" size="sm">Complementado · api-22-F07</Badge>
+</ResponseField>
+
+<ResponseField name="data.infraction.original_transaction" type="object">
+Dados da transação original.
+</ResponseField>
+
+<ResponseField name="data.infraction.original_transaction.transaction_id" type="string">
+ID da transação.
+</ResponseField>
+
+<ResponseField name="data.infraction.original_transaction.root_end_to_end_id" type="string">
+Identificador fim a fim da transação Pix original.
+</ResponseField>
+
+<ResponseField name="data.infraction.original_transaction.amount" type="string">
+Valor da transação, como string decimal.
+</ResponseField>
+
+<ResponseField name="data.infraction.original_transaction.currency" type="string">
+Moeda.
+</ResponseField>
+
+<ResponseField name="data.infraction.original_transaction.completed_at" type="integer">
+Horário de conclusão. Pode ser 0 se a conclusão ainda não tiver ocorrido. Timestamp Unix em milissegundos, em UTC. Pode ser 0 se a conclusão ainda não tiver ocorrido ou se o horário não for informado.
+</ResponseField>
+
+<ResponseField name="data.infraction.original_transaction.payer" type="object">
+Dados do pagador.
+</ResponseField>
+
+<ResponseField name="data.infraction.original_transaction.payer.name" type="string">
+Nome.
+</ResponseField>
+
+<ResponseField name="data.infraction.original_transaction.payer.document" type="string">
+Dados do documento de identificação do participante da transação, conforme o valor retornado pelo serviço para exibição segura.
+</ResponseField>
+
+<ResponseField name="data.infraction.original_transaction.payer.bank_name" type="string">
+Nome do banco.
+</ResponseField>
+
+<ResponseField name="data.infraction.original_transaction.payer.branch" type="string">
+Código da agência.
+</ResponseField>
+
+<ResponseField name="data.infraction.original_transaction.payer.account" type="string">
+Número da conta do pagador. <Badge color="orange" size="sm">Corrigido · api-22-F03</Badge>
+</ResponseField>
+
+<ResponseField name="data.infraction.original_transaction.payer.ispb" type="string">
+Código ISPB do banco.
+</ResponseField>
+
+<ResponseField name="data.infraction.original_transaction.payee" type="object">
+Dados do recebedor.
+</ResponseField>
+
+<ResponseField name="data.infraction.original_transaction.payee.name" type="string">
+Nome.
+</ResponseField>
+
+<ResponseField name="data.infraction.original_transaction.payee.document" type="string">
+Dados do documento de identificação do participante da transação, conforme o valor retornado pelo serviço para exibição segura.
+</ResponseField>
+
+<ResponseField name="data.infraction.original_transaction.payee.bank_name" type="string">
+Nome do banco.
+</ResponseField>
+
+<ResponseField name="data.infraction.original_transaction.payee.branch" type="string">
+Código da agência.
+</ResponseField>
+
+<ResponseField name="data.infraction.original_transaction.payee.account" type="string">
+Número da conta do recebedor. <Badge color="orange" size="sm">Corrigido · api-22-F04</Badge>
+</ResponseField>
+
+<ResponseField name="data.infraction.original_transaction.payee.ispb" type="string">
+Código ISPB do banco.
+</ResponseField>
+
+## Respostas
+
+Consulte os exemplos de resposta pelo `code` de negócio no JSON. Verifique o status HTTP e o code de negócio separadamente. Um JSON malformado pode retornar HTTP `400` com uma mensagem de erro em texto simples, em vez da estrutura JSON mostrada abaixo. Verifique o `Content-Type` da resposta antes de interpretar o JSON. <Badge color="blue" size="sm">Complementado · api-22-F10</Badge> Uma resposta HTTP 200 também pode retornar um erro de negócio.
+
+| `code` | Significado | Ação recomendada |
+| --- | --- | --- |
+| `200` | Requisição bem-sucedida | Leia data e avalie o resultado do processamento conforme o status de negócio deste endpoint. |
+| `400` | Falha na requisição ou validação | Problema nos parâmetros. Verifique e corrija os parâmetros da requisição. Se `infraction_id` estiver ausente ou vazio, o code de negócio será `4000`. A mensagem em inglês é `Field infraction_id is required`. <Badge color="blue" size="sm">Complementado · api-22-F09</Badge> |
+| `500` | Erro do sistema | Registre a resposta e confirme primeiro o resultado de negócio. |
+
+Os exemplos ilustram a estrutura da resposta. Os valores de message e do status de negócio devem ser obtidos da resposta efetiva. Para outros erros de parâmetros, permissões e serviço, consulte [Catálogo de erros](/pt-br/api-reference/error-catalog). Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados. <Badge color="orange" size="sm">Corrigido · api-22-F12</Badge>
+
+<Tip>
+Para testar este endpoint, envie o exemplo de requisição para a Base URL do Sandbox `https://ebanking-openapi-sandbox.pagsmile.com.br` com sua AK/SK de Sandbox. Assine cada requisição conforme descrito em [Ambientes e credenciais](/pt-br/environments-and-credentials#assinatura-de-requisições-à-api).
+</Tip>
+
+
+<Accordion title="Correções em relação ao documento original (10)" icon="clipboard-check">
+Esta página foi conferida com o código-fonte da Pagsmile Open API em 2026-11-10. Cada alteração abaixo está marcada na página com um selo que mostra o seu ID.
+
+| ID | Alteração | Local | Texto do documento original | Texto atualizado |
+| --- | --- | --- | --- | --- |
+| api-22-F01 | Corrigido (não correspondia ao código) | Response fields | Valor da transação, como string decimal. | Valor solicitado na notificação de infração, como string decimal. Pode ser diferente do valor da transação original associada. |
+| api-22-F02 | Corrigido (não correspondia ao código) | Response fields | Dados da conta bancária. | Número da conta associada à notificação de infração, normalmente a conta recebedora da transação original. |
+| api-22-F03 | Corrigido (não correspondia ao código) | Response fields | Dados da conta bancária. | Número da conta do pagador. |
+| api-22-F04 | Corrigido (não correspondia ao código) | Response fields | Dados da conta bancária. | Número da conta do recebedor. |
+| api-22-F05 | Complementado (ausente no original) | Permissions and account ownership | ACCOUNT, ou USER com o header da conta-alvo. | ACCOUNT, ou USER com os headers `X-ISPB` e `X-Account-Number` de uma conta pertencente a esse USER. Credenciais PLATFORM não são aceitas. Credenciais ACCOUNT usam a conta vinculada; se os headers da conta-alvo forem enviados, ambos devem estar preenchidos e corresponder a essa conta. A notificação de infração deve estar associada a uma transação recebida pela conta selecionada. |
+| api-22-F06 | Complementado (ausente no original) | Request parameters | ID da notificação de infração, obtido em `data.items[].infraction_id` na resposta da listagem | ID do registro da notificação de infração, obtido em `data.items[].infraction_id` na resposta da listagem. Use esse valor exatamente; ele é diferente de `infraction_report_id` e `dict_infraction_report_id`. |
+| api-22-F07 | Complementado (ausente no original) | Response fields | Status do bloqueio de recursos, em string. | Status do bloqueio de recursos, em string. Os valores podem incluir `FREEZE_STATUS_UNSPECIFIED`, `FREEZE_STATUS_ACTIVE`, `FREEZE_STATUS_RELEASED`, `FREEZE_STATUS_EXPIRED`, `RELEASED` e `ACCOUNT_CLOSED`. Pode estar vazio antes de haver um status de bloqueio registrado. Interprete-o separadamente de `status`. |
+| api-22-F09 | Complementado (ausente no original) | Responses / Request or validation failed | Problema nos parâmetros. Verifique e corrija os parâmetros da requisição. | Problema nos parâmetros. Verifique e corrija os parâmetros da requisição. Se `infraction_id` estiver ausente ou vazio, o code de negócio será `4000`. A mensagem em inglês é `Field infraction_id is required`. |
+| api-22-F10 | Complementado (ausente no original) | Responses | Verifique o status HTTP e o code de negócio separadamente. | Verifique o status HTTP e o code de negócio separadamente. Um JSON malformado pode retornar HTTP 400 com uma mensagem de erro em texto simples, em vez da estrutura JSON mostrada abaixo. Verifique o Content-Type da resposta antes de interpretar o JSON. |
+| api-22-F12 | Corrigido (não correspondia ao código) | Responses / Request succeeded example | "freeze_shortfall_amount": "10.00", | "freeze_shortfall_amount": "0.00", |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "infraction_id": "replace-with-infraction-id"
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/infractions/detail' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${ACCOUNT_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Requisição bem-sucedida
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "infraction": {
+      "infraction_id": "example-infraction_id",
+      "connected_transaction_id": "example-connected_transaction_id",
+      "root_end_to_end_id": "example-root_end_to_end_id",
+      "account": "example-account",
+      "status": 0,
+      "status_display": "example-status_display",
+      "amount": "10.00",
+      "blocked_amount": "10.00",
+      "created_time": 0,
+      "updated_time": 0,
+      "case_id": "example-case_id",
+      "infraction_report_id": "example-infraction_report_id",
+      "dict_infraction_report_id": "example-dict_infraction_report_id",
+      "freeze_id": "example-freeze_id",
+      "freeze_reference_id": "example-freeze_reference_id",
+      "freeze_target_amount": "10.00",
+      "freeze_effective_amount": "10.00",
+      "freeze_shortfall_amount": "0.00",
+      "freeze_status": "example-freeze_status",
+      "original_transaction": {}
+    }
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Falha na requisição ou validação
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 Erro do sistema
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

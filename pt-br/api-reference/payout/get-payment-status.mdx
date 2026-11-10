@@ -1,0 +1,134 @@
+---
+title: "Consultar status do pagamento"
+description: "Consulte o status atual do pagamento para acompanhar o processamento de uma transação já iniciada."
+api: "POST /v3/transfers/status/check"
+keywords: ["/v3/transfers/status/check"]
+---
+
+## Funcionamento e tratamento
+
+Consulte o status atual do pagamento para acompanhar o processamento de uma transação já iniciada. Esta chamada também pode avançar o processamento do pagamento existente. Para Pix, pode consultar o status no banco e atualizar o resultado do pagamento. Para TED, usa o resultado de liquidação já registrado para concluir o processamento local; não solicita um novo status ao banco. Para uma transferência interna pendente, pode retomar o processamento e executar a transferência existente após as verificações aplicáveis de recursos, risco e janela de pagamento. Se o status Pix registrado e o informado pelo canal permanecerem em `PROCESSING` e o horário registrado da requisição ao canal tiver mais de duas horas, o pagamento pode ser marcado como `FAILED`. <Badge color="blue" size="sm">Complementado · api-14-F01</Badge> Use os detalhes e os lançamentos do extrato em conjunto para confirmar o resultado da movimentação de recursos.
+
+## Permissões e titularidade da conta
+
+Use credenciais `ACCOUNT` vinculadas à conta-alvo, ou credenciais `USER` com `X-ISPB` e `X-Account-Number`. Credenciais `PLATFORM` não são aceitas. Com credenciais `ACCOUNT`, omita os dois headers da conta-alvo ou informe ambos com valores que correspondam à conta vinculada às credenciais. Com credenciais `USER`, a conta-alvo deve pertencer ao titular das credenciais e ter uma hierarquia de contas ativa e válida. Identidades encerradas não podem usar esta consulta de status. A conta-alvo deve corresponder à conta do pagador ou à conta do recebedor da transação informada. <Badge color="blue" size="sm">Complementado · api-14-F02</Badge> As requisições devem seguir as orientações de [Ambientes e credenciais](/pt-br/environments-and-credentials).
+
+## Parâmetros da requisição
+
+<ParamField body="txn_id" type="string" required>
+ID da transação, obtido em `data.txn_id` na resposta da confirmação de pagamento via chave Pix ou QR Code, do pagamento Pix por dados bancários, do pagamento via TED ou da transferência interna
+</ParamField>
+
+<Info>
+**Origem dos parâmetros**
+
+O campo `txn_id` deve conter o ID da transação de um pagamento já iniciado. Primeiro, chame [Confirmar pagamento via chave Pix](/pt-br/api-reference/payout/pix/confirm-pix-key-payment), [Confirmar pagamento via QR Code](/pt-br/api-reference/payout/pix/confirm-qr-code-payment), [Pagar via Pix com dados bancários](/pt-br/api-reference/payout/pix/pay-with-bank-account-details), [Iniciar pagamento via TED](/pt-br/api-reference/payout/ted/initiate-ted-payment) ou [Iniciar transferência interna](/pt-br/api-reference/payout/book-transfer/initiate-internal-transfer). Depois, copie o valor de `data.txn_id` da resposta de sucesso.
+</Info>
+
+## Exemplo de requisição cURL
+
+O exemplo usa credenciais de nível ACCOUNT. Preencha os parâmetros reais e gere a assinatura com base no body.json final.
+
+## Campos da resposta
+
+Os caminhos dos campos partem da raiz da resposta. `[]` indica um elemento de array. Os valores monetários usam strings decimais. Os enums são interpretados conforme cada campo. A estrutura abaixo representa os dados de uma resposta de sucesso. Um valor nulo ou 0, por si só, não indica a conclusão da operação.
+
+<ResponseField name="code" type="integer">
+Código de resultado de negócio; 200 indica sucesso. Os erros de negócio são retornados neste campo, que não equivale ao código de status HTTP.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Descrição do resultado de negócio; em caso de falha, analise esta descrição junto com o campo code para identificar a causa.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Objeto de dados da resposta de sucesso; pode ser null em respostas de erro.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Horário da resposta, em timestamp Unix UTC em milissegundos.
+</ResponseField>
+
+<ResponseField name="data.txn_status" type="integer">
+Status da transação. Enum compartilhado: `0` `TXN_STATUS_UNSPECIFIED`; `1` `TXN_STATUS_PENDING`; `2` `TXN_STATUS_COMPLETED`; `3` `TXN_STATUS_FAILED`; `4` `TXN_STATUS_CANCELLED`; `5` `TXN_STATUS_PROCESSING`; `6` `TXN_STATUS_REFUNDED`; `7` `TXN_STATUS_PARTIALLY_REFUNDED`; `8` `TXN_STATUS_DISPUTED`. Este endpoint atualmente mapeia `PENDING`, `COMPLETED`, `FAILED`, `CANCELLED` e `PROCESSING` para os valores de `1` a `5`; outros valores de status registrados são mapeados para `0`. Atualmente, não retorna os valores de `6` a `8`. Não use apenas esta consulta de status para determinar se ocorreu uma devolução ou contestação. <Badge color="blue" size="sm">Complementado · api-14-F05</Badge>
+</ResponseField>
+
+## Respostas
+
+Consulte os exemplos de resposta pelo `code` de negócio no JSON. Verifique o status HTTP e o code de negócio separadamente. Uma resposta HTTP 200 também pode retornar um erro de negócio.
+
+| `code` | Significado | Ação recomendada |
+| --- | --- | --- |
+| `200` | Requisição bem-sucedida | Leia `data` e avalie o resultado do processamento conforme o status de negócio deste endpoint. Uma requisição bem-sucedida não garante que o status no banco foi atualizado nem que o processamento avançou. Se a atualização do status ou do processamento falhar, mas a transação ainda puder ser consultada, a resposta poderá conter o último status registrado com `code=200`. Continue acompanhando transações em `PENDING` ou `PROCESSING` e confirme o resultado da movimentação de recursos pelos detalhes do pagamento e pelos lançamentos do extrato. <Badge color="blue" size="sm">Complementado · api-14-F07</Badge> |
+| `400` | Falha na requisição ou validação | Problema nos parâmetros. Verifique e corrija os parâmetros da requisição. |
+| `500` | Erro do sistema | Registre a resposta e confirme primeiro o resultado de negócio. |
+
+Os exemplos ilustram a estrutura da resposta. Os valores de message e do status de negócio devem ser obtidos da resposta efetiva. Para outros erros de parâmetros, permissões e serviço, consulte [Catálogo de erros](/pt-br/api-reference/error-catalog). Esta seção não indica que o endpoint retorna apenas os três valores de `code` apresentados. Neste endpoint, a ausência de `txn_id` ou um valor vazio retorna `code=4000`. Uma transação não encontrada retorna `code=4003003`, e uma conta que não corresponde à conta do pagador nem à conta do recebedor retorna `code=4004101`. Falhas na consulta do status da transação podem retornar `code=4003014`; uma falha temporária de comunicação durante a consulta do status do pagamento retorna `code=501`. Erros de autenticação e da conta-alvo podem retornar outros códigos do Catálogo de erros. <Badge color="blue" size="sm">Complementado · api-14-F06</Badge>
+
+<Tip>
+Para testar este endpoint, envie o exemplo de requisição para a Base URL do Sandbox `https://ebanking-openapi-sandbox.pagsmile.com.br` com sua AK/SK de Sandbox. Assine cada requisição conforme descrito em [Ambientes e credenciais](/pt-br/environments-and-credentials#assinatura-de-requisições-à-api).
+</Tip>
+
+
+<Accordion title="Correções em relação ao documento original (5)" icon="clipboard-check">
+Esta página foi conferida com o código-fonte da Pagsmile Open API em 2026-11-10. Cada alteração abaixo está marcada na página com um selo que mostra o seu ID.
+
+| ID | Alteração | Local | Texto do documento original | Texto atualizado |
+| --- | --- | --- | --- | --- |
+| api-14-F01 | Complementado (ausente no original) | Behavior and handling | Consulte o status atual do pagamento para acompanhar o processamento de uma transação já iniciada. | Consulte o status atual do pagamento para acompanhar o processamento de uma transação já iniciada. Esta chamada também pode avançar o processamento do pagamento existente. Para Pix, pode consultar o status no banco e atualizar o resultado do pagamento. Para TED, usa o resultado de liquidação já registrado para concluir o processamento local; não solicita um novo status ao banco. Para uma transferência interna pendente, pode retomar o processamento e executar a transferência existente após as verificações aplicáveis de recursos, risco e janela de pagamento. Se o status Pix registrado e o informado pelo canal permanecerem em PROCESSING e o horário registrado da requisição ao canal tiver mais de duas horas, o pagamento pode ser marcado como FAILED. |
+| api-14-F02 | Complementado (ausente no original) | Permissions and account ownership | ACCOUNT, ou USER com o header da conta-alvo. | Use credenciais ACCOUNT vinculadas à conta-alvo, ou credenciais USER com `X-ISPB` e `X-Account-Number`. Credenciais PLATFORM não são aceitas. Com credenciais ACCOUNT, omita os dois headers da conta-alvo ou informe ambos com valores que correspondam à conta vinculada às credenciais. Com credenciais USER, a conta-alvo deve pertencer ao titular das credenciais e ter uma hierarquia de contas ativa e válida. Identidades encerradas não podem usar esta consulta de status. A conta-alvo deve corresponder à conta do pagador ou à conta do recebedor da transação informada. |
+| api-14-F05 | Complementado (ausente no original) | Response fields | Status da transação. Enum: 0 TXN_STATUS_UNSPECIFIED; 1 TXN_STATUS_PENDING; 2 TXN_STATUS_COMPLETED; 3 TXN_STATUS_FAILED; 4 TXN_STATUS_CANCELLED; 5 TXN_STATUS_PROCESSING; 6 TXN_STATUS_REFUNDED; 7 TXN_STATUS_PARTIALLY_REFUNDED; 8 TXN_STATUS_DISPUTED. | Status da transação. Enum compartilhado: 0 TXN_STATUS_UNSPECIFIED; 1 TXN_STATUS_PENDING; 2 TXN_STATUS_COMPLETED; 3 TXN_STATUS_FAILED; 4 TXN_STATUS_CANCELLED; 5 TXN_STATUS_PROCESSING; 6 TXN_STATUS_REFUNDED; 7 TXN_STATUS_PARTIALLY_REFUNDED; 8 TXN_STATUS_DISPUTED. Este endpoint atualmente mapeia PENDING, COMPLETED, FAILED, CANCELLED e PROCESSING para os valores de 1 a 5; outros valores de status registrados são mapeados para 0. Atualmente, não retorna os valores de 6 a 8. Não use apenas esta consulta de status para determinar se ocorreu uma devolução ou contestação. |
+| api-14-F06 | Complementado (ausente no original) | Responses: append endpoint-specific errors to the final explanatory paragraph | Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados. | Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados. Neste endpoint, a ausência de `txn_id` ou um valor vazio retorna `code=4000`. Uma transação não encontrada retorna `code=4003003`, e uma conta que não corresponde à conta do pagador nem à conta do recebedor retorna `code=4004101`. Falhas na consulta do status da transação podem retornar `code=4003014`; uma falha temporária de comunicação durante a consulta do status do pagamento retorna `code=501`. Erros de autenticação e da conta-alvo podem retornar outros códigos do Catálogo de erros. |
+| api-14-F07 | Complementado (ausente no original) | Responses: Request succeeded / Recommended action | Leia data e avalie o resultado do processamento conforme o status de negócio deste endpoint. | Leia data e avalie o resultado do processamento conforme o status de negócio deste endpoint. Uma requisição bem-sucedida não garante que o status no banco foi atualizado nem que o processamento avançou. Se a atualização do status ou do processamento falhar, mas a transação ainda puder ser consultada, a resposta poderá conter o último status registrado com `code=200`. Continue acompanhando transações em PENDING ou PROCESSING e confirme o resultado da movimentação de recursos pelos detalhes do pagamento e pelos lançamentos do extrato. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "txn_id": "replace-with-transaction-id"
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/transfers/status/check' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${ACCOUNT_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Requisição bem-sucedida
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "txn_status": 0
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Falha na requisição ou validação
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 Erro do sistema
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

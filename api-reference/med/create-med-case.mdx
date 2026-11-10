@@ -1,0 +1,737 @@
+---
+title: "Create MED case"
+description: "Create a MED case for the original Pix transaction to track dispute handling and funds recovery. Creating a case does not guarantee full recovery of funds."
+api: "POST /v3/med/create"
+keywords: ["/v3/med/create"]
+---
+
+## Behavior and handling
+
+Create a MED case for the original Pix transaction to track dispute handling and funds recovery. Creating a case does not guarantee full recovery of funds.
+
+### Case initiation requirements and original transaction linkage
+
+Prepare the original Pix end-to-end ID, fraud situation, report description, and complaint time. Confirm that the original transaction is a Pix payment and that the original payer account is neither closing nor closed. The original payment must be retrievable with an amount and transaction ID. <Badge color="blue" size="sm">Added · api-17-F10</Badge> Use an original Pix payment belonging to the authorized account and verify that ownership before submitting. Account targeting does not itself verify ownership of the original transaction. The case remains linked to the original payment. <Badge color="orange" size="sm">Corrected · api-17-F05</Badge>
+
+### Create MED case
+
+Submit the case request with the applicable automatic return option, and save the case ID. Repeated submissions of the same request are not guaranteed to return the same case. If the result is unknown, check for an existing case before submitting again. <Badge color="blue" size="sm">Added · api-17-F11</Badge> `automatic_refund` specifies a return processing option. It does not guarantee automatic full recovery.
+
+## Permissions and account ownership
+
+ACCOUNT, or USER with both `X-ISPB` and `X-Account-Number` identifying an account owned by that user. PLATFORM credentials are not accepted. With ACCOUNT credentials, account headers may be omitted; if sent, both must be nonempty and match the credential-bound account. Requests must follow [Environments & Credentials](/environments-and-credentials). <Badge color="blue" size="sm">Added · api-17-F06</Badge>
+
+## Request parameters
+
+<ParamField body="end_to_end_id" type="string" required>
+Original Pix end-to-end ID from `settlement_id` in an account statement entry with txn_status of 2
+</ParamField>
+
+<ParamField body="original_fraud_situation" type="integer" required>
+**Required:** Yes; must be `1` to `6`. <Badge color="orange" size="sm">Corrected · api-17-F01</Badge> Original fraud situation enum. Accepted values: `1 SCAM`; `2 ACCOUNT_TAKEOVER`; `3 COERCION`; `4 SOCIAL_ENGINEERING`; `5 OTHER`; `6 UNKNOWN`. The enum value `0 UNSPECIFIED` is not accepted when creating a case. <Badge color="orange" size="sm">Corrected · api-17-F02</Badge>
+</ParamField>
+
+<ParamField body="report_details" type="string">
+**Required:** No (not enforced at this layer). Dispute report description
+</ParamField>
+
+<ParamField body="complaint_create_time" type="integer">
+**Required:** No (not enforced at this layer). Complaint creation time as a UTC Unix timestamp in milliseconds. If omitted, the value is `0` and no complaint time is sent. Positive values below `1000000000000` are treated as Unix seconds and converted to milliseconds; use milliseconds for new integrations. Nonpositive values do not send a complaint time. <Badge color="blue" size="sm">Added · api-17-F07</Badge>
+</ParamField>
+
+<ParamField body="automatic_refund" type="boolean">
+**Required:** No (not enforced at this layer). Automatic return option. Defaults to `false` when omitted. `false` selects manual processing (`flow_type=2`); `true` selects automated processing (`flow_type=1`). The option is sent explicitly and does not guarantee full funds recovery. <Badge color="blue" size="sm">Added · api-17-F08</Badge>
+</ParamField>
+
+<Info>
+**Parameter sources**
+
+`end_to_end_id` comes from `data.statements[].settlement_id` in a successful response from [Get account statement](/api-reference/accounts/get-account-statement) (`/v3/statements`). Identify the original Pix payment being disputed and use its settlement ID. Confirm `payment_method=1` and the transaction details; do not choose an unrelated transaction merely because it has the largest amount. <Badge color="orange" size="sm">Corrected · api-17-F04</Badge>
+</Info>
+
+## cURL request example
+
+The example uses ACCOUNT-level credentials. Enter the actual parameters and generate the signature from the final body.json. <Badge color="orange" size="sm">Corrected · api-17-F03</Badge>
+
+## Response fields
+
+Field paths start at the response root. `[]` indicates an array element. Amounts use decimal strings. Enum values are defined separately for each field. The structure below describes a success response. A null value or 0 alone does not indicate that processing is complete.
+
+<ResponseField name="code" type="integer">
+Business result code. A value of 200 indicates success. Business errors are returned in this field. It is not the HTTP status code.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Business result description. On failure, use this with code to determine the cause.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Data object in a successful response. Can be null in an error response.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Response time as a UTC Unix timestamp in milliseconds.
+</ResponseField>
+
+<ResponseField name="data.med_case" type="object">
+MED case details.
+</ResponseField>
+
+<ResponseField name="data.med_case.case_id" type="string">
+MED case ID.
+</ResponseField>
+
+<ResponseField name="data.med_case.funds_recovery_id" type="string">
+Funds recovery operation ID.
+</ResponseField>
+
+<ResponseField name="data.med_case.dict_funds_recovery_id" type="string">
+DICT funds recovery ID.
+</ResponseField>
+
+<ResponseField name="data.med_case.root_end_to_end_id" type="string">
+End-to-end ID of the original Pix transaction.
+</ResponseField>
+
+<ResponseField name="data.med_case.status" type="integer">
+Current business status, interpreted according to the enum listed for this field. Enum: 0 MED_CASE_STATUS_UNSPECIFIED; 1 MED_CASE_STATUS_CREATED; 2 MED_CASE_STATUS_TRACKED; 3 MED_CASE_STATUS_AWAITING_ANALYSIS; 4 MED_CASE_STATUS_ANALYZED; 5 MED_CASE_STATUS_RETURN_PROCESSING; 6 MED_CASE_STATUS_COMPLETED; 7 MED_CASE_STATUS_CANCELLED; 8 MED_CASE_STATUS_FAILED.
+</ResponseField>
+
+<ResponseField name="data.med_case.status_display" type="string">
+Display text for the business status.
+</ResponseField>
+
+<ResponseField name="data.med_case.progress_step" type="integer">
+Current workflow step number; not a completion percentage.
+</ResponseField>
+
+<ResponseField name="data.med_case.original_transaction" type="object">
+Original transaction details.
+</ResponseField>
+
+<ResponseField name="data.med_case.original_transaction.transaction_id" type="string">
+Transaction ID.
+</ResponseField>
+
+<ResponseField name="data.med_case.original_transaction.root_end_to_end_id" type="string">
+End-to-end ID of the original Pix transaction.
+</ResponseField>
+
+<ResponseField name="data.med_case.original_transaction.amount" type="string">
+Transaction amount as a decimal string.
+</ResponseField>
+
+<ResponseField name="data.med_case.original_transaction.currency" type="string">
+Currency.
+</ResponseField>
+
+<ResponseField name="data.med_case.original_transaction.completed_at" type="integer">
+Completion time. Can be 0 if completion has not occurred. Expressed in UTC Unix milliseconds. Can be 0 if completion has not occurred or the time is not provided.
+</ResponseField>
+
+<ResponseField name="data.med_case.original_transaction.payer" type="object">
+Payer details.
+</ResponseField>
+
+<ResponseField name="data.med_case.original_transaction.payer.name" type="string">
+Name.
+</ResponseField>
+
+<ResponseField name="data.med_case.original_transaction.payer.document" type="string">
+Identification document information for the transaction participant, using the safe display value returned by the service.
+</ResponseField>
+
+<ResponseField name="data.med_case.original_transaction.payer.bank_name" type="string">
+Bank name.
+</ResponseField>
+
+<ResponseField name="data.med_case.original_transaction.payer.branch" type="string">
+Branch code.
+</ResponseField>
+
+<ResponseField name="data.med_case.original_transaction.payer.account" type="string">
+Bank account details.
+</ResponseField>
+
+<ResponseField name="data.med_case.original_transaction.payer.ispb" type="string">
+Bank ISPB code.
+</ResponseField>
+
+<ResponseField name="data.med_case.original_transaction.payee" type="object">
+Payee details.
+</ResponseField>
+
+<ResponseField name="data.med_case.original_transaction.payee.name" type="string">
+Name.
+</ResponseField>
+
+<ResponseField name="data.med_case.original_transaction.payee.document" type="string">
+Identification document information for the transaction participant, using the safe display value returned by the service.
+</ResponseField>
+
+<ResponseField name="data.med_case.original_transaction.payee.bank_name" type="string">
+Bank name.
+</ResponseField>
+
+<ResponseField name="data.med_case.original_transaction.payee.branch" type="string">
+Branch code.
+</ResponseField>
+
+<ResponseField name="data.med_case.original_transaction.payee.account" type="string">
+Bank account details.
+</ResponseField>
+
+<ResponseField name="data.med_case.original_transaction.payee.ispb" type="string">
+Bank ISPB code.
+</ResponseField>
+
+<ResponseField name="data.med_case.fraud_type" type="integer">
+Fraud type. Enum: 0 MED_ORIGINAL_FRAUD_SITUATION_UNSPECIFIED; 1 MED_ORIGINAL_FRAUD_SITUATION_SCAM; 2 MED_ORIGINAL_FRAUD_SITUATION_ACCOUNT_TAKEOVER; 3 MED_ORIGINAL_FRAUD_SITUATION_COERCION; 4 MED_ORIGINAL_FRAUD_SITUATION_SOCIAL_ENGINEERING; 5 MED_ORIGINAL_FRAUD_SITUATION_OTHER; 6 MED_ORIGINAL_FRAUD_SITUATION_UNKNOWN.
+</ResponseField>
+
+<ResponseField name="data.med_case.requested_amount" type="string">
+Amount requested for processing, as a decimal string.
+</ResponseField>
+
+<ResponseField name="data.med_case.blocked_amount_total" type="string">
+Total blocked amount, as a decimal string.
+</ResponseField>
+
+<ResponseField name="data.med_case.returned_amount_total" type="string">
+Total returned amount, as a decimal string.
+</ResponseField>
+
+<ResponseField name="data.med_case.automatic_refund" type="boolean">
+Whether automatic refunds are enabled.
+</ResponseField>
+
+<ResponseField name="data.med_case.flow_type" type="integer">
+MED processing flow type. Enum: 0 MED_FLOW_TYPE_UNSPECIFIED; 1 MED_FLOW_TYPE_AUTOMATED; 2 MED_FLOW_TYPE_MANUAL.
+</ResponseField>
+
+<ResponseField name="data.med_case.created_at" type="integer">
+Creation time in UTC Unix milliseconds. Can be 0 if creation has not occurred or the time is not provided.
+</ResponseField>
+
+<ResponseField name="data.med_case.updated_at" type="integer">
+Last update time in UTC Unix milliseconds. Can be 0 if no update has occurred or the time is not provided.
+</ResponseField>
+
+<ResponseField name="data.med_case.analysis_deadline" type="integer">
+Analysis deadline in UTC Unix milliseconds. Initially set to 7 days after case creation and replaced by a positive analysis deadline returned during processing. Use the deadline in the actual response. <Badge color="blue" size="sm">Added · api-17-F14</Badge>
+</ResponseField>
+
+<ResponseField name="data.med_case.manual_refund_deadline" type="integer">
+Manual return deadline in UTC Unix milliseconds. Initially set to 72 hours after case creation, including when `automatic_refund` is `true`. The presence of a deadline does not itself mean that a manual return action is available. Use the actual response and case status. <Badge color="blue" size="sm">Added · api-17-F15</Badge>
+</ResponseField>
+
+<ResponseField name="data.med_case.can_cancel" type="boolean">
+Whether the case can currently be canceled.
+</ResponseField>
+
+<ResponseField name="data.med_case.timeline" type="array">
+List of case timeline records.
+</ResponseField>
+
+<ResponseField name="data.med_case.timeline[].entry_id" type="string">
+Timeline record ID.
+</ResponseField>
+
+<ResponseField name="data.med_case.timeline[].event_type" type="integer">
+Case timeline event type. Enum: 0 MED_TIMELINE_EVENT_TYPE_UNSPECIFIED; 1 MED_TIMELINE_EVENT_TYPE_CASE_CREATED; 2 MED_TIMELINE_EVENT_TYPE_CASE_TRACKED; 3 MED_TIMELINE_EVENT_TYPE_ANALYSIS_AWAITING; 4 MED_TIMELINE_EVENT_TYPE_ANALYZED; 5 MED_TIMELINE_EVENT_TYPE_REFUND_TRIGGERED; 6 MED_TIMELINE_EVENT_TYPE_REFUND_UPDATED; 7 MED_TIMELINE_EVENT_TYPE_CASE_COMPLETED; 8 MED_TIMELINE_EVENT_TYPE_CASE_CANCELLED; 9 MED_TIMELINE_EVENT_TYPE_INFRACTION_RECEIVED; 10 MED_TIMELINE_EVENT_TYPE_INFRACTION_CLOSED; 11 MED_TIMELINE_EVENT_TYPE_REFUND_REQUEST_RECEIVED; 12 MED_TIMELINE_EVENT_TYPE_REFUND_REQUEST_CLOSED; 13 MED_TIMELINE_EVENT_TYPE_SLA_BREACHED. <Badge color="orange" size="sm">Corrected · api-17-F17</Badge>
+</ResponseField>
+
+<ResponseField name="data.med_case.timeline[].title" type="string">
+Timeline event title.
+</ResponseField>
+
+<ResponseField name="data.med_case.timeline[].description" type="string">
+Timeline event description.
+</ResponseField>
+
+<ResponseField name="data.med_case.timeline[].event_time" type="integer">
+Time the timeline event occurred, in UTC Unix milliseconds. The value can be 0 if the event has not occurred or the value is not provided.
+</ResponseField>
+
+<ResponseField name="data.med_case.infractions" type="array">
+List of infraction tasks associated with the case.
+</ResponseField>
+
+<ResponseField name="data.med_case.infractions[].task_id" type="string">
+Task ID.
+</ResponseField>
+
+<ResponseField name="data.med_case.infractions[].infraction_report_id" type="string">
+Infraction report business ID.
+</ResponseField>
+
+<ResponseField name="data.med_case.infractions[].dict_infraction_report_id" type="string">
+Infraction report ID in DICT.
+</ResponseField>
+
+<ResponseField name="data.med_case.infractions[].status" type="integer">
+Current business status, interpreted according to the enum listed for this field. Enum: 0 MED_INFRACTION_TASK_STATUS_UNSPECIFIED; 1 MED_INFRACTION_TASK_STATUS_RECEIVED; 2 MED_INFRACTION_TASK_STATUS_BLOCKING_PENDING; 3 MED_INFRACTION_TASK_STATUS_BLOCKED; 4 MED_INFRACTION_TASK_STATUS_ANALYSIS_PENDING; 5 MED_INFRACTION_TASK_STATUS_CLOSED_AGREED; 6 MED_INFRACTION_TASK_STATUS_CLOSED_DISAGREED; 7 MED_INFRACTION_TASK_STATUS_CANCELLED; 8 MED_INFRACTION_TASK_STATUS_FAILED.
+</ResponseField>
+
+<ResponseField name="data.med_case.infractions[].status_display" type="string">
+Display text for the business status.
+</ResponseField>
+
+<ResponseField name="data.med_case.infractions[].requested_amount" type="string">
+Amount requested for processing, as a decimal string.
+</ResponseField>
+
+<ResponseField name="data.med_case.infractions[].blocked_amount" type="string">
+Frozen amount, as a decimal string.
+</ResponseField>
+
+<ResponseField name="data.med_case.infractions[].received_at" type="integer">
+Time the task was received, in UTC Unix milliseconds. The value can be 0 if the event has not occurred or the value is not provided.
+</ResponseField>
+
+<ResponseField name="data.med_case.infractions[].sla_deadline" type="integer">
+Task SLA deadline in UTC Unix milliseconds. The value can be 0 if the event has not occurred or the value is not provided.
+</ResponseField>
+
+<ResponseField name="data.med_case.infractions[].remaining_seconds" type="integer">
+Seconds remaining until the task deadline.
+</ResponseField>
+
+<ResponseField name="data.med_case.infractions[].root_end_to_end_id" type="string">
+End-to-end ID of the original Pix transaction.
+</ResponseField>
+
+<ResponseField name="data.med_case.infractions[].transaction_id" type="string">
+Transaction ID.
+</ResponseField>
+
+<ResponseField name="data.med_case.infractions[].original_transaction" type="object">
+Original transaction details.
+</ResponseField>
+
+<ResponseField name="data.med_case.infractions[].original_transaction.transaction_id" type="string">
+Transaction ID.
+</ResponseField>
+
+<ResponseField name="data.med_case.infractions[].original_transaction.root_end_to_end_id" type="string">
+End-to-end ID of the original Pix transaction.
+</ResponseField>
+
+<ResponseField name="data.med_case.infractions[].original_transaction.amount" type="string">
+Transaction amount as a decimal string.
+</ResponseField>
+
+<ResponseField name="data.med_case.infractions[].original_transaction.currency" type="string">
+Currency.
+</ResponseField>
+
+<ResponseField name="data.med_case.infractions[].original_transaction.completed_at" type="integer">
+Completion time. Can be 0 if completion has not occurred. Expressed in UTC Unix milliseconds. Can be 0 if completion has not occurred or the time is not provided.
+</ResponseField>
+
+<ResponseField name="data.med_case.infractions[].original_transaction.payer" type="object">
+Payer details.
+</ResponseField>
+
+<ResponseField name="data.med_case.infractions[].original_transaction.payer.name" type="string">
+Name.
+</ResponseField>
+
+<ResponseField name="data.med_case.infractions[].original_transaction.payer.document" type="string">
+Identification document information for the transaction participant, using the safe display value returned by the service.
+</ResponseField>
+
+<ResponseField name="data.med_case.infractions[].original_transaction.payer.bank_name" type="string">
+Bank name.
+</ResponseField>
+
+<ResponseField name="data.med_case.infractions[].original_transaction.payer.branch" type="string">
+Branch code.
+</ResponseField>
+
+<ResponseField name="data.med_case.infractions[].original_transaction.payer.account" type="string">
+Bank account details.
+</ResponseField>
+
+<ResponseField name="data.med_case.infractions[].original_transaction.payer.ispb" type="string">
+Bank ISPB code.
+</ResponseField>
+
+<ResponseField name="data.med_case.infractions[].original_transaction.payee" type="object">
+Payee details.
+</ResponseField>
+
+<ResponseField name="data.med_case.infractions[].original_transaction.payee.name" type="string">
+Name.
+</ResponseField>
+
+<ResponseField name="data.med_case.infractions[].original_transaction.payee.document" type="string">
+Identification document information for the transaction participant, using the safe display value returned by the service.
+</ResponseField>
+
+<ResponseField name="data.med_case.infractions[].original_transaction.payee.bank_name" type="string">
+Bank name.
+</ResponseField>
+
+<ResponseField name="data.med_case.infractions[].original_transaction.payee.branch" type="string">
+Branch code.
+</ResponseField>
+
+<ResponseField name="data.med_case.infractions[].original_transaction.payee.account" type="string">
+Bank account details.
+</ResponseField>
+
+<ResponseField name="data.med_case.infractions[].original_transaction.payee.ispb" type="string">
+Bank ISPB code.
+</ResponseField>
+
+<ResponseField name="data.med_case.infractions[].freeze_reference_id" type="string">
+Freeze reference ID. In infraction details, this is the associated task ID.
+</ResponseField>
+
+<ResponseField name="data.med_case.infractions[].freeze_effective_amount" type="string">
+Effective frozen amount, as a decimal string.
+</ResponseField>
+
+<ResponseField name="data.med_case.infractions[].freeze_shortfall_amount" type="string">
+Freeze shortfall amount, as a decimal string.
+</ResponseField>
+
+<ResponseField name="data.med_case.infractions[].freeze_status" type="string">
+Freeze status string.
+</ResponseField>
+
+<ResponseField name="data.med_case.refunds" type="array">
+List of MED refund tasks associated with the case.
+</ResponseField>
+
+<ResponseField name="data.med_case.refunds[].task_id" type="string">
+Task ID.
+</ResponseField>
+
+<ResponseField name="data.med_case.refunds[].refund_request_id" type="string">
+MED refund request business ID.
+</ResponseField>
+
+<ResponseField name="data.med_case.refunds[].dict_refund_request_id" type="string">
+MED refund request ID in DICT.
+</ResponseField>
+
+<ResponseField name="data.med_case.refunds[].status" type="integer">
+Current business status, interpreted according to the enum listed for this field. Enum: 0 MED_REFUND_TASK_STATUS_UNSPECIFIED; 1 MED_REFUND_TASK_STATUS_RECEIVED; 2 MED_REFUND_TASK_STATUS_PROCESSING; 3 MED_REFUND_TASK_STATUS_ACCEPTED_FULL; 4 MED_REFUND_TASK_STATUS_ACCEPTED_PARTIAL; 5 MED_REFUND_TASK_STATUS_REJECTED; 6 MED_REFUND_TASK_STATUS_CLOSED; 7 MED_REFUND_TASK_STATUS_CANCELLED; 8 MED_REFUND_TASK_STATUS_FAILED.
+</ResponseField>
+
+<ResponseField name="data.med_case.refunds[].status_display" type="string">
+Display text for the business status.
+</ResponseField>
+
+<ResponseField name="data.med_case.refunds[].requested_amount" type="string">
+Amount requested for processing, as a decimal string.
+</ResponseField>
+
+<ResponseField name="data.med_case.refunds[].refunded_amount" type="string">
+Amount returned, as a decimal string.
+</ResponseField>
+
+<ResponseField name="data.med_case.refunds[].monitor_account" type="boolean">
+Whether subsequent credits to the account are monitored.
+</ResponseField>
+
+<ResponseField name="data.med_case.refunds[].received_at" type="integer">
+Time the task was received, in UTC Unix milliseconds. The value can be 0 if the event has not occurred or the value is not provided.
+</ResponseField>
+
+<ResponseField name="data.med_case.refunds[].sla_deadline" type="integer">
+Task SLA deadline in UTC Unix milliseconds. The value can be 0 if the event has not occurred or the value is not provided.
+</ResponseField>
+
+<ResponseField name="data.med_case.refunds[].remaining_seconds" type="integer">
+Seconds remaining until the task deadline.
+</ResponseField>
+
+<ResponseField name="data.med_case.refunds[].root_end_to_end_id" type="string">
+End-to-end ID of the original Pix transaction.
+</ResponseField>
+
+<ResponseField name="data.med_case.refunds[].transaction_id" type="string">
+Transaction ID.
+</ResponseField>
+
+<ResponseField name="data.med_case.refunds[].original_transaction" type="object">
+Original transaction details.
+</ResponseField>
+
+<ResponseField name="data.med_case.refunds[].original_transaction.transaction_id" type="string">
+Transaction ID.
+</ResponseField>
+
+<ResponseField name="data.med_case.refunds[].original_transaction.root_end_to_end_id" type="string">
+End-to-end ID of the original Pix transaction.
+</ResponseField>
+
+<ResponseField name="data.med_case.refunds[].original_transaction.amount" type="string">
+Transaction amount as a decimal string.
+</ResponseField>
+
+<ResponseField name="data.med_case.refunds[].original_transaction.currency" type="string">
+Currency.
+</ResponseField>
+
+<ResponseField name="data.med_case.refunds[].original_transaction.completed_at" type="integer">
+Completion time. Can be 0 if completion has not occurred. Expressed in UTC Unix milliseconds. Can be 0 if completion has not occurred or the time is not provided.
+</ResponseField>
+
+<ResponseField name="data.med_case.refunds[].original_transaction.payer" type="object">
+Payer details.
+</ResponseField>
+
+<ResponseField name="data.med_case.refunds[].original_transaction.payer.name" type="string">
+Name.
+</ResponseField>
+
+<ResponseField name="data.med_case.refunds[].original_transaction.payer.document" type="string">
+Identification document information for the transaction participant, using the safe display value returned by the service.
+</ResponseField>
+
+<ResponseField name="data.med_case.refunds[].original_transaction.payer.bank_name" type="string">
+Bank name.
+</ResponseField>
+
+<ResponseField name="data.med_case.refunds[].original_transaction.payer.branch" type="string">
+Branch code.
+</ResponseField>
+
+<ResponseField name="data.med_case.refunds[].original_transaction.payer.account" type="string">
+Bank account details.
+</ResponseField>
+
+<ResponseField name="data.med_case.refunds[].original_transaction.payer.ispb" type="string">
+Bank ISPB code.
+</ResponseField>
+
+<ResponseField name="data.med_case.refunds[].original_transaction.payee" type="object">
+Payee details.
+</ResponseField>
+
+<ResponseField name="data.med_case.refunds[].original_transaction.payee.name" type="string">
+Name.
+</ResponseField>
+
+<ResponseField name="data.med_case.refunds[].original_transaction.payee.document" type="string">
+Identification document information for the transaction participant, using the safe display value returned by the service.
+</ResponseField>
+
+<ResponseField name="data.med_case.refunds[].original_transaction.payee.bank_name" type="string">
+Bank name.
+</ResponseField>
+
+<ResponseField name="data.med_case.refunds[].original_transaction.payee.branch" type="string">
+Branch code.
+</ResponseField>
+
+<ResponseField name="data.med_case.refunds[].original_transaction.payee.account" type="string">
+Bank account details.
+</ResponseField>
+
+<ResponseField name="data.med_case.refunds[].original_transaction.payee.ispb" type="string">
+Bank ISPB code.
+</ResponseField>
+
+<ResponseField name="data.med_case.fund_dispositions" type="array">
+List of associated frozen-funds debit or transfer disposition records. This is not a complete history of every freeze and release. <Badge color="orange" size="sm">Corrected · api-17-F18</Badge>
+</ResponseField>
+
+<ResponseField name="data.med_case.fund_dispositions[].disposition_id" type="string">
+Funds disposition record ID.
+</ResponseField>
+
+<ResponseField name="data.med_case.fund_dispositions[].infraction_task_id" type="string">
+Associated infraction task ID.
+</ResponseField>
+
+<ResponseField name="data.med_case.fund_dispositions[].refund_task_id" type="string">
+MED refund task ID.
+</ResponseField>
+
+<ResponseField name="data.med_case.fund_dispositions[].case_id" type="string">
+MED case ID.
+</ResponseField>
+
+<ResponseField name="data.med_case.fund_dispositions[].root_end_to_end_id" type="string">
+End-to-end ID of the original Pix transaction.
+</ResponseField>
+
+<ResponseField name="data.med_case.fund_dispositions[].transaction_id" type="string">
+Transaction ID.
+</ResponseField>
+
+<ResponseField name="data.med_case.fund_dispositions[].freeze_reference_id" type="string">
+Freeze reference ID. In infraction details, this is the associated task ID.
+</ResponseField>
+
+<ResponseField name="data.med_case.fund_dispositions[].operation" type="string">
+Funds disposition operation string. Values: `CONSUME` (debit funds previously blocked); `TRANSFER` (transfer previously blocked funds to the original payer). <Badge color="blue" size="sm">Added · api-17-F19</Badge>
+</ResponseField>
+
+<ResponseField name="data.med_case.fund_dispositions[].amount" type="string">
+Amount processed by this funds disposition operation, as a decimal string; not necessarily the amount of the original Pix transaction. <Badge color="blue" size="sm">Added · api-17-F21</Badge>
+</ResponseField>
+
+<ResponseField name="data.med_case.fund_dispositions[].remaining_frozen_amount" type="string">
+Remaining frozen amount after disposition, as a decimal string.
+</ResponseField>
+
+<ResponseField name="data.med_case.fund_dispositions[].provider_transaction_id" type="string">
+Upstream funds disposition transaction ID.
+</ResponseField>
+
+<ResponseField name="data.med_case.fund_dispositions[].status" type="string">
+Funds disposition status string. Values: `PENDING` (operation pending); `SUCCEEDED` (operation succeeded); `FAILED` (operation failed). <Badge color="orange" size="sm">Corrected · api-17-F20</Badge>
+</ResponseField>
+
+<ResponseField name="data.med_case.fund_dispositions[].created_at" type="integer">
+Creation time in UTC Unix milliseconds. Can be 0 if creation has not occurred or the time is not provided.
+</ResponseField>
+
+<ResponseField name="data.med_case.fund_dispositions[].updated_at" type="integer">
+Last update time in UTC Unix milliseconds. Can be 0 if no update has occurred or the time is not provided.
+</ResponseField>
+
+## Responses
+
+View response examples by the business `code` in the JSON response. Check the HTTP status and business code separately. An HTTP 200 response can also return a business error. <Badge color="orange" size="sm">Corrected · api-17-F22</Badge>
+
+| `code` | Meaning | Recommended action |
+| --- | --- | --- |
+| `200` | Request succeeded | Read data and determine the result using the business status defined for this endpoint. |
+| `400` | Request or validation failed | Parameter issue. Check and correct the request parameters. An empty `end_to_end_id` returns business code `4000` with the message "Field end_to_end_id is required" in English. Always provide a supported `original_fraud_situation` as well; downstream rejection is not guaranteed to use code `400`. <Badge color="blue" size="sm">Added · api-17-F23</Badge> |
+| `500` | System error | Log the response and confirm the business result first. |
+
+The examples illustrate the response structure. Use the actual response for message and business status values. See [Error Catalog](/api-reference/error-catalog) for other parameter, permission, and service errors. This section does not imply that the endpoint returns only these three code values.
+
+<Tip>
+To try this endpoint, send the request example to the Sandbox base URL `https://ebanking-openapi-sandbox.pagsmile.com.br` with your Sandbox AK/SK. Sign every request as described in [Environments & Credentials](/environments-and-credentials#api-request-signing).
+</Tip>
+
+
+<Accordion title="Corrections to the source document (19)" icon="clipboard-check">
+This page was checked against the Pagsmile Open API source code on 2026-11-10. Each change below is marked in the page with a badge that shows its ID.
+
+| ID | Change | Location | Source document text | Updated text |
+| --- | --- | --- | --- | --- |
+| api-17-F01 | Corrected (did not match the code) | Request parameters | No (not enforced at this layer) | Yes; must be 1 to 6 |
+| api-17-F02 | Corrected (did not match the code) | Request parameters | Original fraud situation enum. Values: 0 UNSPECIFIED; 1 SCAM; 2 ACCOUNT_TAKEOVER; 3 COERCION; 4 SOCIAL_ENGINEERING; 5 OTHER; 6 UNKNOWN | Original fraud situation enum. Accepted values: 1 SCAM; 2 ACCOUNT_TAKEOVER; 3 COERCION; 4 SOCIAL_ENGINEERING; 5 OTHER; 6 UNKNOWN. The enum value 0 UNSPECIFIED is not accepted when creating a case. |
+| api-17-F03 | Corrected (did not match the code) | cURL request example | `{ "end_to_end_id": "replace-with-original-end-to-end-id" }` | `{ "end_to_end_id": "replace-with-original-end-to-end-id", "original_fraud_situation": 1 }` |
+| api-17-F04 | Corrected (did not match the code) | Parameter sources | `end_to_end_id` comes from `data.statements[].settlement_id` in a successful response from Get account statement ↗ (`/v3/statements`). Filter for entries with `txn_status=2`. If multiple entries match, use the one with the largest amount. | `end_to_end_id` comes from `data.statements[].settlement_id` in a successful response from Get account statement ↗ (`/v3/statements`). Identify the original Pix payment being disputed and use its settlement ID. Confirm `payment_method=1` and the transaction details; do not choose an unrelated transaction merely because it has the largest amount. |
+| api-17-F05 | Corrected (did not match the code) | Behavior and handling / Case initiation requirements and original transaction linkage | The case is processed within the authorized account scope and remains linked to the original payment. | Use an original Pix payment belonging to the authorized account and verify that ownership before submitting. Account targeting does not itself verify ownership of the original transaction. The case remains linked to the original payment. |
+| api-17-F06 | Added (missing in the source) | Permissions and account ownership | ACCOUNT, or USER with the target account header. Requests must follow Environments & Credentials. | ACCOUNT, or USER with both `X-ISPB` and `X-Account-Number` identifying an account owned by that user. PLATFORM credentials are not accepted. With ACCOUNT credentials, account headers may be omitted; if sent, both must be nonempty and match the credential-bound account. Requests must follow Environments & Credentials. |
+| api-17-F07 | Added (missing in the source) | Request parameters | Complaint creation time | Complaint creation time as a UTC Unix timestamp in milliseconds. If omitted, the value is 0 and no complaint time is sent. Positive values below 1000000000000 are treated as Unix seconds and converted to milliseconds; use milliseconds for new integrations. Nonpositive values do not send a complaint time. |
+| api-17-F08 | Added (missing in the source) | Request parameters | Automatic return option, with no guarantee of funds recovery | Automatic return option. Defaults to false when omitted. false selects manual processing (`flow_type=2`); true selects automated processing (`flow_type=1`). The option is sent explicitly and does not guarantee full funds recovery. |
+| api-17-F10 | Added (missing in the source) | Behavior and handling / Case initiation requirements and original transaction linkage | Confirm the original transaction and case eligibility. | Confirm that the original transaction is a Pix payment and that the original payer account is neither closing nor closed. The original payment must be retrievable with an amount and transaction ID. |
+| api-17-F11 | Added (missing in the source) | Behavior and handling / Create MED case | Submit the case request with the applicable automatic return option, and save the case ID. | Submit the case request with the applicable automatic return option, and save the case ID. Repeated submissions of the same request are not guaranteed to return the same case. If the result is unknown, check for an existing case before submitting again. |
+| api-17-F14 | Added (missing in the source) | Response fields | Analysis deadline in UTC Unix milliseconds. The value can be 0 if the event has not occurred or the value is not provided. | Analysis deadline in UTC Unix milliseconds. Initially set to 7 days after case creation and replaced by a positive analysis deadline returned during processing. Use the deadline in the actual response. |
+| api-17-F15 | Added (missing in the source) | Response fields | Manual return deadline in UTC Unix milliseconds. The value can be 0 if the event has not occurred or the value is not provided. | Manual return deadline in UTC Unix milliseconds. Initially set to 72 hours after case creation, including when automatic_refund is true. The presence of a deadline does not itself mean that a manual return action is available. Use the actual response and case status. |
+| api-17-F17 | Corrected (did not match the code) | Response fields | Subscription or timeline event type. Enum: 0 MED_TIMELINE_EVENT_TYPE_UNSPECIFIED; 1 MED_TIMELINE_EVENT_TYPE_CASE_CREATED; 2 MED_TIMELINE_EVENT_TYPE_CASE_TRACKED; 3 MED_TIMELINE_EVENT_TYPE_ANALYSIS_AWAITING; 4 MED_TIMELINE_EVENT_TYPE_ANALYZED; 5 MED_TIMELINE_EVENT_TYPE_REFUND_TRIGGERED; 6 MED_TIMELINE_EVENT_TYPE_REFUND_UPDATED; 7 MED_TIMELINE_EVENT_TYPE_CASE_COMPLETED; 8 MED_TIMELINE_EVENT_TYPE_CASE_CANCELLED; 9 MED_TIMELINE_EVENT_TYPE_INFRACTION_RECEIVED; 10 MED_TIMELINE_EVENT_TYPE_INFRACTION_CLOSED; 11 MED_TIMELINE_EVENT_TYPE_REFUND_REQUEST_RECEIVED; 12 MED_TIMELINE_EVENT_TYPE_REFUND_REQUEST_CLOSED; 13 MED_TIMELINE_EVENT_TYPE_SLA_BREACHED. | Case timeline event type. Enum: 0 MED_TIMELINE_EVENT_TYPE_UNSPECIFIED; 1 MED_TIMELINE_EVENT_TYPE_CASE_CREATED; 2 MED_TIMELINE_EVENT_TYPE_CASE_TRACKED; 3 MED_TIMELINE_EVENT_TYPE_ANALYSIS_AWAITING; 4 MED_TIMELINE_EVENT_TYPE_ANALYZED; 5 MED_TIMELINE_EVENT_TYPE_REFUND_TRIGGERED; 6 MED_TIMELINE_EVENT_TYPE_REFUND_UPDATED; 7 MED_TIMELINE_EVENT_TYPE_CASE_COMPLETED; 8 MED_TIMELINE_EVENT_TYPE_CASE_CANCELLED; 9 MED_TIMELINE_EVENT_TYPE_INFRACTION_RECEIVED; 10 MED_TIMELINE_EVENT_TYPE_INFRACTION_CLOSED; 11 MED_TIMELINE_EVENT_TYPE_REFUND_REQUEST_RECEIVED; 12 MED_TIMELINE_EVENT_TYPE_REFUND_REQUEST_CLOSED; 13 MED_TIMELINE_EVENT_TYPE_SLA_BREACHED. |
+| api-17-F18 | Corrected (did not match the code) | Response fields | List of funds disposition records for freezes, releases, or refunds. | List of associated frozen-funds debit or transfer disposition records. This is not a complete history of every freeze and release. |
+| api-17-F19 | Added (missing in the source) | Response fields | Funds disposition operation type string. | Funds disposition operation string. Values: CONSUME (debit funds previously blocked); TRANSFER (transfer previously blocked funds to the original payer). |
+| api-17-F20 | Corrected (did not match the code) | Response fields | Current business status, interpreted according to the enum listed for this field. | Funds disposition status string. Values: PENDING (operation pending); SUCCEEDED (operation succeeded); FAILED (operation failed). |
+| api-17-F21 | Added (missing in the source) | Response fields | Transaction amount as a decimal string. | Amount processed by this funds disposition operation, as a decimal string; not necessarily the amount of the original Pix transaction. |
+| api-17-F22 | Corrected (did not match the code) | Responses / Request succeeded | `{ "code": 200, "message": "success", "data": { "med_case": { "case_id": "example-case_id", "funds_recovery_id": "example-funds_recovery_id", "dict_funds_recovery_id": "example-dict_funds_recovery_id", "root_end_to_end_id": "example-root_end_to_end_id", "status": 0, "status_display": "example-status_display", "progress_step": 0, "original_transaction": {}, "fraud_type": 0, "requested_amount": "10.00", "blocked_amount_total": "10.00", "returned_amount_total": "10.00", "automatic_refund": false, "flow_type": 0, "created_at": 0, "updated_at": 0, "analysis_deadline": 0, "manual_refund_deadline": 0, "can_cancel": false, "timeline": [], "infractions": [], "refunds": [], "fund_dispositions": [] } }, "time": 1791792000000 }` | `{ "code": 200, "message": "success", "data": { "med_case": { "case_id": "example-case_id", "funds_recovery_id": "example-funds_recovery_id", "dict_funds_recovery_id": "example-dict_funds_recovery_id", "root_end_to_end_id": "example-root_end_to_end_id", "status": 2, "status_display": "DISPUTE_SITUATION_IN_PROGRESS", "progress_step": 2, "original_transaction": { "transaction_id": "example-transaction-id", "root_end_to_end_id": "example-root_end_to_end_id", "amount": "10.00", "currency": "BRL", "completed_at": 1791791940000, "payer": { "name": "Example payer", "document": "11144477735", "ispb": "37753531", "branch": "0001", "account": "00000001" }, "payee": { "name": "Example payee", "document": "12345678909", "ispb": "00000000", "branch": "0001", "account": "00000002" } }, "fraud_type": 1, "requested_amount": "10.00", "blocked_amount_total": "0", "returned_amount_total": "0", "automatic_refund": false, "flow_type": 2, "created_at": 1791792000000, "updated_at": 1791792000000, "analysis_deadline": 1792396800000, "manual_refund_deadline": 1792051200000, "can_cancel": true, "timeline": [], "infractions": [], "refunds": [], "fund_dispositions": [] } }, "time": 1791792000000 }` |
+| api-17-F23 | Added (missing in the source) | Responses / Request or validation failed | Parameter issue. Check and correct the request parameters. | Parameter issue. Check and correct the request parameters. An empty end_to_end_id returns business code 4000 with the message "Field end_to_end_id is required" in English. Always provide a supported original_fraud_situation as well; downstream rejection is not guaranteed to use code 400. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "end_to_end_id": "replace-with-original-end-to-end-id",
+  "original_fraud_situation": 1
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/med/create' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${ACCOUNT_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Request succeeded
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "med_case": {
+      "case_id": "example-case_id",
+      "funds_recovery_id": "example-funds_recovery_id",
+      "dict_funds_recovery_id": "example-dict_funds_recovery_id",
+      "root_end_to_end_id": "example-root_end_to_end_id",
+      "status": 2,
+      "status_display": "DISPUTE_SITUATION_IN_PROGRESS",
+      "progress_step": 2,
+      "original_transaction": {
+        "transaction_id": "example-transaction-id",
+        "root_end_to_end_id": "example-root_end_to_end_id",
+        "amount": "10.00",
+        "currency": "BRL",
+        "completed_at": 1791791940000,
+        "payer": {
+          "name": "Example payer",
+          "document": "11144477735",
+          "ispb": "37753531",
+          "branch": "0001",
+          "account": "00000001"
+        },
+        "payee": {
+          "name": "Example payee",
+          "document": "12345678909",
+          "ispb": "00000000",
+          "branch": "0001",
+          "account": "00000002"
+        }
+      },
+      "fraud_type": 1,
+      "requested_amount": "10.00",
+      "blocked_amount_total": "0",
+      "returned_amount_total": "0",
+      "automatic_refund": false,
+      "flow_type": 2,
+      "created_at": 1791792000000,
+      "updated_at": 1791792000000,
+      "analysis_deadline": 1792396800000,
+      "manual_refund_deadline": 1792051200000,
+      "can_cancel": true,
+      "timeline": [],
+      "infractions": [],
+      "refunds": [],
+      "fund_dispositions": []
+    }
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Request or validation failed
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 System error
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

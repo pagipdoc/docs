@@ -1,0 +1,338 @@
+---
+title: "Get refund details"
+description: "Query refund details to link the original transaction, refund amount, and processing result for tracking and reconciliation."
+api: "POST /v3/refunds/details"
+keywords: ["/v3/refunds/details"]
+---
+
+## Behavior and handling
+
+Query refund details to link the original transaction, refund amount, and processing result for tracking and reconciliation.
+
+### Links between original transactions, refunds, and statement entries
+
+Save the original transaction's settlement ID, refund order ID, refund ID, settlement refund ID, amount, and status. Record the refund separately without overwriting the original transaction. Link the refund statement entry to the refund and original transaction to reconcile them. Use `parent_txn_id` and `parent_settlement_id` from the matching refund statement entry to identify the original transaction; this refund-details response does not populate `original_settlement_id`. <Badge color="blue" size="sm">Added · api-6-F10</Badge>
+
+## Permissions and account ownership
+
+ACCOUNT, or USER with both `X-ISPB` and `X-Account-Number` for an account owned by that USER. ACCOUNT credentials use their bound account; if account headers are sent, both must be nonempty and match that account. The target account must be the refund sender or recipient. The refund recipient (the original payer) can query only completed refunds; unfinished refunds are returned as business code `4003003` (Transaction detail not found). An account that is neither party receives business code `4004101` (Authorization is required). <Badge color="blue" size="sm">Added · api-6-F04</Badge> Requests must follow [Environments & Credentials](/environments-and-credentials).
+
+## Request parameters
+
+<ParamField body="refund_id" type="string">
+**Required:** At least one. The `txn_id` from the statement entry for the refund you want to query, with `txn_type=2`; you must provide at least one of `refund_id` or `settlement_refund_id` <Badge color="orange" size="sm">Corrected · api-6-F01</Badge>
+</ParamField>
+
+<ParamField body="settlement_refund_id" type="string">
+**Required:** At least one. The `settlement_id` from the same refund statement entry; you must provide at least one of `refund_id` or `settlement_refund_id`. If both are provided, `refund_id` takes precedence: `settlement_refund_id` is not used as a fallback and is not checked for a match. <Badge color="blue" size="sm">Added · api-6-F03</Badge>
+</ParamField>
+
+<Info>
+**Parameter sources**
+
+Find the record for the refund you want to query, with `txn_type=2`, in a successful [Get account statement](/api-reference/accounts/get-account-statement) (`/v3/statements`) response. <Badge color="orange" size="sm">Corrected · api-6-F02</Badge> Populate `refund_id` with `txn_id` and `settlement_refund_id` with `settlement_id` from the same record.
+</Info>
+
+## cURL request example
+
+The example uses ACCOUNT-level credentials. Enter the actual parameters and generate the signature from the final body.json.
+
+## Response fields
+
+Field paths start at the response root. `[]` indicates an array element. Amounts use decimal strings. Enum values are defined separately for each field. The structure below describes a success response. A null value or 0 alone does not indicate that processing is complete.
+
+<ResponseField name="code" type="integer">
+Business result code. A value of 200 indicates success. Business errors are returned in this field. It is not the HTTP status code.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Business result description. On failure, use this with code to determine the cause.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Data object in a successful response. Can be null in an error response.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Response time as a UTC Unix timestamp in milliseconds.
+</ResponseField>
+
+<ResponseField name="data.details" type="object">
+Transaction details; txn_id identifies the refund. The settlement refund ID is currently not populated in this structure.
+</ResponseField>
+
+<ResponseField name="data.details.payee" type="object">
+Payee details.
+</ResponseField>
+
+<ResponseField name="data.details.payee.name" type="string">
+Name.
+</ResponseField>
+
+<ResponseField name="data.details.payee.document_id" type="string">
+Transaction participant's document number. It may be masked based on the merchant's configuration.
+</ResponseField>
+
+<ResponseField name="data.details.payee.document_type" type="integer">
+Document type. Enum: 0 DOCUMENT_TYPE_UNSPECIFIED; 1 DOCUMENT_TYPE_CPF; 2 DOCUMENT_TYPE_CNPJ.
+</ResponseField>
+
+<ResponseField name="data.details.payee.bank_account" type="string">
+Account number.
+</ResponseField>
+
+<ResponseField name="data.details.payee.bank_account_type" type="integer">
+Bank account type. Enum: 0 BANK_ACCOUNT_TYPE_UNSPECIFIED; 1 BANK_ACCOUNT_TYPE_CHECKING; 2 BANK_ACCOUNT_TYPE_SALARY; 3 BANK_ACCOUNT_TYPE_SAVINGS; 4 BANK_ACCOUNT_TYPE_PAYMENT; 5 BANK_ACCOUNT_TYPE_TRANSCTIONAL_PI; 7 BANK_ACCOUNT_TYPE_DEPOSIT; 6 BANK_ACCOUNT_TYPE_GUARANTEED.
+</ResponseField>
+
+<ResponseField name="data.details.payee.bank_branch" type="string">
+Bank branch code.
+</ResponseField>
+
+<ResponseField name="data.details.payee.bank_code" type="string">
+Bank ISPB.
+</ResponseField>
+
+<ResponseField name="data.details.payee.bank_name" type="string">
+Bank name.
+</ResponseField>
+
+<ResponseField name="data.details.payer" type="object">
+Payer details.
+</ResponseField>
+
+<ResponseField name="data.details.payer.name" type="string">
+Name.
+</ResponseField>
+
+<ResponseField name="data.details.payer.document_id" type="string">
+Transaction participant's document number. It may be masked based on the merchant's configuration.
+</ResponseField>
+
+<ResponseField name="data.details.payer.document_type" type="integer">
+Document type. Enum: 0 DOCUMENT_TYPE_UNSPECIFIED; 1 DOCUMENT_TYPE_CPF; 2 DOCUMENT_TYPE_CNPJ.
+</ResponseField>
+
+<ResponseField name="data.details.payer.bank_account" type="string">
+Account number.
+</ResponseField>
+
+<ResponseField name="data.details.payer.bank_account_type" type="integer">
+Bank account type. Enum: 0 BANK_ACCOUNT_TYPE_UNSPECIFIED; 1 BANK_ACCOUNT_TYPE_CHECKING; 2 BANK_ACCOUNT_TYPE_SALARY; 3 BANK_ACCOUNT_TYPE_SAVINGS; 4 BANK_ACCOUNT_TYPE_PAYMENT; 5 BANK_ACCOUNT_TYPE_TRANSCTIONAL_PI; 7 BANK_ACCOUNT_TYPE_DEPOSIT; 6 BANK_ACCOUNT_TYPE_GUARANTEED.
+</ResponseField>
+
+<ResponseField name="data.details.payer.bank_branch" type="string">
+Bank branch code.
+</ResponseField>
+
+<ResponseField name="data.details.payer.bank_code" type="string">
+Bank ISPB.
+</ResponseField>
+
+<ResponseField name="data.details.payer.bank_name" type="string">
+Bank name.
+</ResponseField>
+
+<ResponseField name="data.details.txn_id" type="string">
+Transaction ID.
+</ResponseField>
+
+<ResponseField name="data.details.settlement_id" type="string">
+Settlement transaction ID; currently not populated by this endpoint and returned as an empty string.
+</ResponseField>
+
+<ResponseField name="data.details.merchant_order_id" type="string">
+Caller's merchant order ID.
+</ResponseField>
+
+<ResponseField name="data.details.txn_status" type="integer">
+Refund processing status. This endpoint maps refund states to `1` `TXN_STATUS_PENDING`, `5` `TXN_STATUS_PROCESSING`, `2` `TXN_STATUS_COMPLETED`, or `3` `TXN_STATUS_FAILED`; an unrecognized state maps to `0` `TXN_STATUS_UNSPECIFIED`. The other values belong to the shared transaction enum and are not produced by this refund-state mapping. <Badge color="blue" size="sm">Added · api-6-F06</Badge>
+</ResponseField>
+
+<ResponseField name="data.details.source_type" type="integer">
+Source type. This endpoint currently returns `0` (`SOURCE_TYPE_UNSPECIFIED`), including for API-initiated refunds. Shared enum: `0` `SOURCE_TYPE_UNSPECIFIED`; `1` `SOURCE_TYPE_APP`; `2` `SOURCE_TYPE_API`; `3` `SOURCE_TYPE_SCHEDULE`; `4` `SOURCE_TYPE_BATCH`. <Badge color="blue" size="sm">Added · api-6-F05</Badge>
+</ResponseField>
+
+<ResponseField name="data.details.amount" type="string">
+Transaction amount as a decimal string.
+</ResponseField>
+
+<ResponseField name="data.details.memo" type="string">
+Transaction note.
+</ResponseField>
+
+<ResponseField name="data.details.credit_fee" type="string">
+Credit-side fee, as a decimal string.
+</ResponseField>
+
+<ResponseField name="data.details.debit_fee" type="string">
+Debit-side fee, decimal string.
+</ResponseField>
+
+<ResponseField name="data.details.currency" type="string">
+Currency.
+</ResponseField>
+
+<ResponseField name="data.details.rejection_reason" type="string">
+Transaction rejection or failure reason. This endpoint does not populate this field: empty string.
+</ResponseField>
+
+<ResponseField name="data.details.created_at" type="integer">
+Creation time, as a UTC Unix timestamp in milliseconds. Can be 0 if creation has not occurred or the time is not provided. This endpoint does not populate this field: 0.
+</ResponseField>
+
+<ResponseField name="data.details.completed_at" type="integer">
+Completion time. Can be 0 if completion has not occurred. UTC Unix timestamp in milliseconds; can be 0 if completion has not occurred or the time is not provided. This endpoint does not populate this field: 0.
+</ResponseField>
+
+<ResponseField name="data.details.pix_details" type="object">
+Pix-specific transaction details. This endpoint does not populate this field: null.
+</ResponseField>
+
+<ResponseField name="data.details.pix_details.pix_key" type="string">
+Pix key value.
+</ResponseField>
+
+<ResponseField name="data.details.pix_details.pix_key_type" type="integer">
+Pix key type. Enum: 0 PIX_KEY_TYPE_UNSPECIFIED; 1 PIX_KEY_TYPE_CPF; 2 PIX_KEY_TYPE_CNPJ; 3 PIX_KEY_TYPE_EMAIL; 4 PIX_KEY_TYPE_PHONE; 5 PIX_KEY_TYPE_EVP.
+</ResponseField>
+
+<ResponseField name="data.details.pix_details.qr_code_id" type="string">
+QR code ID.
+</ResponseField>
+
+<ResponseField name="data.details.ted_details" type="object">
+TED-specific transaction details. This endpoint does not populate this field: null.
+</ResponseField>
+
+<ResponseField name="data.details.ted_details.spb_request_id" type="string">
+SPB request ID for the TED transaction.
+</ResponseField>
+
+<ResponseField name="data.details.original_settlement_id" type="string">
+Original transaction's settlement transaction ID. This endpoint does not populate this field: empty string.
+</ResponseField>
+
+## Responses
+
+View response examples by the business `code` in the JSON response. Check the HTTP status and business code separately. Malformed JSON or a JSON value with the wrong field type can return HTTP 400 with a text response rather than this JSON envelope; parse the business code only when the body is JSON. <Badge color="blue" size="sm">Added · api-6-F12</Badge> An HTTP 200 response can also return a business error. <Badge color="orange" size="sm">Corrected · api-6-F09</Badge>
+
+| `code` | Meaning | Recommended action |
+| --- | --- | --- |
+| `200` | Request succeeded | Read data and determine the result using the business status defined for this endpoint. |
+| `400` | Request or validation failed | Parameter issue. Check and correct the request parameters. |
+| `500` | System error | Log the response and confirm the business result first. |
+
+The examples illustrate the response structure. Use the actual response for message and business status values. See [Error Catalog](/api-reference/error-catalog) for other parameter, permission, and service errors. This section does not imply that the endpoint returns only these three code values. If both identifiers are empty, code `4000` is returned (Field refund_id or settlement_refund_id is required). If the refund is not found or is hidden from the recipient because it is not completed, code `4003003` is returned (Transaction detail not found). An unrelated target account receives code `4004101` (Authorization is required). A communication failure can return code `501`. <Badge color="blue" size="sm">Added · api-6-F11</Badge>
+
+<Tip>
+To try this endpoint, send the request example to the Sandbox base URL `https://ebanking-openapi-sandbox.pagsmile.com.br` with your Sandbox AK/SK. Sign every request as described in [Environments & Credentials](/environments-and-credentials#api-request-signing).
+</Tip>
+
+
+<Accordion title="Corrections to the source document (10)" icon="clipboard-check">
+This page was checked against the Pagsmile Open API source code on 2026-11-10. Each change below is marked in the page with a badge that shows its ID.
+
+| ID | Change | Location | Source document text | Updated text |
+| --- | --- | --- | --- | --- |
+| api-6-F01 | Corrected (did not match the code) | Request parameters | The `txn_id` from the first account statement entry with `txn_type=2`; you must provide at least one of refund_id or settlement_refund_id | The `txn_id` from the statement entry for the refund you want to query, with `txn_type=2`; you must provide at least one of refund_id or settlement_refund_id |
+| api-6-F02 | Corrected (did not match the code) | Parameter sources | Find the first record with `txn_type=2` in a successful Get account statement ↗ (`/v3/statements`) response. | Find the record for the refund you want to query, with `txn_type=2`, in a successful Get account statement ↗ (`/v3/statements`) response. |
+| api-6-F03 | Added (missing in the source) | Request parameters | The `settlement_id` from the same refund statement entry; you must provide at least one of refund_id or settlement_refund_id | The `settlement_id` from the same refund statement entry; you must provide at least one of refund_id or settlement_refund_id. If both are provided, refund_id takes precedence: settlement_refund_id is not used as a fallback and is not checked for a match. |
+| api-6-F04 | Added (missing in the source) | Permissions and account ownership | ACCOUNT, or USER with the target account header. | ACCOUNT, or USER with both X-ISPB and X-Account-Number for an account owned by that USER. ACCOUNT credentials use their bound account; if account headers are sent, both must be nonempty and match that account. The target account must be the refund sender or recipient. The refund recipient (the original payer) can query only completed refunds; unfinished refunds are returned as business code 4003003 (Transaction detail not found). An account that is neither party receives business code 4004101 (Authorization is required). |
+| api-6-F05 | Added (missing in the source) | Response fields | Source type. Enum: 0 SOURCE_TYPE_UNSPECIFIED; 1 SOURCE_TYPE_APP; 2 SOURCE_TYPE_API; 3 SOURCE_TYPE_SCHEDULE; 4 SOURCE_TYPE_BATCH. | Source type. This endpoint currently returns 0 (SOURCE_TYPE_UNSPECIFIED), including for API-initiated refunds. Shared enum: 0 SOURCE_TYPE_UNSPECIFIED; 1 SOURCE_TYPE_APP; 2 SOURCE_TYPE_API; 3 SOURCE_TYPE_SCHEDULE; 4 SOURCE_TYPE_BATCH. |
+| api-6-F06 | Added (missing in the source) | Response fields | Transaction status. Enum: 0 TXN_STATUS_UNSPECIFIED; 1 TXN_STATUS_PENDING; 2 TXN_STATUS_COMPLETED; 3 TXN_STATUS_FAILED; 4 TXN_STATUS_CANCELLED; 5 TXN_STATUS_PROCESSING; 6 TXN_STATUS_REFUNDED; 7 TXN_STATUS_PARTIALLY_REFUNDED; 8 TXN_STATUS_DISPUTED. | Refund processing status. This endpoint maps refund states to 1 TXN_STATUS_PENDING, 5 TXN_STATUS_PROCESSING, 2 TXN_STATUS_COMPLETED, or 3 TXN_STATUS_FAILED; an unrecognized state maps to 0 TXN_STATUS_UNSPECIFIED. The other values belong to the shared transaction enum and are not produced by this refund-state mapping. |
+| api-6-F09 | Corrected (did not match the code) | Responses / Request succeeded | `{ "code": 200, "message": "success", "data": { "details": { "payee": {}, "payer": {}, "txn_id": "example-txn_id", "settlement_id": "example-settlement_id", "merchant_order_id": "example-merchant_order_id", "txn_status": 0, "source_type": 0, "amount": "10.00", "memo": "example-memo", "credit_fee": "example-credit_fee", "debit_fee": "example-debit_fee", "currency": "BRL", "rejection_reason": "example-rejection_reason", "created_at": 0, "completed_at": 0, "pix_details": {}, "ted_details": {}, "original_settlement_id": "example-original_settlement_id" } }, "time": 1791792000000 }` | `{ "code": 200, "message": "success", "data": { "details": { "payee": { "name": "Example Recipient", "document_id": "12345678901", "document_type": 1, "bank_account": "00000001", "bank_account_type": 1, "bank_branch": "0001", "bank_code": "12345678", "bank_name": "Example Bank" }, "payer": { "name": "Example Sender", "document_id": "98765432100", "document_type": 1, "bank_account": "00000002", "bank_account_type": 1, "bank_branch": "0001", "bank_code": "87654321", "bank_name": "Example Bank" }, "txn_id": "example-txn_id", "settlement_id": "", "merchant_order_id": "example-merchant_order_id", "txn_status": 2, "source_type": 0, "amount": "10.00", "memo": "example-memo", "credit_fee": "0.00", "debit_fee": "0.00", "currency": "BRL", "rejection_reason": "", "created_at": 0, "completed_at": 0, "pix_details": null, "ted_details": null, "original_settlement_id": "" }, "error": null, "result": null }, "time": 1791792000000 }` |
+| api-6-F10 | Added (missing in the source) | Links between original transactions, refunds, and statement entries | Link the refund statement entry to the refund and original transaction to reconcile them. | Link the refund statement entry to the refund and original transaction to reconcile them. Use parent_txn_id and parent_settlement_id from the matching refund statement entry to identify the original transaction; this refund-details response does not populate original_settlement_id. |
+| api-6-F11 | Added (missing in the source) | Responses | This section does not imply that the endpoint returns only these three code values. | This section does not imply that the endpoint returns only these three code values. If both identifiers are empty, code 4000 is returned (Field refund_id or settlement_refund_id is required). If the refund is not found or is hidden from the recipient because it is not completed, code 4003003 is returned (Transaction detail not found). An unrelated target account receives code 4004101 (Authorization is required). A communication failure can return code 501. |
+| api-6-F12 | Added (missing in the source) | Responses | Check the HTTP status and business code separately. | Check the HTTP status and business code separately. Malformed JSON or a JSON value with the wrong field type can return HTTP 400 with a text response rather than this JSON envelope; parse the business code only when the body is JSON. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "refund_id": "replace-with-refund-id"
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/refunds/details' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${ACCOUNT_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Request succeeded
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "details": {
+      "payee": {
+        "name": "Example Recipient",
+        "document_id": "12345678901",
+        "document_type": 1,
+        "bank_account": "00000001",
+        "bank_account_type": 1,
+        "bank_branch": "0001",
+        "bank_code": "12345678",
+        "bank_name": "Example Bank"
+      },
+      "payer": {
+        "name": "Example Sender",
+        "document_id": "98765432100",
+        "document_type": 1,
+        "bank_account": "00000002",
+        "bank_account_type": 1,
+        "bank_branch": "0001",
+        "bank_code": "87654321",
+        "bank_name": "Example Bank"
+      },
+      "txn_id": "example-txn_id",
+      "settlement_id": "",
+      "merchant_order_id": "example-merchant_order_id",
+      "txn_status": 2,
+      "source_type": 0,
+      "amount": "10.00",
+      "memo": "example-memo",
+      "credit_fee": "0.00",
+      "debit_fee": "0.00",
+      "currency": "BRL",
+      "rejection_reason": "",
+      "created_at": 0,
+      "completed_at": 0,
+      "pix_details": null,
+      "ted_details": null,
+      "original_settlement_id": ""
+    },
+    "error": null,
+    "result": null
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Request or validation failed
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 System error
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

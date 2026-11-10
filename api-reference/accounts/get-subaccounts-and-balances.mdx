@@ -1,0 +1,376 @@
+---
+title: "Get subaccounts and balances"
+description: "Use USER-level credentials to query a specified subaccount's information, balance, frozen amount, and associated configuration within your authorization scope."
+api: "POST /v3/bank_account"
+keywords: ["/v3/bank_account"]
+---
+
+## Behavior and handling
+
+Use USER-level credentials to query a specified subaccount's information, balance, frozen amount, and associated configuration within your authorization scope. Query only one target account at a time.
+
+If the balance snapshot query fails, the outer code can still be 200, and amounts fall back to 0. The current response has no fallback indicator, so a single response cannot distinguish a true zero balance from a fallback value. Query again and cross-check the account's transaction details and statement entries. If the results still do not match, keep a record of the account details, query time, and masked response, and contact integration support to investigate.
+
+## Permissions and account ownership
+
+Use USER AK/SK. You must include both the `X-ISPB` and `X-Account-Number` headers for the target subaccount. The server validates the target account's status and USER ownership. You cannot query other users' accounts.
+
+The request body is `{}`. Account selection is not passed through the `account_number` field in the request body. For request signing, see [Environments & Credentials](/environments-and-credentials).
+
+## Request parameters
+
+<ParamField header="X-Client-ID" type="string">
+USER-level AK
+</ParamField>
+
+<ParamField header="X-ISPB" type="string">
+Required. The target subaccount's ISPB. Preserve leading zeros
+</ParamField>
+
+<ParamField header="X-Account-Number" type="string">
+Required. The target subaccount's account number. Pass it as a string and preserve leading zeros
+</ParamField>
+
+<ParamField body="No fields" type="string">
+`{}`
+</ParamField>
+
+## cURL request example
+
+Use your actual USER AK/SK to generate the timestamp, nonce, body SHA-256 hash, and signature before sending the request. Do not include the SK in the request. Both target account headers must also be included in signing.
+
+## Response fields
+
+Field paths start at the response root. `[]` indicates an array element. Amounts use decimal strings. Enum values are defined separately for each field. The structure below describes a success response. A null value or 0 alone does not indicate that processing is complete.
+
+<ResponseField name="code" type="integer">
+Business result code. A value of 200 indicates success. Business errors are returned in this field. It is not the HTTP status code.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Business result description. On failure, use this with code to determine the cause.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Data object in a successful response. Can be null in an error response.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Response time as a UTC Unix timestamp in milliseconds.
+</ResponseField>
+
+<ResponseField name="data.account_number" type="string">
+Account number.
+</ResponseField>
+
+<ResponseField name="data.ispb" type="string">
+Bank ISPB code.
+</ResponseField>
+
+<ResponseField name="data.balance" type="string">
+Account balance, as a decimal string.
+</ResponseField>
+
+<ResponseField name="data.frozen_amount" type="string">
+Frozen balance, as a decimal string.
+</ResponseField>
+
+<ResponseField name="data.available_amount" type="string">
+Available balance, as a decimal string.
+</ResponseField>
+
+<ResponseField name="data.currency" type="string">
+Currency.
+</ResponseField>
+
+<ResponseField name="data.med_frozen_amount" type="string">
+Effective amount frozen for MED, as a decimal string. This amount is capped at `frozen_amount`. If the MED freeze summary cannot be retrieved, this field falls back to `"0"` even when the balance snapshot succeeds, without a fallback indicator. <Badge color="blue" size="sm">Added · bank-account-child-F05</Badge>
+</ResponseField>
+
+<ResponseField name="data.other_frozen_amount" type="string">
+Amount frozen for other operations, as a decimal string, calculated as `frozen_amount` minus `med_frozen_amount`, with a minimum of `"0"`. If the MED summary falls back to zero, this field includes the entire frozen amount and must not be treated as a verified non-MED breakdown. <Badge color="blue" size="sm">Added · bank-account-child-F06</Badge>
+</ResponseField>
+
+<ResponseField name="data.pix_keys" type="array">
+List of valid Pix keys for the account. The list currently contains only ACTIVE entries and can be empty if retrieval fails.
+</ResponseField>
+
+<ResponseField name="data.pix_keys[].pix_key" type="string">
+Pix key value.
+</ResponseField>
+
+<ResponseField name="data.pix_keys[].pix_key_type" type="integer">
+Pix key type. Enum: 0 PIX_KEY_TYPE_UNSPECIFIED; 1 PIX_KEY_TYPE_CPF; 2 PIX_KEY_TYPE_CNPJ; 3 PIX_KEY_TYPE_EMAIL; 4 PIX_KEY_TYPE_PHONE; 5 PIX_KEY_TYPE_EVP.
+</ResponseField>
+
+<ResponseField name="data.pix_keys[].status" type="integer">
+Current business status, interpreted according to the enum values listed for this field. Enum: 0 PIX_KEY_STATUS_UNSPECIFIED; 1 PIX_KEY_STATUS_ACTIVE; 2 PIX_KEY_STATUS_INACTIVE; 3 PIX_KEY_STATUS_BLOCKED; 4 PIX_KEY_STATUS_DELETED.
+</ResponseField>
+
+<ResponseField name="data.pix_keys[].created_at" type="integer">
+Creation time in UTC Unix milliseconds. Can be 0 if creation has not occurred or the time is not provided.
+</ResponseField>
+
+<ResponseField name="data.limit_config" type="object">
+Account limit configuration. It may be unavailable if no limits can be retrieved. Individual transfer, withdrawal, daytime, nighttime, or holder-specific values may be missing when the corresponding limit is unavailable. Missing values do not mean a zero or unlimited limit. <Badge color="blue" size="sm">Added · bank-account-child-F04</Badge>
+</ResponseField>
+
+<ResponseField name="data.limit_config.transfer" type="object">
+Transfer limit configuration.
+</ResponseField>
+
+<ResponseField name="data.limit_config.transfer.daytime" type="object">
+Daytime limit configuration.
+</ResponseField>
+
+<ResponseField name="data.limit_config.transfer.daytime.cpf" type="string">
+Limit for a CPF holder, as a decimal string.
+</ResponseField>
+
+<ResponseField name="data.limit_config.transfer.daytime.cnpj" type="string">
+Limit for a CNPJ holder, as a decimal string.
+</ResponseField>
+
+<ResponseField name="data.limit_config.transfer.nighttime" type="object">
+Nighttime limit configuration.
+</ResponseField>
+
+<ResponseField name="data.limit_config.transfer.nighttime.cpf" type="string">
+Limit for a CPF holder, as a decimal string.
+</ResponseField>
+
+<ResponseField name="data.limit_config.transfer.nighttime.cnpj" type="string">
+Limit for a CNPJ holder, as a decimal string.
+</ResponseField>
+
+<ResponseField name="data.limit_config.transfer.nighttime.nighttime_period" type="string">
+Time period when the nighttime limit applies.
+</ResponseField>
+
+<ResponseField name="data.limit_config.withdraw" type="object">
+Withdrawal limit view. This query currently reuses the CNPJ daytime and nighttime transfer-limit amounts and nighttime period. It does not return independently queried withdrawal-limit values. <Badge color="blue" size="sm">Added · bank-account-child-F09</Badge>
+</ResponseField>
+
+<ResponseField name="data.limit_config.withdraw.daytime" type="object">
+Daytime limit configuration.
+</ResponseField>
+
+<ResponseField name="data.limit_config.withdraw.daytime.cpf" type="string">
+Compatibility field. This query does not populate CPF daytime withdrawal limits. Do not use this field to determine a CPF withdrawal limit. <Badge color="orange" size="sm">Corrected · bank-account-child-F01</Badge>
+</ResponseField>
+
+<ResponseField name="data.limit_config.withdraw.daytime.cnpj" type="string">
+Limit for a CNPJ holder, as a decimal string.
+</ResponseField>
+
+<ResponseField name="data.limit_config.withdraw.nighttime" type="object">
+Nighttime limit configuration.
+</ResponseField>
+
+<ResponseField name="data.limit_config.withdraw.nighttime.cpf" type="string">
+Compatibility field. This query does not populate CPF nighttime withdrawal limits. Do not use this field to determine a CPF withdrawal limit. <Badge color="orange" size="sm">Corrected · bank-account-child-F02</Badge>
+</ResponseField>
+
+<ResponseField name="data.limit_config.withdraw.nighttime.cnpj" type="string">
+Limit for a CNPJ holder, as a decimal string.
+</ResponseField>
+
+<ResponseField name="data.limit_config.withdraw.nighttime.nighttime_period" type="string">
+Time period when the nighttime limit applies.
+</ResponseField>
+
+<ResponseField name="data.webhooks" type="array">
+List of USER-level event subscriptions for the authenticated user and application. This list is not filtered by the target subaccount headers and may include subscriptions for other accounts owned by the same user. It can be empty if retrieval fails. <Badge color="blue" size="sm">Added · bank-account-child-F03</Badge>
+</ResponseField>
+
+<ResponseField name="data.webhooks[].webhook_id" type="string">
+Event subscription ID.
+</ResponseField>
+
+<ResponseField name="data.webhooks[].event_type" type="string">
+Subscribed event name as a string. The creation endpoint uses a numeric enum for event_type.
+</ResponseField>
+
+<ResponseField name="data.webhooks[].callback_url" type="string">
+Callback URL for the subscribed event.
+</ResponseField>
+
+<ResponseField name="data.webhooks[].status" type="integer">
+Current business status, interpreted according to the enum listed for this field. Values: 0 BASE_STATUS_UNSPECIFIED; 1 BASE_STATUS_ACTIVE; 2 BASE_STATUS_INACTIVE.
+</ResponseField>
+
+<ResponseField name="data.webhooks[].created_at" type="integer">
+Creation time in UTC Unix milliseconds. Can be 0 if creation has not occurred or the time is not provided.
+</ResponseField>
+
+<ResponseField name="data.webhooks[].updated_at" type="integer">
+Last update time in UTC Unix milliseconds. Can be 0 if no update has occurred or the time is not provided.
+</ResponseField>
+
+<ResponseField name="data.webhooks[].account_number" type="string">
+Account number. The current subscription query mapping does not populate this compatibility field, so it can be empty. webhook_id provides the subscription ID.
+</ResponseField>
+
+<ResponseField name="data.webhooks[].subscription_id" type="string">
+Stable subscription ID. The current subscription query mapping does not populate this compatibility field, so it can be empty. webhook_id provides the subscription ID.
+</ResponseField>
+
+<ResponseField name="data.webhooks[].suspend_reason" type="string">
+Reason for subscription suspension. The current subscription query mapping does not populate this compatibility field, so it can be empty. webhook_id provides the subscription ID.
+</ResponseField>
+
+<ResponseField name="data.fee_configs" type="array">
+List of applicable fee configurations across all fee categories. It may be empty or unavailable if retrieval fails. An empty list does not by itself confirm that the account has no fee configuration. <Badge color="blue" size="sm">Added · bank-account-child-F08</Badge>
+</ResponseField>
+
+<ResponseField name="data.fee_configs[].fee_config_id" type="string">
+Fee rate configuration ID.
+</ResponseField>
+
+<ResponseField name="data.fee_configs[].name" type="string">
+Name.
+</ResponseField>
+
+<ResponseField name="data.fee_configs[].payment_method" type="string">
+Payment method.
+</ResponseField>
+
+<ResponseField name="data.fee_configs[].flow_direction" type="string">
+Funds direction.
+</ResponseField>
+
+<ResponseField name="data.fee_configs[].transaction_type" type="string">
+Transaction category.
+</ResponseField>
+
+<ResponseField name="data.fee_configs[].charge_type" type="string">
+Fee calculation method.
+</ResponseField>
+
+<ResponseField name="data.fee_configs[].charge_weight" type="string">
+Fee calculation weight.
+</ResponseField>
+
+<ResponseField name="data.fee_configs[].min_amount" type="string">
+Minimum amount to which the fee configuration applies.
+</ResponseField>
+
+<ResponseField name="data.fee_configs[].max_amount" type="string">
+Maximum amount to which the fee configuration applies.
+</ResponseField>
+
+<ResponseField name="data.fee_configs[].fee_scenario_code" type="string">
+Fee scenario code.
+</ResponseField>
+
+<ResponseField name="data.fee_configs[].fee_kind" type="string">
+Fee category.
+</ResponseField>
+
+## Responses
+
+View response examples by the business `code` in the JSON response. Check the HTTP status and business code separately. An HTTP 200 response can also return a business error. <Badge color="orange" size="sm">Corrected · bank-account-child-F10</Badge>
+
+| `code` | Meaning | Recommended action |
+| --- | --- | --- |
+| `200` | Request succeeded<br />The following example illustrates the structure. Account numbers, amounts, and times are sample values. Empty lists indicate that the example does not show specific configurations. Both queries return the same structure. `account_number` and `ispb` identify the account queried. | When `code` is `200`, read the account data. This endpoint has no separate account-query processing status. Interpret Pix key and webhook statuses only for their respective records, and follow the balance-fallback guidance above. <Badge color="orange" size="sm">Corrected · bank-account-child-F11</Badge> |
+| `400` | Request or validation failed | Parameter issue. Check and correct the request parameters. |
+| `500` | System error | Log the response and confirm the business result first. |
+
+The examples illustrate the response structure. Use the actual response for message and business status values. See [Error Catalog](/api-reference/error-catalog) for other parameter, permission, and service errors. This section does not imply that the endpoint returns only these three code values.
+
+<Tip>
+To try this endpoint, send the request example to the Sandbox base URL `https://ebanking-openapi-sandbox.pagsmile.com.br` with your Sandbox AK/SK. Sign every request as described in [Environments & Credentials](/environments-and-credentials#api-request-signing).
+</Tip>
+
+
+<Accordion title="Corrections to the source document (10)" icon="clipboard-check">
+This page was checked against the Pagsmile Open API source code on 2026-11-10. Each change below is marked in the page with a badge that shows its ID.
+
+| ID | Change | Location | Source document text | Updated text |
+| --- | --- | --- | --- | --- |
+| bank-account-child-F01 | Corrected (did not match the code) | Response fields | Limit for a CPF holder, as a decimal string. | Compatibility field. This query does not populate CPF daytime withdrawal limits. Do not use this field to determine a CPF withdrawal limit. |
+| bank-account-child-F02 | Corrected (did not match the code) | Response fields | Limit for a CPF holder, as a decimal string. | Compatibility field. This query does not populate CPF nighttime withdrawal limits. Do not use this field to determine a CPF withdrawal limit. |
+| bank-account-child-F03 | Added (missing in the source) | Response fields | List of event subscriptions. Can be empty if retrieval fails. | List of USER-level event subscriptions for the authenticated user and application. This list is not filtered by the target subaccount headers and may include subscriptions for other accounts owned by the same user. It can be empty if retrieval fails. |
+| bank-account-child-F04 | Added (missing in the source) | Response fields | Account limit configuration. | Account limit configuration. It may be unavailable if no limits can be retrieved. Individual transfer, withdrawal, daytime, nighttime, or holder-specific values may be missing when the corresponding limit is unavailable. Missing values do not mean a zero or unlimited limit. |
+| bank-account-child-F05 | Added (missing in the source) | Response fields | Amount frozen for MED, as a decimal string. | Effective amount frozen for MED, as a decimal string. This amount is capped at frozen_amount. If the MED freeze summary cannot be retrieved, this field falls back to "0" even when the balance snapshot succeeds, without a fallback indicator. |
+| bank-account-child-F06 | Added (missing in the source) | Response fields | Amount frozen for other operations, as a decimal string. | Amount frozen for other operations, as a decimal string, calculated as frozen_amount minus med_frozen_amount, with a minimum of "0". If the MED summary falls back to zero, this field includes the entire frozen amount and must not be treated as a verified non-MED breakdown. |
+| bank-account-child-F08 | Added (missing in the source) | Response fields | List of applicable fee configurations. | List of applicable fee configurations across all fee categories. It may be empty or unavailable if retrieval fails. An empty list does not by itself confirm that the account has no fee configuration. |
+| bank-account-child-F09 | Added (missing in the source) | Response fields | Withdrawal limit configuration. | Withdrawal limit view. This query currently reuses the CNPJ daytime and nighttime transfer-limit amounts and nighttime period. It does not return independently queried withdrawal-limit values. |
+| bank-account-child-F10 | Corrected (did not match the code) | Responses / Request succeeded | "limit_config": \{ "transfer": \{\}, "withdraw": \{\} \} | "limit_config": \{ "transfer": \{ "daytime": \{ "cpf": "5000", "cnpj": "10000" \} \}, "withdraw": \{ "daytime": \{ "cnpj": "10000" \} \} \} |
+| bank-account-child-F11 | Corrected (did not match the code) | Responses / Recommended action | Read data and determine the result using the business status defined for this endpoint. | When code is 200, read the account data. This endpoint has no separate account-query processing status. Interpret Pix key and webhook statuses only for their respective records, and follow the balance-fallback guidance above. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+cat > body.json <<'JSON'
+{}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/bank_account' \
+  --header "Content-Type: application/json" \
+  --header "X-Client-ID: ${USER_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-ISPB: ${CHILD_ISPB}" \
+  --header "X-Account-Number: ${CHILD_ACCOUNT_NUMBER}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Request succeeded
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "account_number": "00012346",
+    "ispb": "12345678",
+    "balance": "1000.00",
+    "frozen_amount": "100.00",
+    "available_amount": "900.00",
+    "currency": "BRL",
+    "med_frozen_amount": "60.00",
+    "other_frozen_amount": "40.00",
+    "pix_keys": [],
+    "limit_config": {
+      "transfer": {
+        "daytime": {
+          "cpf": "5000",
+          "cnpj": "10000"
+        }
+      },
+      "withdraw": {
+        "daytime": {
+          "cnpj": "10000"
+        }
+      }
+    },
+    "webhooks": [],
+    "fee_configs": []
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Request or validation failed
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 System error
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

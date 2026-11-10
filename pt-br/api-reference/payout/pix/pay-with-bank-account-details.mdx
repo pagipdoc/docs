@@ -1,0 +1,301 @@
+---
+title: "Pagar via Pix com dados bancários"
+description: "Inicie um pagamento Pix diretamente com os dados bancários do recebedor, sem inicialização por chave Pix ou QR Code."
+api: "POST /v3/transfers/pix/bank-account"
+keywords: ["/v3/transfers/pix/bank-account"]
+---
+
+## Funcionamento e tratamento
+
+Inicie um pagamento Pix diretamente com os dados bancários do recebedor, sem inicialização por chave Pix ou QR Code. O pagador e o recebedor não podem ter o mesmo ISPB e número da conta; essa combinação é rejeitada com `code 400` e `message "Payer and payee bank accounts must be different"`. <Badge color="blue" size="sm">Complementado · api-12-F20</Badge> Antes de enviar, confira o recebedor, o valor e os requisitos de recursos da conta. Mantenha saldo disponível suficiente para cobrir o valor total debitado pelo pagamento. O bloqueio de recursos ocorre durante o processamento assíncrono; uma submissão bem-sucedida ainda pode falhar posteriormente por saldo disponível insuficiente. Confirme o resultado final consultando o status ou os detalhes do pagamento. <Badge color="blue" size="sm">Complementado · api-12-F21</Badge>
+
+Os pagamentos estão sujeitos aos limites de transação configurados para a conta do pagador e aos controles de risco. Uma rejeição por limite pode retornar `code 4001998`; uma rejeição por controle de risco pode retornar `code 4003016`. Os limites são específicos da conta, não um valor máximo fixo definido por este endpoint. Use o `code` e a `message` reais para investigar a rejeição. <Badge color="blue" size="sm">Complementado · api-12-F23</Badge>
+
+Se o resultado da requisição for desconhecido, verifique a transação original conforme [Cenários de erro do módulo de pagamentos](/pt-br/api-reference/payout/overview). Não reenvie a requisição diretamente.
+
+## Permissões e titularidade da conta
+
+Use credenciais `ACCOUNT` para a conta do pagador vinculada a elas, ou credenciais `USER` com `X-ISPB` e `X-Account-Number` para selecionar uma conta do pagador pertencente a esse `USER`. A conta selecionada e a hierarquia necessária de contas superiores devem estar ativas. Credenciais `PLATFORM` não são aceitas. Com credenciais `ACCOUNT`, omita os dois headers da conta-alvo ou envie ambos com valores exatamente iguais aos vinculados à credencial; um header ausente, vazio ou divergente é rejeitado. <Badge color="blue" size="sm">Complementado · api-12-F22</Badge> As requisições devem seguir as orientações de [Ambientes e credenciais](/pt-br/environments-and-credentials).
+
+## Parâmetros da requisição
+
+<ParamField body="payee" type="object" required>
+Identificação e dados bancários do recebedor
+</ParamField>
+
+<ParamField body="payee.name" type="string" required>
+↳ Nome do recebedor
+</ParamField>
+
+<ParamField body="payee.document_id" type="string" required>
+↳ Número do documento do recebedor, compatível com o tipo de documento e com a conta que receberá o pagamento. Informe um CPF sem formatação, com 11 dígitos, ou um CNPJ com 14 caracteres: 12 letras maiúsculas ou dígitos seguidos de 2 dígitos. O formato do documento também é validado durante o processamento do pagamento; a aceitação pela API não comprova que o pagamento será concluído <Badge color="blue" size="sm">Complementado · api-12-F09</Badge>
+</ParamField>
+
+<ParamField body="payee.document_type" type="integer">
+↳ **Obrigatório:** Sim. <Badge color="orange" size="sm">Corrigido · api-12-F01</Badge> Use `1 CPF` ou `2 CNPJ`, conforme o documento do recebedor. `0 UNSPECIFIED` e todos os demais valores são rejeitados <Badge color="orange" size="sm">Corrigido · api-12-F02</Badge>
+</ParamField>
+
+<ParamField body="payee.bank_account" type="string" required>
+↳ Número da conta do recebedor. Preserve os zeros à esquerda. Use apenas dígitos, sem espaços, letras, hífens ou outros sinais de pontuação <Badge color="blue" size="sm">Complementado · api-12-F07</Badge>
+</ParamField>
+
+<ParamField body="payee.bank_account_type" type="integer">
+↳ **Obrigatório:** Sim. <Badge color="orange" size="sm">Corrigido · api-12-F03</Badge> Use `1 CHECKING`, `2 SALARY`, `3 SAVINGS` ou `4 PAYMENT`, conforme a conta real do recebedor. `0 UNSPECIFIED`, `5 TRANSCTIONAL_PI`, `6 GUARANTEED`, `7 DEPOSIT` e todos os demais valores são rejeitados <Badge color="orange" size="sm">Corrigido · api-12-F04</Badge>
+</ParamField>
+
+<ParamField body="payee.bank_branch" type="string" required>
+↳ Código da agência do recebedor. Preserve os zeros à esquerda. Use apenas dígitos, sem espaços, letras, hífens ou outros sinais de pontuação <Badge color="blue" size="sm">Complementado · api-12-F08</Badge>
+</ParamField>
+
+<ParamField body="payee.bank_code" type="string" required>
+↳ ISPB do banco do recebedor em formato de string. Preserve os zeros à esquerda. A Open API remove todos os espaços em branco, converte as letras para maiúsculas e preenche à esquerda com zeros os valores com menos de 8 caracteres. Após a normalização, o valor deve conter exatamente 8 letras maiúsculas ou dígitos. O serviço de transações atual aceita apenas dígitos. Informe um ISPB real e válido de 8 dígitos
+</ParamField>
+
+<ParamField body="payee.bank_name" type="string">
+↳ **Obrigatório:** Não. <Badge color="orange" size="sm">Corrigido · api-12-F05</Badge> Nome do banco opcional. Este endpoint ignora o valor informado; `payee.bank_code` determina o banco usado no pagamento <Badge color="orange" size="sm">Corrigido · api-12-F06</Badge>
+</ParamField>
+
+<ParamField body="amount" type="string" required>
+String com o valor decimal; o valor deve ser maior que `0` e ser representável exatamente com duas casas decimais (por exemplo, `10.00`). Zeros adicionais à direita, como em `10.000`, são aceitos; não são aceitos `0`, números negativos ou `10.555` <Badge color="orange" size="sm">Corrigido · api-12-F10</Badge>
+</ParamField>
+
+<ParamField body="currency" type="string">
+**Obrigatório:** Não (não obrigatório nesta camada). Moeda; nesta versão, os pagamentos por conta bancária são processados em `BRL`. O valor informado é ignorado e não altera a moeda do pagamento; use `BRL` ou omita o campo <Badge color="blue" size="sm">Complementado · api-12-F11</Badge>
+</ParamField>
+
+<ParamField body="memo" type="string">
+**Obrigatório:** Não (não obrigatório nesta camada). Observação da transação
+</ParamField>
+
+<ParamField body="merchant_order_id" type="string" required>
+ID do pedido do comerciante; permite apenas letras do alfabeto inglês, números, hífens e sublinhados. Os primeiros seis caracteres devem formar uma data UTC válida no formato `YYMMDD`. A data deve ter interseção com a janela de ±1 hora em relação ao horário UTC atual. Use um ID único entre suas integrações no mesmo ambiente, não apenas dentro de uma conta do pagador. A proteção contra duplicidade mantém o ID reservado por 48 horas; a repetição de um ID reservado é rejeitada com `code 4001013` e não retorna a resposta de sucesso original. Se o resultado for desconhecido, consulte primeiro a operação original. Não reenvie com outro ID sem essa verificação <Badge color="blue" size="sm">Complementado · api-12-F12</Badge>
+</ParamField>
+
+## Exemplo de requisição cURL
+
+O exemplo usa credenciais de nível ACCOUNT. Preencha os parâmetros reais e gere a assinatura com base no body.json final. <Badge color="orange" size="sm">Corrigido · api-12-F13</Badge>
+
+O número da conta e o documento do exemplo servem apenas para demonstrar a estrutura. É obrigatório substituí-los pelos dados de um recebedor real do Sandbox.
+
+## Campos da resposta
+
+Os caminhos dos campos partem da raiz da resposta. `[]` indica um elemento de array. Os valores monetários usam strings decimais. Os enums são interpretados conforme cada campo. A estrutura abaixo representa os dados de uma resposta de sucesso. Um valor nulo ou 0, por si só, não indica a conclusão da operação.
+
+<ResponseField name="code" type="integer">
+Código de resultado de negócio; 200 indica sucesso. Os erros de negócio são retornados neste campo, que não equivale ao código de status HTTP.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Descrição do resultado de negócio; em caso de falha, analise esta descrição junto com o campo code para identificar a causa.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Objeto de dados da resposta de sucesso; pode ser null em respostas de erro.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Horário da resposta, em timestamp Unix UTC em milissegundos.
+</ResponseField>
+
+<ResponseField name="data.merchant_order_id" type="string">
+ID do pedido do comerciante informado pelo integrador.
+</ResponseField>
+
+<ResponseField name="data.txn_id" type="string">
+ID da transação.
+</ResponseField>
+
+<ResponseField name="data.txn_status" type="integer">
+Status da transação. Enum: `0 TXN_STATUS_UNSPECIFIED`; `1 TXN_STATUS_PENDING`; `2 TXN_STATUS_COMPLETED`; `3 TXN_STATUS_FAILED`; `4 TXN_STATUS_CANCELLED`; `5 TXN_STATUS_PROCESSING`; `6 TXN_STATUS_REFUNDED`; `7 TXN_STATUS_PARTIALLY_REFUNDED`; `8 TXN_STATUS_DISPUTED`. Uma submissão bem-sucedida retorna `5 TXN_STATUS_PROCESSING`: o pagamento foi aceito para processamento assíncrono, mas ainda não foi concluído. Salve `txn_id` e consulte o status ou os detalhes do pagamento para determinar o resultado final. <Badge color="blue" size="sm">Complementado · api-12-F14</Badge>
+</ResponseField>
+
+<ResponseField name="data.settlement_id" type="string">
+ID de liquidação. Este endpoint de submissão retorna uma string vazia; consulte o identificador em Consultar detalhes do pagamento quando estiver disponível <Badge color="blue" size="sm">Complementado · api-12-F17</Badge>
+</ResponseField>
+
+<ResponseField name="data.payee" type="object">
+Dados do recebedor. O endpoint de pagamento atual não preenche este campo e retorna null. Chame Consultar detalhes do pagamento para obter os dados reais dos participantes.
+</ResponseField>
+
+<ResponseField name="data.payee.name" type="string">
+Nome.
+</ResponseField>
+
+<ResponseField name="data.payee.document_id" type="string">
+Número do documento do participante da transação, que pode ser mascarado conforme a configuração do comerciante.
+</ResponseField>
+
+<ResponseField name="data.payee.document_type" type="integer">
+Tipo de documento. Enum: 0 DOCUMENT_TYPE_UNSPECIFIED; 1 DOCUMENT_TYPE_CPF; 2 DOCUMENT_TYPE_CNPJ.
+</ResponseField>
+
+<ResponseField name="data.payee.bank_account" type="string">
+Número da conta.
+</ResponseField>
+
+<ResponseField name="data.payee.bank_account_type" type="integer">
+Tipo de conta bancária. Enum: 0 BANK_ACCOUNT_TYPE_UNSPECIFIED; 1 BANK_ACCOUNT_TYPE_CHECKING; 2 BANK_ACCOUNT_TYPE_SALARY; 3 BANK_ACCOUNT_TYPE_SAVINGS; 4 BANK_ACCOUNT_TYPE_PAYMENT; 5 BANK_ACCOUNT_TYPE_TRANSCTIONAL_PI; 7 BANK_ACCOUNT_TYPE_DEPOSIT; 6 BANK_ACCOUNT_TYPE_GUARANTEED.
+</ResponseField>
+
+<ResponseField name="data.payee.bank_branch" type="string">
+Código da agência bancária.
+</ResponseField>
+
+<ResponseField name="data.payee.bank_code" type="string">
+ISPB do banco.
+</ResponseField>
+
+<ResponseField name="data.payee.bank_name" type="string">
+Nome do banco.
+</ResponseField>
+
+<ResponseField name="data.payer" type="object">
+Dados do pagador. O endpoint de pagamento atual não preenche este campo e retorna null. Chame Consultar detalhes do pagamento para obter os dados reais dos participantes.
+</ResponseField>
+
+<ResponseField name="data.payer.name" type="string">
+Nome.
+</ResponseField>
+
+<ResponseField name="data.payer.document_id" type="string">
+Número do documento do participante da transação, que pode ser mascarado conforme a configuração do comerciante.
+</ResponseField>
+
+<ResponseField name="data.payer.document_type" type="integer">
+Tipo de documento. Enum: 0 DOCUMENT_TYPE_UNSPECIFIED; 1 DOCUMENT_TYPE_CPF; 2 DOCUMENT_TYPE_CNPJ.
+</ResponseField>
+
+<ResponseField name="data.payer.bank_account" type="string">
+Número da conta.
+</ResponseField>
+
+<ResponseField name="data.payer.bank_account_type" type="integer">
+Tipo de conta bancária. Enum: 0 BANK_ACCOUNT_TYPE_UNSPECIFIED; 1 BANK_ACCOUNT_TYPE_CHECKING; 2 BANK_ACCOUNT_TYPE_SALARY; 3 BANK_ACCOUNT_TYPE_SAVINGS; 4 BANK_ACCOUNT_TYPE_PAYMENT; 5 BANK_ACCOUNT_TYPE_TRANSCTIONAL_PI; 7 BANK_ACCOUNT_TYPE_DEPOSIT; 6 BANK_ACCOUNT_TYPE_GUARANTEED.
+</ResponseField>
+
+<ResponseField name="data.payer.bank_branch" type="string">
+Código da agência bancária.
+</ResponseField>
+
+<ResponseField name="data.payer.bank_code" type="string">
+ISPB do banco.
+</ResponseField>
+
+<ResponseField name="data.payer.bank_name" type="string">
+Nome do banco.
+</ResponseField>
+
+## Respostas
+
+Consulte os exemplos de resposta pelo `code` de negócio no JSON. Verifique o status HTTP e o code de negócio separadamente. Uma resposta HTTP 200 também pode retornar um erro de negócio. <Badge color="orange" size="sm">Corrigido · api-12-F15</Badge>
+
+| `code` | Significado | Ação recomendada |
+| --- | --- | --- |
+| `200` | Requisição bem-sucedida | Leia data e avalie o resultado do processamento conforme o status de negócio deste endpoint. |
+| `400` | Falha na requisição ou validação | Problema nos parâmetros. Verifique e corrija os parâmetros da requisição. |
+| `500` | Erro do sistema | Registre a resposta e confirme primeiro o resultado de negócio. |
+
+Os exemplos ilustram a estrutura da resposta. Os valores de message e do status de negócio devem ser obtidos da resposta efetiva. Para outros erros de parâmetros, permissões e serviço, consulte [Catálogo de erros](/pt-br/api-reference/error-catalog). Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados. <Badge color="orange" size="sm">Corrigido · api-12-F16</Badge>
+
+<Tip>
+Para testar este endpoint, envie o exemplo de requisição para a Base URL do Sandbox `https://ebanking-openapi-sandbox.pagsmile.com.br` com sua AK/SK de Sandbox. Assine cada requisição conforme descrito em [Ambientes e credenciais](/pt-br/environments-and-credentials#assinatura-de-requisições-à-api).
+</Tip>
+
+
+<Accordion title="Correções em relação ao documento original (21)" icon="clipboard-check">
+Esta página foi conferida com o código-fonte da Pagsmile Open API em 2026-11-10. Cada alteração abaixo está marcada na página com um selo que mostra o seu ID.
+
+| ID | Alteração | Local | Texto do documento original | Texto atualizado |
+| --- | --- | --- | --- | --- |
+| api-12-F01 | Corrigido (não correspondia ao código) | Request parameters / Required column | Conforme as condições do objeto pai | Sim |
+| api-12-F02 | Corrigido (não correspondia ao código) | Request parameters / Format and conditions | Preencha com os dados reais da operação. A validade depende das validações do servidor e dos sistemas subsequentes. Valores: 0 UNSPECIFIED; 1 CPF; 2 CNPJ | Use 1 CPF ou 2 CNPJ, conforme o documento do recebedor. 0 UNSPECIFIED e todos os demais valores são rejeitados |
+| api-12-F03 | Corrigido (não correspondia ao código) | Request parameters / Required column | Conforme as condições do objeto pai | Sim |
+| api-12-F04 | Corrigido (não correspondia ao código) | Request parameters / Format and conditions | Preencha com os dados reais da operação. A validade depende das validações do servidor e dos sistemas subsequentes. Valores: 0 UNSPECIFIED; 1 CHECKING; 2 SALARY; 3 SAVINGS; 4 PAYMENT; 5 TRANSCTIONAL_PI | Use 1 CHECKING, 2 SALARY, 3 SAVINGS ou 4 PAYMENT, conforme a conta real do recebedor. 0 UNSPECIFIED, 5 TRANSCTIONAL_PI, 6 GUARANTEED, 7 DEPOSIT e todos os demais valores são rejeitados |
+| api-12-F05 | Corrigido (não correspondia ao código) | Request parameters / Required column | Conforme as condições do objeto pai | Não |
+| api-12-F06 | Corrigido (não correspondia ao código) | Request parameters / Format and conditions | Preencha com os dados reais do negócio; a validade depende das validações no servidor e nos sistemas subsequentes | Nome do banco opcional. Este endpoint ignora o valor informado; payee.bank_code determina o banco usado no pagamento |
+| api-12-F07 | Complementado (ausente no original) | Request parameters / append to payee.bank_account description | Número da conta do recebedor. Preserve os zeros à esquerda | Número da conta do recebedor. Preserve os zeros à esquerda. Use apenas dígitos, sem espaços, letras, hífens ou outros sinais de pontuação |
+| api-12-F08 | Complementado (ausente no original) | Request parameters / append to payee.bank_branch description | Código da agência do recebedor. Preserve os zeros à esquerda | Código da agência do recebedor. Preserve os zeros à esquerda. Use apenas dígitos, sem espaços, letras, hífens ou outros sinais de pontuação |
+| api-12-F09 | Complementado (ausente no original) | Request parameters / append to payee.document_id description | Número do documento do recebedor, compatível com o tipo de documento e com a conta que receberá o pagamento | Número do documento do recebedor, compatível com o tipo de documento e com a conta que receberá o pagamento. Informe um CPF sem formatação, com 11 dígitos, ou um CNPJ com 14 caracteres: 12 letras maiúsculas ou dígitos seguidos de 2 dígitos. O formato do documento também é validado durante o processamento do pagamento; a aceitação pela API não comprova que o pagamento será concluído |
+| api-12-F10 | Corrigido (não correspondia ao código) | Request parameters / Format and conditions | String com o valor decimal; o valor deve ser maior que 0 e ter no máximo duas casas decimais (por exemplo, 10.00). Não são aceitos 0, números negativos ou 10.555 | String com o valor decimal; o valor deve ser maior que 0 e ser representável exatamente com duas casas decimais (por exemplo, 10.00). Zeros adicionais à direita, como em 10.000, são aceitos; não são aceitos 0, números negativos ou 10.555 |
+| api-12-F11 | Complementado (ausente no original) | Request parameters / append to currency description | Moeda; nesta versão, os pagamentos por conta bancária são processados em BRL | Moeda; nesta versão, os pagamentos por conta bancária são processados em BRL. O valor informado é ignorado e não altera a moeda do pagamento; use BRL ou omita o campo |
+| api-12-F12 | Complementado (ausente no original) | Request parameters / append to merchant_order_id description | ID do pedido do comerciante; permite apenas letras do alfabeto inglês, números, hífens e sublinhados. Os primeiros seis caracteres devem formar uma data UTC válida no formato YYMMDD. A data deve ter interseção com a janela de ±1 hora em relação ao horário UTC atual. Se o resultado for desconhecido, consulte primeiro a operação original. Não reenvie com outro ID sem essa verificação | ID do pedido do comerciante; permite apenas letras do alfabeto inglês, números, hífens e sublinhados. Os primeiros seis caracteres devem formar uma data UTC válida no formato YYMMDD. A data deve ter interseção com a janela de ±1 hora em relação ao horário UTC atual. Use um ID único entre suas integrações no mesmo ambiente, não apenas dentro de uma conta do pagador. A proteção contra duplicidade mantém o ID reservado por 48 horas; a repetição de um ID reservado é rejeitada com code 4001013 e não retorna a resposta de sucesso original. Se o resultado for desconhecido, consulte primeiro a operação original. Não reenvie com outro ID sem essa verificação |
+| api-12-F13 | Corrigido (não correspondia ao código) | cURL request example / ORDER_ID | `ORDER_ID="$(date +%y%m%d%H%M%S)$(openssl rand -hex 3 \| python3 -c 'import sys; print(str(int(sys.stdin.read().strip(),16)%1000000).zfill(6))')"` | `ORDER_ID="$(date -u +%y%m%d%H%M%S)$(openssl rand -hex 3 \| python3 -c 'import sys; print(str(int(sys.stdin.read().strip(),16)%1000000).zfill(6))')"` |
+| api-12-F14 | Complementado (ausente no original) | Response fields / append to data.txn_status meaning | Status da transação. Enum: 0 TXN_STATUS_UNSPECIFIED; 1 TXN_STATUS_PENDING; 2 TXN_STATUS_COMPLETED; 3 TXN_STATUS_FAILED; 4 TXN_STATUS_CANCELLED; 5 TXN_STATUS_PROCESSING; 6 TXN_STATUS_REFUNDED; 7 TXN_STATUS_PARTIALLY_REFUNDED; 8 TXN_STATUS_DISPUTED. | Status da transação. Enum: 0 TXN_STATUS_UNSPECIFIED; 1 TXN_STATUS_PENDING; 2 TXN_STATUS_COMPLETED; 3 TXN_STATUS_FAILED; 4 TXN_STATUS_CANCELLED; 5 TXN_STATUS_PROCESSING; 6 TXN_STATUS_REFUNDED; 7 TXN_STATUS_PARTIALLY_REFUNDED; 8 TXN_STATUS_DISPUTED. Uma submissão bem-sucedida retorna 5 TXN_STATUS_PROCESSING: o pagamento foi aceito para processamento assíncrono, mas ainda não foi concluído. Salve txn_id e consulte o status ou os detalhes do pagamento para determinar o resultado final. |
+| api-12-F15 | Corrigido (não correspondia ao código) | Responses / Request succeeded JSON | "txn_status": 0, | "txn_status": 5, |
+| api-12-F16 | Corrigido (não correspondia ao código) | Responses / Request succeeded JSON | "payee": \{ "name": "example-name", "document_id": "example-document_id", "document_type": 0, "bank_account": "example-bank_account", "bank_account_type": 0, "bank_branch": "example-bank_branch", "bank_code": "example-bank_code", "bank_name": "example-bank_name" \}, "payer": \{ "name": "example-name", "document_id": "example-document_id", "document_type": 0, "bank_account": "example-bank_account", "bank_account_type": 0, "bank_branch": "example-bank_branch", "bank_code": "example-bank_code", "bank_name": "example-bank_name" \} | "payee": null, "payer": null, "settlement_id": "", "error": null, "result": null |
+| api-12-F17 | Complementado (ausente no original) | Response fields / new row after data.txn_status | — | `data.settlement_id` \| string \| — \| ID de liquidação. Este endpoint de submissão retorna uma string vazia; consulte o identificador em Consultar detalhes do pagamento quando estiver disponível |
+| api-12-F20 | Complementado (ausente no original) | Behavior and handling / append after direct-payment sentence | Inicie um pagamento Pix diretamente com os dados bancários do recebedor, sem inicialização por chave Pix ou QR Code. | Inicie um pagamento Pix diretamente com os dados bancários do recebedor, sem inicialização por chave Pix ou QR Code. O pagador e o recebedor não podem ter o mesmo ISPB e número da conta; essa combinação é rejeitada com code 400 e message "Payer and payee bank accounts must be different". |
+| api-12-F21 | Complementado (ausente no original) | Behavior and handling / funding requirements | Antes de enviar, confira o recebedor, o valor e os requisitos de recursos da conta. | Antes de enviar, confira o recebedor, o valor e os requisitos de recursos da conta. Mantenha saldo disponível suficiente para cobrir o valor total debitado pelo pagamento. O bloqueio de recursos ocorre durante o processamento assíncrono; uma submissão bem-sucedida ainda pode falhar posteriormente por saldo disponível insuficiente. Confirme o resultado final consultando o status ou os detalhes do pagamento. |
+| api-12-F22 | Complementado (ausente no original) | Permissions and account ownership | ACCOUNT, ou USER com o header da conta-alvo. | Use credenciais ACCOUNT para a conta do pagador vinculada a elas, ou credenciais USER com X-ISPB e X-Account-Number para selecionar uma conta do pagador pertencente a esse USER. A conta selecionada e a hierarquia necessária de contas superiores devem estar ativas. Credenciais PLATFORM não são aceitas. Com credenciais ACCOUNT, omita os dois headers da conta-alvo ou envie ambos com valores exatamente iguais aos vinculados à credencial; um header ausente, vazio ou divergente é rejeitado. |
+| api-12-F23 | Complementado (ausente no original) | Behavior and handling / new paragraph before unknown-result handling | — | Os pagamentos estão sujeitos aos limites de transação configurados para a conta do pagador e aos controles de risco. Uma rejeição por limite pode retornar code 4001998; uma rejeição por controle de risco pode retornar code 4003016. Os limites são específicos da conta, não um valor máximo fixo definido por este endpoint. Use o code e a message reais para investigar a rejeição. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+ORDER_ID="$(date -u +%y%m%d%H%M%S)$(openssl rand -hex 3 | python3 -c 'import sys; print(str(int(sys.stdin.read().strip(),16)%1000000).zfill(6))')"
+cat > body.json <<JSON
+{
+  "payee": {
+    "bank_code": "00000000",
+    "bank_account": "00000001",
+    "bank_branch": "0001",
+    "document_id": "00000000000",
+    "name": "Demo Receiver",
+    "document_type": 1,
+    "bank_account_type": 1
+  },
+  "amount": "10.00",
+  "currency": "BRL",
+  "merchant_order_id": "${ORDER_ID}"
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/transfers/pix/bank-account' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${ACCOUNT_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Requisição bem-sucedida
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "merchant_order_id": "example-merchant_order_id",
+    "txn_id": "example-txn_id",
+    "txn_status": 5,
+    "payee": null,
+    "payer": null,
+    "settlement_id": "",
+    "error": null,
+    "result": null
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Falha na requisição ou validação
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 Erro do sistema
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

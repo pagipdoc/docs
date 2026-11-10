@@ -1,0 +1,316 @@
+---
+title: "Get infraction report details"
+description: "Get details for a specific infraction report. Check the associated report, case, and original transaction."
+api: "POST /v3/infractions/detail"
+keywords: ["/v3/infractions/detail"]
+---
+
+## Behavior and handling
+
+Get details for a specific infraction report. Check the associated report, case, and original transaction.
+
+## Permissions and account ownership
+
+ACCOUNT, or USER with both `X-ISPB` and `X-Account-Number` for an account owned by that USER. PLATFORM credentials are not supported. ACCOUNT credentials use their bound account; if target headers are sent, both must be nonempty and match that account. The infraction report must be associated with a transaction received by the selected account. <Badge color="blue" size="sm">Added · api-22-F05</Badge> Requests must follow [Environments & Credentials](/environments-and-credentials).
+
+## Request parameters
+
+<ParamField body="infraction_id" type="string" required>
+Infraction record ID from `data.items[].infraction_id` in the list response. Use this value exactly; it is distinct from `infraction_report_id` and `dict_infraction_report_id`. <Badge color="blue" size="sm">Added · api-22-F06</Badge>
+</ParamField>
+
+<Info>
+**Parameter sources**
+
+`infraction_id` comes from `data.items[].infraction_id` in a successful response from [List infraction reports](/api-reference/med/list-infraction-reports) (`/v3/infractions/list`).
+</Info>
+
+## cURL request example
+
+The example uses ACCOUNT-level credentials. Enter the actual parameters and generate the signature from the final body.json.
+
+## Response fields
+
+Field paths start at the response root. `[]` indicates an array element. Amounts use decimal strings. Enum values are defined separately for each field. The structure below describes a success response. A null value or 0 alone does not indicate that processing is complete.
+
+<ResponseField name="code" type="integer">
+Business result code. A value of 200 indicates success. Business errors are returned in this field. It is not the HTTP status code.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Business result description. On failure, use this with code to determine the cause.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Data object in a successful response. Can be null in an error response.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Response time as a UTC Unix timestamp in milliseconds.
+</ResponseField>
+
+<ResponseField name="data.infraction" type="object">
+Infraction report details.
+</ResponseField>
+
+<ResponseField name="data.infraction.infraction_id" type="string">
+Infraction report ID; used to query infraction report details.
+</ResponseField>
+
+<ResponseField name="data.infraction.connected_transaction_id" type="string">
+Associated transaction ID.
+</ResponseField>
+
+<ResponseField name="data.infraction.root_end_to_end_id" type="string">
+End-to-end ID of the original Pix transaction.
+</ResponseField>
+
+<ResponseField name="data.infraction.account" type="string">
+Account number associated with the infraction report, normally the original transaction’s receiving account. <Badge color="orange" size="sm">Corrected · api-22-F02</Badge>
+</ResponseField>
+
+<ResponseField name="data.infraction.status" type="integer">
+Current business status, interpreted according to the enum listed for this field. Enum: 0 MED_INFRACTION_TASK_STATUS_UNSPECIFIED; 1 MED_INFRACTION_TASK_STATUS_RECEIVED; 2 MED_INFRACTION_TASK_STATUS_BLOCKING_PENDING; 3 MED_INFRACTION_TASK_STATUS_BLOCKED; 4 MED_INFRACTION_TASK_STATUS_ANALYSIS_PENDING; 5 MED_INFRACTION_TASK_STATUS_CLOSED_AGREED; 6 MED_INFRACTION_TASK_STATUS_CLOSED_DISAGREED; 7 MED_INFRACTION_TASK_STATUS_CANCELLED; 8 MED_INFRACTION_TASK_STATUS_FAILED.
+</ResponseField>
+
+<ResponseField name="data.infraction.status_display" type="string">
+Display text for the business status.
+</ResponseField>
+
+<ResponseField name="data.infraction.amount" type="string">
+Requested infraction amount, as a decimal string. It can differ from the amount of the associated original transaction. <Badge color="orange" size="sm">Corrected · api-22-F01</Badge>
+</ResponseField>
+
+<ResponseField name="data.infraction.blocked_amount" type="string">
+Frozen amount, as a decimal string.
+</ResponseField>
+
+<ResponseField name="data.infraction.created_time" type="integer">
+Creation time in UTC Unix milliseconds. Can be 0 if creation has not occurred or the time is not provided.
+</ResponseField>
+
+<ResponseField name="data.infraction.updated_time" type="integer">
+Last update time in UTC Unix milliseconds. Can be 0 if no update has occurred or the time is not provided.
+</ResponseField>
+
+<ResponseField name="data.infraction.case_id" type="string">
+MED case ID.
+</ResponseField>
+
+<ResponseField name="data.infraction.infraction_report_id" type="string">
+Infraction report business ID.
+</ResponseField>
+
+<ResponseField name="data.infraction.dict_infraction_report_id" type="string">
+Infraction report ID in DICT.
+</ResponseField>
+
+<ResponseField name="data.infraction.freeze_id" type="string">
+Freeze record ID.
+</ResponseField>
+
+<ResponseField name="data.infraction.freeze_reference_id" type="string">
+Freeze reference ID. In infraction details, this is the associated task ID.
+</ResponseField>
+
+<ResponseField name="data.infraction.freeze_target_amount" type="string">
+Target freeze amount, as a decimal string.
+</ResponseField>
+
+<ResponseField name="data.infraction.freeze_effective_amount" type="string">
+Effective frozen amount, as a decimal string.
+</ResponseField>
+
+<ResponseField name="data.infraction.freeze_shortfall_amount" type="string">
+Freeze shortfall amount, as a decimal string.
+</ResponseField>
+
+<ResponseField name="data.infraction.freeze_status" type="string">
+Freeze status string. Values can include `FREEZE_STATUS_UNSPECIFIED`, `FREEZE_STATUS_ACTIVE`, `FREEZE_STATUS_RELEASED`, `FREEZE_STATUS_EXPIRED`, `RELEASED`, and `ACCOUNT_CLOSED`. It can be empty before a freeze status is recorded. Interpret it separately from `status`. <Badge color="blue" size="sm">Added · api-22-F07</Badge>
+</ResponseField>
+
+<ResponseField name="data.infraction.original_transaction" type="object">
+Original transaction details.
+</ResponseField>
+
+<ResponseField name="data.infraction.original_transaction.transaction_id" type="string">
+Transaction ID.
+</ResponseField>
+
+<ResponseField name="data.infraction.original_transaction.root_end_to_end_id" type="string">
+End-to-end ID of the original Pix transaction.
+</ResponseField>
+
+<ResponseField name="data.infraction.original_transaction.amount" type="string">
+Transaction amount as a decimal string.
+</ResponseField>
+
+<ResponseField name="data.infraction.original_transaction.currency" type="string">
+Currency.
+</ResponseField>
+
+<ResponseField name="data.infraction.original_transaction.completed_at" type="integer">
+Completion time. Can be 0 if completion has not occurred. Expressed in UTC Unix milliseconds. Can be 0 if completion has not occurred or the time is not provided.
+</ResponseField>
+
+<ResponseField name="data.infraction.original_transaction.payer" type="object">
+Payer details.
+</ResponseField>
+
+<ResponseField name="data.infraction.original_transaction.payer.name" type="string">
+Name.
+</ResponseField>
+
+<ResponseField name="data.infraction.original_transaction.payer.document" type="string">
+Identification document information for the transaction participant, using the safe display value returned by the service.
+</ResponseField>
+
+<ResponseField name="data.infraction.original_transaction.payer.bank_name" type="string">
+Bank name.
+</ResponseField>
+
+<ResponseField name="data.infraction.original_transaction.payer.branch" type="string">
+Branch code.
+</ResponseField>
+
+<ResponseField name="data.infraction.original_transaction.payer.account" type="string">
+Payer account number. <Badge color="orange" size="sm">Corrected · api-22-F03</Badge>
+</ResponseField>
+
+<ResponseField name="data.infraction.original_transaction.payer.ispb" type="string">
+Bank ISPB code.
+</ResponseField>
+
+<ResponseField name="data.infraction.original_transaction.payee" type="object">
+Payee details.
+</ResponseField>
+
+<ResponseField name="data.infraction.original_transaction.payee.name" type="string">
+Name.
+</ResponseField>
+
+<ResponseField name="data.infraction.original_transaction.payee.document" type="string">
+Identification document information for the transaction participant, using the safe display value returned by the service.
+</ResponseField>
+
+<ResponseField name="data.infraction.original_transaction.payee.bank_name" type="string">
+Bank name.
+</ResponseField>
+
+<ResponseField name="data.infraction.original_transaction.payee.branch" type="string">
+Branch code.
+</ResponseField>
+
+<ResponseField name="data.infraction.original_transaction.payee.account" type="string">
+Payee account number. <Badge color="orange" size="sm">Corrected · api-22-F04</Badge>
+</ResponseField>
+
+<ResponseField name="data.infraction.original_transaction.payee.ispb" type="string">
+Bank ISPB code.
+</ResponseField>
+
+## Responses
+
+View response examples by the business `code` in the JSON response. Check the HTTP status and business code separately. Malformed JSON can return HTTP 400 with a plain-text error body instead of the JSON response structure shown below. Check the response Content-Type before parsing JSON. <Badge color="blue" size="sm">Added · api-22-F10</Badge> An HTTP 200 response can also return a business error.
+
+| `code` | Meaning | Recommended action |
+| --- | --- | --- |
+| `200` | Request succeeded | Read data and determine the result using the business status defined for this endpoint. |
+| `400` | Request or validation failed | Parameter issue. Check and correct the request parameters. If `infraction_id` is missing or empty, the business code is `4000` and the English message is `Field infraction_id is required`. <Badge color="blue" size="sm">Added · api-22-F09</Badge> |
+| `500` | System error | Log the response and confirm the business result first. |
+
+The examples illustrate the response structure. Use the actual response for message and business status values. See [Error Catalog](/api-reference/error-catalog) for other parameter, permission, and service errors. This section does not imply that the endpoint returns only these three code values. <Badge color="orange" size="sm">Corrected · api-22-F12</Badge>
+
+<Tip>
+To try this endpoint, send the request example to the Sandbox base URL `https://ebanking-openapi-sandbox.pagsmile.com.br` with your Sandbox AK/SK. Sign every request as described in [Environments & Credentials](/environments-and-credentials#api-request-signing).
+</Tip>
+
+
+<Accordion title="Corrections to the source document (10)" icon="clipboard-check">
+This page was checked against the Pagsmile Open API source code on 2026-11-10. Each change below is marked in the page with a badge that shows its ID.
+
+| ID | Change | Location | Source document text | Updated text |
+| --- | --- | --- | --- | --- |
+| api-22-F01 | Corrected (did not match the code) | Response fields | Transaction amount as a decimal string. | Requested infraction amount, as a decimal string. It can differ from the amount of the associated original transaction. |
+| api-22-F02 | Corrected (did not match the code) | Response fields | Bank account details. | Account number associated with the infraction report, normally the original transaction’s receiving account. |
+| api-22-F03 | Corrected (did not match the code) | Response fields | Bank account details. | Payer account number. |
+| api-22-F04 | Corrected (did not match the code) | Response fields | Bank account details. | Payee account number. |
+| api-22-F05 | Added (missing in the source) | Permissions and account ownership | ACCOUNT, or USER with the target account header. | ACCOUNT, or USER with both `X-ISPB` and `X-Account-Number` for an account owned by that USER. PLATFORM credentials are not supported. ACCOUNT credentials use their bound account; if target headers are sent, both must be nonempty and match that account. The infraction report must be associated with a transaction received by the selected account. |
+| api-22-F06 | Added (missing in the source) | Request parameters | Infraction report ID from `data.items[].infraction_id` in the list response | Infraction record ID from `data.items[].infraction_id` in the list response. Use this value exactly; it is distinct from `infraction_report_id` and `dict_infraction_report_id`. |
+| api-22-F07 | Added (missing in the source) | Response fields | Freeze status string. | Freeze status string. Values can include `FREEZE_STATUS_UNSPECIFIED`, `FREEZE_STATUS_ACTIVE`, `FREEZE_STATUS_RELEASED`, `FREEZE_STATUS_EXPIRED`, `RELEASED`, and `ACCOUNT_CLOSED`. It can be empty before a freeze status is recorded. Interpret it separately from `status`. |
+| api-22-F09 | Added (missing in the source) | Responses / Request or validation failed | Parameter issue. Check and correct the request parameters. | Parameter issue. Check and correct the request parameters. If `infraction_id` is missing or empty, the business code is `4000` and the English message is `Field infraction_id is required`. |
+| api-22-F10 | Added (missing in the source) | Responses | Check the HTTP status and business code separately. | Check the HTTP status and business code separately. Malformed JSON can return HTTP 400 with a plain-text error body instead of the JSON response structure shown below. Check the response Content-Type before parsing JSON. |
+| api-22-F12 | Corrected (did not match the code) | Responses / Request succeeded example | "freeze_shortfall_amount": "10.00", | "freeze_shortfall_amount": "0.00", |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "infraction_id": "replace-with-infraction-id"
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/infractions/detail' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${ACCOUNT_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Request succeeded
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "infraction": {
+      "infraction_id": "example-infraction_id",
+      "connected_transaction_id": "example-connected_transaction_id",
+      "root_end_to_end_id": "example-root_end_to_end_id",
+      "account": "example-account",
+      "status": 0,
+      "status_display": "example-status_display",
+      "amount": "10.00",
+      "blocked_amount": "10.00",
+      "created_time": 0,
+      "updated_time": 0,
+      "case_id": "example-case_id",
+      "infraction_report_id": "example-infraction_report_id",
+      "dict_infraction_report_id": "example-dict_infraction_report_id",
+      "freeze_id": "example-freeze_id",
+      "freeze_reference_id": "example-freeze_reference_id",
+      "freeze_target_amount": "10.00",
+      "freeze_effective_amount": "10.00",
+      "freeze_shortfall_amount": "0.00",
+      "freeze_status": "example-freeze_status",
+      "original_transaction": {}
+    }
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Request or validation failed
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 System error
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

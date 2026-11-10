@@ -1,0 +1,34 @@
+---
+title: "TED"
+description: "Inicie um pagamento via TED usando uma conta bancária."
+---
+
+Inicie um pagamento via TED para um banco diferente do banco do pagador, usando os dados da conta bancária do recebedor. <Badge color="blue" size="sm">Complementado · payout-ted-F01</Badge>
+
+## Operações da API
+
+| Operação | Caminho POST |
+| --- | --- |
+| [Iniciar pagamento via TED](/pt-br/api-reference/payout/ted/initiate-ted-payment) | `/v3/transfers/ted/bank-account` |
+| [Consultar status do pagamento](/pt-br/api-reference/payout/get-payment-status) | `/v3/transfers/status/check` |
+| [Consultar detalhes do pagamento](/pt-br/api-reference/payout/get-payment-details) | `/v3/transfers/details` |
+
+### Permissões e titularidade da conta
+
+Use credenciais `ACCOUNT` da conta do pagador, ou credenciais `USER` com `X-ISPB` e `X-Account-Number` identificando uma conta pertencente a esse `USER`. Credenciais `PLATFORM` não podem chamar essas operações. Com credenciais `ACCOUNT`, omita os dois cabeçalhos de seleção da conta ou informe ambos com valores correspondentes à conta da credencial. Nesse fluxo, mantenha o contexto da conta do pagador ao consultar o status e os detalhes. As requisições devem seguir [Ambientes e credenciais](/pt-br/environments-and-credentials). <Badge color="blue" size="sm">Complementado · payout-ted-F03</Badge>
+
+## Sequência de chamadas
+
+Preencher os dados da conta bancária do recebedor e do pagamento → Iniciar pagamento via TED → Salvar `data.txn_id` da resposta bem-sucedida → Usar esse ID como `txn_id` para consultar o status e os detalhes do pagamento.
+
+Uma submissão bem-sucedida aceita o pagamento para processamento assíncrono e retorna `data.txn_status` como 5 (`TXN_STATUS_PROCESSING`); isso não confirma a conclusão. Uma consulta de status ou detalhes feita logo após a submissão pode ainda não encontrar a transação. Consulte novamente a transação original, em vez de interpretar esse resultado como prova de falha do pagamento. Se o resultado da submissão for desconhecido, siga [Cenários de erro no módulo de pagamentos](/pt-br/api-reference/payout/overview) antes de reenviar. Reutilizar um `merchant_order_id` já reservado retorna um erro de duplicidade; alterar o ID pode criar outro pagamento. <Badge color="blue" size="sm">Complementado · payout-ted-F02</Badge>
+
+<Accordion title="Correções em relação ao documento original (3)" icon="clipboard-check">
+Esta página foi conferida com o código-fonte da Pagsmile Open API em 2026-11-10. Cada alteração abaixo está marcada na página com um selo que mostra o seu ID.
+
+| ID | Alteração | Local | Texto do documento original | Texto atualizado |
+| --- | --- | --- | --- | --- |
+| payout-ted-F01 | Complementado (ausente no original) | Introductory description | Inicie um pagamento via TED usando uma conta bancária. | Inicie um pagamento via TED para um banco diferente do banco do pagador, usando os dados da conta bancária do recebedor. |
+| payout-ted-F02 | Complementado (ausente no original) | Call sequence — replace the existing sequence and add handling guidance immediately below it | Preencher os dados da conta bancária do recebedor e do pagamento → Iniciar pagamento via TED → Salvar o ID da transação → Consultar o status e os detalhes do pagamento. | Preencher os dados da conta bancária do recebedor e do pagamento → Iniciar pagamento via TED → Salvar `data.txn_id` da resposta bem-sucedida → Usar esse ID como `txn_id` para consultar o status e os detalhes do pagamento. Uma submissão bem-sucedida aceita o pagamento para processamento assíncrono e retorna `data.txn_status` como 5 (`TXN_STATUS_PROCESSING`); isso não confirma a conclusão. Uma consulta de status ou detalhes feita logo após a submissão pode ainda não encontrar a transação. Consulte novamente a transação original, em vez de interpretar esse resultado como prova de falha do pagamento. Se o resultado da submissão for desconhecido, siga Cenários de erro no módulo de pagamentos antes de reenviar. Reutilizar um `merchant_order_id` já reservado retorna um erro de duplicidade; alterar o ID pode criar outro pagamento. |
+| payout-ted-F03 | Complementado (ausente no original) | New Permissions and account ownership section between API operations and Call sequence | — | ### Permissões e titularidade da conta Use credenciais ACCOUNT da conta do pagador, ou credenciais USER com `X-ISPB` e `X-Account-Number` identificando uma conta pertencente a esse USER. Credenciais PLATFORM não podem chamar essas operações. Com credenciais ACCOUNT, omita os dois cabeçalhos de seleção da conta ou informe ambos com valores correspondentes à conta da credencial. Nesse fluxo, mantenha o contexto da conta do pagador ao consultar o status e os detalhes. As requisições devem seguir Ambientes e credenciais. |
+</Accordion>

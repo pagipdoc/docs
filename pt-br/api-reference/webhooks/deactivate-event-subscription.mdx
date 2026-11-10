@@ -1,0 +1,148 @@
+---
+title: "Desativar assinatura de eventos"
+description: "Desative a assinatura de eventos para o tipo de evento e o escopo da conta. Após enviar a requisição, consulte a configuração para confirmar a desativação."
+api: "POST /v3/webhooks/delete"
+keywords: ["/v3/webhooks/delete"]
+---
+
+## Funcionamento e tratamento
+
+Desative a assinatura de eventos da identidade autenticada. Com credenciais `ACCOUNT`, a assinatura de eventos pertence à conta vinculada. Com credenciais `USER`, as assinaturas de eventos de transações são compartilhadas no nível do usuário e da aplicação para cada tipo de evento; `account_number` é obrigatório na requisição, mas não restringe a desativação àquela conta. Portanto, desativar uma assinatura de eventos `USER` afeta essa assinatura de eventos compartilhada, não apenas a conta informada. <Badge color="orange" size="sm">Corrigido · api-30-F03</Badge> Após enviar a requisição, consulte a configuração para confirmar a desativação.
+
+## Permissões e titularidade da conta
+
+A autorização depende da identidade titular da assinatura de eventos e do escopo. As credenciais `ACCOUNT` usam a conta vinculada e não podem desativar assinaturas de eventos `MASTER_ACCOUNT_KYB`. As credenciais `USER` permitem os eventos de transações 1–4, que exigem `account_number`, e `VA_ACCOUNT_KYB` (`5`), para o qual `account_number` deve ser omitido ou vazio. As credenciais `PLATFORM` permitem apenas `MASTER_ACCOUNT_KYB` (`6`), e `account_number` deve ser omitido ou vazio. Não é permitido acessar assinaturas de eventos de outra conta, outro usuário ou outro tenant da plataforma. <Badge color="blue" size="sm">Complementado · api-30-F02</Badge> Veja [Webhooks](/pt-br/api-reference/webhooks/overview). As requisições devem seguir as orientações de [Ambientes e credenciais](/pt-br/environments-and-credentials).
+
+## Parâmetros da requisição
+
+<ParamField body="event_type" type="integer" required>
+Tipos de evento de webhook: `1` `PIX_IN`; `2` `PIX_OUT`; `3` `REFUND_IN`; `4` `REFUND_OUT`; `5` `VA_ACCOUNT_KYB`; `6` `MASTER_ACCOUNT_KYB`. Os valores permitidos dependem da titularidade das credenciais. O valor `0` não é aceito. <Badge color="blue" size="sm">Complementado · api-30-F01</Badge>
+</ParamField>
+
+<ParamField body="account_number" type="string">
+**Obrigatório:** Obrigatório sob condição. Remova primeiro os espaços em branco no início e no fim. Preserve os zeros à esquerda. O campo pode ser omitido com credenciais ACCOUNT. Se informado, deve corresponder ao número da conta vinculada. As credenciais `USER` permitem os eventos de transações 1–4, que exigem `account_number`, e `VA_ACCOUNT_KYB` (`5`), para o qual `account_number` deve ser omitido ou vazio. As credenciais `PLATFORM` permitem apenas `MASTER_ACCOUNT_KYB` (`6`), e `account_number` deve ser omitido ou vazio. <Badge color="blue" size="sm">Complementado · api-30-F02</Badge>
+</ParamField>
+
+<ParamField body="subscription_id" type="string">
+Remova os espaços em branco no início e no fim. Se informado, `subscription_id` seleciona a assinatura de eventos pelo ID, com verificação da titularidade da conta, do usuário ou do tenant da plataforma autenticado. A aplicação e o tipo de evento não são filtros adicionais de correspondência quando o ID é informado, e `account_number` de `USER` não restringe a seleção. Se omitido, a seleção usa a identidade autenticada, a aplicação e o tipo de evento; com `ACCOUNT`, também usa o ISPB e o número da conta vinculada. Use o ID da assinatura de eventos que deseja desativar. Não acesse uma assinatura de eventos de outra identidade titular. <Badge color="orange" size="sm">Corrigido · api-30-F04</Badge>
+</ParamField>
+
+## Exemplo de requisição cURL
+
+O exemplo usa credenciais de nível ACCOUNT. Preencha os parâmetros reais e gere a assinatura com base no body.json final.
+
+## Campos da resposta
+
+Os caminhos dos campos partem da raiz da resposta. `[]` indica um elemento de array. Os valores monetários usam strings decimais. Os enums são interpretados conforme cada campo. A estrutura abaixo representa os dados de uma resposta de sucesso. Um valor nulo ou 0, por si só, não indica a conclusão da operação.
+
+<ResponseField name="code" type="integer">
+Código de resultado de negócio; 200 indica sucesso. Os erros de negócio são retornados neste campo, que não equivale ao código de status HTTP.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Descrição do resultado de negócio; em caso de falha, analise esta descrição junto com o campo code para identificar a causa.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Objeto de dados da resposta de sucesso; pode ser null em respostas de erro.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Horário da resposta, em timestamp Unix UTC em milissegundos.
+</ResponseField>
+
+<ResponseField name="data.webhook_id" type="string">
+ID da assinatura de eventos.
+</ResponseField>
+
+<ResponseField name="data.deleted_at" type="integer">
+Data e hora em que a resposta de desativação bem-sucedida é gerada, em timestamp Unix UTC em milissegundos. O campo é preenchido em caso de sucesso. A assinatura de eventos é desativada, não excluída; esse valor não é um timestamp de exclusão armazenado. <Badge color="orange" size="sm">Corrigido · api-30-F05</Badge>
+</ResponseField>
+
+## Respostas
+
+Consulte os exemplos de resposta pelo `code` de negócio no JSON. Um JSON inválido ou uma falha na leitura do corpo da requisição pode retornar HTTP 400 com um erro em texto simples, em vez desta estrutura JSON. Trate respostas que não sejam JSON separadamente dos erros de negócio. <Badge color="blue" size="sm">Complementado · api-30-F10</Badge> Verifique o status HTTP e o code de negócio separadamente. Uma resposta HTTP 200 também pode retornar um erro de negócio. <Badge color="orange" size="sm">Corrigido · api-30-F06</Badge>
+
+| `code` | Significado | Ação recomendada |
+| --- | --- | --- |
+| `200` | Requisição bem-sucedida | O `code` de negócio `200` confirma que a assinatura de eventos foi desativada. Esta resposta não contém um campo de status da assinatura de eventos. Consulte a configuração da assinatura de eventos e confirme o status `2` (`BASE_STATUS_INACTIVE`). O ID da assinatura de eventos permanece inalterado. <Badge color="orange" size="sm">Corrigido · api-30-F07</Badge> |
+| `400` | Falha na requisição ou validação | Problema nos parâmetros. Verifique e corrija os parâmetros da requisição. |
+| `500` | Erro do sistema | Registre a resposta e confirme primeiro o resultado de negócio. |
+
+Os exemplos ilustram a estrutura da resposta. Os valores de message e do status de negócio devem ser obtidos da resposta efetiva. Para outros erros de parâmetros, permissões e serviço, consulte [Catálogo de erros](/pt-br/api-reference/error-catalog). Esta seção não indica que o endpoint retorna apenas os três valores de `code` apresentados. Os erros comuns deste endpoint incluem `code` `4000` quando `event_type` é omitido ou `0`, ou quando eventos de transações com `USER` omitem `account_number`; `code` `4004003` quando a titularidade das credenciais ou a combinação de evento e conta não é permitida; `code` `4004004` quando a assinatura de eventos não é encontrada; e `code` `501` quando a operação da assinatura de eventos não consegue acessar o serviço necessário. Corrija problemas de parâmetros ou permissões antes de tentar novamente. Se o resultado da desativação for desconhecido, consulte primeiro a configuração da assinatura de eventos. <Badge color="blue" size="sm">Complementado · api-30-F11</Badge>
+
+<Tip>
+Para testar este endpoint, envie o exemplo de requisição para a Base URL do Sandbox `https://ebanking-openapi-sandbox.pagsmile.com.br` com sua AK/SK de Sandbox. Assine cada requisição conforme descrito em [Ambientes e credenciais](/pt-br/environments-and-credentials#assinatura-de-requisições-à-api).
+</Tip>
+
+
+<Accordion title="Correções em relação ao documento original (9)" icon="clipboard-check">
+Esta página foi conferida com o código-fonte da Pagsmile Open API em 2026-11-10. Cada alteração abaixo está marcada na página com um selo que mostra o seu ID.
+
+| ID | Alteração | Local | Texto do documento original | Texto atualizado |
+| --- | --- | --- | --- | --- |
+| api-30-F01 | Complementado (ausente no original) | Request parameters | Tipos de evento de webhook: 1 PIX_IN; 2 PIX_OUT; 3 REFUND_IN; 4 REFUND_OUT. | Tipos de evento de webhook: 1 PIX_IN; 2 PIX_OUT; 3 REFUND_IN; 4 REFUND_OUT; 5 VA_ACCOUNT_KYB; 6 MASTER_ACCOUNT_KYB. Os valores permitidos dependem da titularidade das credenciais. O valor 0 não é aceito. |
+| api-30-F02 | Complementado (ausente no original) | Permissions and account ownership; Request parameters | A autorização depende da identidade titular da assinatura de eventos e do escopo. | A autorização depende da identidade titular da assinatura de eventos e do escopo. As credenciais ACCOUNT usam a conta vinculada e não podem desativar assinaturas de eventos MASTER_ACCOUNT_KYB. As credenciais USER permitem os eventos de transações 1–4, que exigem account_number, e VA_ACCOUNT_KYB (5), para o qual account_number deve ser omitido ou vazio. As credenciais PLATFORM permitem apenas MASTER_ACCOUNT_KYB (6), e account_number deve ser omitido ou vazio. Não é permitido acessar assinaturas de eventos de outra conta, outro usuário ou outro tenant da plataforma. |
+| api-30-F03 | Corrigido (não correspondia ao código) | Behavior and handling | Desative a assinatura de eventos para o tipo de evento e o escopo da conta. | Desative a assinatura de eventos da identidade autenticada. Com credenciais ACCOUNT, a assinatura de eventos pertence à conta vinculada. Com credenciais USER, as assinaturas de eventos de transações são compartilhadas no nível do usuário e da aplicação para cada tipo de evento; account_number é obrigatório na requisição, mas não restringe a desativação àquela conta. Portanto, desativar uma assinatura de eventos USER afeta essa assinatura de eventos compartilhada, não apenas a conta informada. |
+| api-30-F04 | Corrigido (não correspondia ao código) | Request parameters | Remova os espaços em branco no início e no fim antes de enviar o valor ao serviço de consulta de assinaturas de eventos. O valor identifica a assinatura de eventos em conjunto com a titularidade das credenciais, a aplicação, o tipo de evento e o escopo da conta. Não acesse outros escopos sem autorização | Remova os espaços em branco no início e no fim. Se informado, subscription_id seleciona a assinatura de eventos pelo ID, com verificação da titularidade da conta, do usuário ou do tenant da plataforma autenticado. A aplicação e o tipo de evento não são filtros adicionais de correspondência quando o ID é informado, e account_number de USER não restringe a seleção. Se omitido, a seleção usa a identidade autenticada, a aplicação e o tipo de evento; com ACCOUNT, também usa o ISPB e o número da conta vinculada. Use o ID da assinatura de eventos que deseja desativar. Não acesse uma assinatura de eventos de outra identidade titular. |
+| api-30-F05 | Corrigido (não correspondia ao código) | Response fields | Data e hora da exclusão ou desativação, em timestamp Unix em milissegundos (UTC). Pode ser 0 se nenhuma delas tiver ocorrido ou se o horário não tiver sido informado. | Data e hora em que a resposta de desativação bem-sucedida é gerada, em timestamp Unix UTC em milissegundos. O campo é preenchido em caso de sucesso. A assinatura de eventos é desativada, não excluída; esse valor não é um timestamp de exclusão armazenado. |
+| api-30-F06 | Corrigido (não correspondia ao código) | Responses / Request succeeded | `{ "code": 200, "message": "success", "data": { "webhook_id": "example-webhook_id", "deleted_at": 0 }, "time": 1791792000000 }` | `{ "code": 200, "message": "success", "data": { "webhook_id": "example-webhook_id", "deleted_at": 1791792000001, "error": null, "result": null }, "time": 1791792000000 }` |
+| api-30-F07 | Corrigido (não correspondia ao código) | Responses / Request succeeded / Recommended action | Leia data e avalie o resultado do processamento conforme o status de negócio deste endpoint. | O code de negócio 200 confirma que a assinatura de eventos foi desativada. Esta resposta não contém um campo de status da assinatura de eventos. Consulte a configuração da assinatura de eventos e confirme o status 2 (BASE_STATUS_INACTIVE). O ID da assinatura de eventos permanece inalterado. |
+| api-30-F10 | Complementado (ausente no original) | Responses / opening guidance | Consulte os exemplos de resposta pelo `code` de negócio no JSON. | Consulte os exemplos de resposta pelo `code` de negócio no JSON. Um JSON inválido ou uma falha na leitura do corpo da requisição pode retornar HTTP 400 com um erro em texto simples, em vez desta estrutura JSON. Trate respostas que não sejam JSON separadamente dos erros de negócio. |
+| api-30-F11 | Complementado (ausente no original) | Responses / error catalog guidance | Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados. | Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados. Os erros comuns deste endpoint incluem code 4000 quando event_type é omitido ou 0, ou quando eventos de transações com USER omitem account_number; code 4004003 quando a titularidade das credenciais ou a combinação de evento e conta não é permitida; code 4004004 quando a assinatura de eventos não é encontrada; e code 501 quando a operação da assinatura de eventos não consegue acessar o serviço necessário. Corrija problemas de parâmetros ou permissões antes de tentar novamente. Se o resultado da desativação for desconhecido, consulte primeiro a configuração da assinatura de eventos. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "event_type": 1,
+  "account_number": "replace-with-account-number"
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/webhooks/delete' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${ACCOUNT_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Requisição bem-sucedida
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "webhook_id": "example-webhook_id",
+    "deleted_at": 1791792000001,
+    "error": null,
+    "result": null
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Falha na requisição ou validação
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 Erro do sistema
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

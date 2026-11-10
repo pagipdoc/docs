@@ -1,0 +1,338 @@
+---
+title: "Consultar detalhes da devolução"
+description: "Consulte os detalhes da devolução para vincular a transação original, o valor da devolução e o resultado do processamento, para acompanhamento e conciliação."
+api: "POST /v3/refunds/details"
+keywords: ["/v3/refunds/details"]
+---
+
+## Funcionamento e tratamento
+
+Consulte os detalhes da devolução para vincular a transação original, o valor da devolução e o resultado do processamento, para acompanhamento e conciliação.
+
+### Vínculos entre transações originais, devoluções e lançamentos do extrato
+
+Salve o ID de liquidação da transação original, o ID do pedido de devolução, o ID da devolução, o ID de liquidação da devolução, o valor e o status. Registre a devolução separadamente, sem sobrescrever a transação original. Vincule o lançamento da devolução no extrato à devolução e à transação original para concluir a conferência. Use `parent_txn_id` e `parent_settlement_id` do lançamento correspondente à devolução para identificar a transação original; esta resposta de detalhes da devolução não preenche `original_settlement_id`. <Badge color="blue" size="sm">Complementado · api-6-F10</Badge>
+
+## Permissões e titularidade da conta
+
+`ACCOUNT`, ou `USER` com `X-ISPB` e `X-Account-Number` de uma conta de titularidade desse `USER`. As credenciais `ACCOUNT` usam a conta vinculada; se os headers da conta forem enviados, ambos devem ser preenchidos e corresponder a essa conta. A conta-alvo deve ser a do pagador ou do recebedor da devolução. O recebedor da devolução (pagador original) só pode consultar devoluções concluídas; devoluções ainda não concluídas retornam o `code` de negócio `4003003` (Transaction detail not found). Uma conta que não seja de nenhuma das partes recebe o `code` de negócio `4004101` (Authorization is required). <Badge color="blue" size="sm">Complementado · api-6-F04</Badge> As requisições devem seguir as orientações de [Ambientes e credenciais](/pt-br/environments-and-credentials).
+
+## Parâmetros da requisição
+
+<ParamField body="refund_id" type="string">
+**Obrigatório:** Pelo menos um. `txn_id` do lançamento do extrato correspondente à devolução que você deseja consultar, com `txn_type=2`; é obrigatório fornecer pelo menos um dos campos: `refund_id` ou `settlement_refund_id` <Badge color="orange" size="sm">Corrigido · api-6-F01</Badge>
+</ParamField>
+
+<ParamField body="settlement_refund_id" type="string">
+**Obrigatório:** Pelo menos um. `settlement_id` do mesmo lançamento de devolução no extrato; é obrigatório fornecer pelo menos um dos campos: `refund_id` ou `settlement_refund_id`. Se ambos forem informados, `refund_id` tem prioridade: `settlement_refund_id` não é usado como alternativa e não é verificado para confirmar a correspondência. <Badge color="blue" size="sm">Complementado · api-6-F03</Badge>
+</ParamField>
+
+<Info>
+**Origem dos parâmetros**
+
+Selecione o registro correspondente à devolução que você deseja consultar, com `txn_type=2`, na resposta de sucesso de [Consultar extrato da conta](/pt-br/api-reference/accounts/get-account-statement) (`/v3/statements`). <Badge color="orange" size="sm">Corrigido · api-6-F02</Badge> Preencha `refund_id` com `txn_id` e `settlement_refund_id` com `settlement_id` do mesmo registro.
+</Info>
+
+## Exemplo de requisição cURL
+
+O exemplo usa credenciais de nível ACCOUNT. Preencha os parâmetros reais e gere a assinatura com base no body.json final.
+
+## Campos da resposta
+
+Os caminhos dos campos partem da raiz da resposta. `[]` indica um elemento de array. Os valores monetários usam strings decimais. Os enums são interpretados conforme cada campo. A estrutura abaixo representa os dados de uma resposta de sucesso. Um valor nulo ou 0, por si só, não indica a conclusão da operação.
+
+<ResponseField name="code" type="integer">
+Código de resultado de negócio; 200 indica sucesso. Os erros de negócio são retornados neste campo, que não equivale ao código de status HTTP.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Descrição do resultado de negócio; em caso de falha, analise esta descrição junto com o campo code para identificar a causa.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Objeto de dados da resposta de sucesso; pode ser null em respostas de erro.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Horário da resposta, em timestamp Unix UTC em milissegundos.
+</ResponseField>
+
+<ResponseField name="data.details" type="object">
+Detalhes da transação; txn_id identifica a devolução. O ID de liquidação da devolução não é preenchido na estrutura atual.
+</ResponseField>
+
+<ResponseField name="data.details.payee" type="object">
+Dados do recebedor.
+</ResponseField>
+
+<ResponseField name="data.details.payee.name" type="string">
+Nome.
+</ResponseField>
+
+<ResponseField name="data.details.payee.document_id" type="string">
+Número do documento do participante da transação, que pode ser mascarado conforme a configuração do comerciante.
+</ResponseField>
+
+<ResponseField name="data.details.payee.document_type" type="integer">
+Tipo de documento. Enum: 0 DOCUMENT_TYPE_UNSPECIFIED; 1 DOCUMENT_TYPE_CPF; 2 DOCUMENT_TYPE_CNPJ.
+</ResponseField>
+
+<ResponseField name="data.details.payee.bank_account" type="string">
+Número da conta.
+</ResponseField>
+
+<ResponseField name="data.details.payee.bank_account_type" type="integer">
+Tipo de conta bancária. Enum: 0 BANK_ACCOUNT_TYPE_UNSPECIFIED; 1 BANK_ACCOUNT_TYPE_CHECKING; 2 BANK_ACCOUNT_TYPE_SALARY; 3 BANK_ACCOUNT_TYPE_SAVINGS; 4 BANK_ACCOUNT_TYPE_PAYMENT; 5 BANK_ACCOUNT_TYPE_TRANSCTIONAL_PI; 7 BANK_ACCOUNT_TYPE_DEPOSIT; 6 BANK_ACCOUNT_TYPE_GUARANTEED.
+</ResponseField>
+
+<ResponseField name="data.details.payee.bank_branch" type="string">
+Código da agência bancária.
+</ResponseField>
+
+<ResponseField name="data.details.payee.bank_code" type="string">
+ISPB do banco.
+</ResponseField>
+
+<ResponseField name="data.details.payee.bank_name" type="string">
+Nome do banco.
+</ResponseField>
+
+<ResponseField name="data.details.payer" type="object">
+Dados do pagador.
+</ResponseField>
+
+<ResponseField name="data.details.payer.name" type="string">
+Nome.
+</ResponseField>
+
+<ResponseField name="data.details.payer.document_id" type="string">
+Número do documento do participante da transação, que pode ser mascarado conforme a configuração do comerciante.
+</ResponseField>
+
+<ResponseField name="data.details.payer.document_type" type="integer">
+Tipo de documento. Enum: 0 DOCUMENT_TYPE_UNSPECIFIED; 1 DOCUMENT_TYPE_CPF; 2 DOCUMENT_TYPE_CNPJ.
+</ResponseField>
+
+<ResponseField name="data.details.payer.bank_account" type="string">
+Número da conta.
+</ResponseField>
+
+<ResponseField name="data.details.payer.bank_account_type" type="integer">
+Tipo de conta bancária. Enum: 0 BANK_ACCOUNT_TYPE_UNSPECIFIED; 1 BANK_ACCOUNT_TYPE_CHECKING; 2 BANK_ACCOUNT_TYPE_SALARY; 3 BANK_ACCOUNT_TYPE_SAVINGS; 4 BANK_ACCOUNT_TYPE_PAYMENT; 5 BANK_ACCOUNT_TYPE_TRANSCTIONAL_PI; 7 BANK_ACCOUNT_TYPE_DEPOSIT; 6 BANK_ACCOUNT_TYPE_GUARANTEED.
+</ResponseField>
+
+<ResponseField name="data.details.payer.bank_branch" type="string">
+Código da agência bancária.
+</ResponseField>
+
+<ResponseField name="data.details.payer.bank_code" type="string">
+ISPB do banco.
+</ResponseField>
+
+<ResponseField name="data.details.payer.bank_name" type="string">
+Nome do banco.
+</ResponseField>
+
+<ResponseField name="data.details.txn_id" type="string">
+ID da transação.
+</ResponseField>
+
+<ResponseField name="data.details.settlement_id" type="string">
+ID da transação de liquidação; atualmente não é preenchido por este endpoint e retorna como uma string vazia.
+</ResponseField>
+
+<ResponseField name="data.details.merchant_order_id" type="string">
+ID do pedido do comerciante informado pelo integrador.
+</ResponseField>
+
+<ResponseField name="data.details.txn_status" type="integer">
+Status do processamento da devolução. Este endpoint mapeia os estados da devolução para `1 TXN_STATUS_PENDING`, `5 TXN_STATUS_PROCESSING`, `2 TXN_STATUS_COMPLETED` ou `3 TXN_STATUS_FAILED`; um estado não reconhecido é mapeado para `0 TXN_STATUS_UNSPECIFIED`. Os demais valores pertencem ao enum compartilhado de transações e não são produzidos por esse mapeamento de estados da devolução. <Badge color="blue" size="sm">Complementado · api-6-F06</Badge>
+</ResponseField>
+
+<ResponseField name="data.details.source_type" type="integer">
+Tipo de origem. Atualmente, este endpoint retorna `0` (`SOURCE_TYPE_UNSPECIFIED`), inclusive para devoluções iniciadas via API. Enum compartilhado: `0 SOURCE_TYPE_UNSPECIFIED`; `1 SOURCE_TYPE_APP`; `2 SOURCE_TYPE_API`; `3 SOURCE_TYPE_SCHEDULE`; `4 SOURCE_TYPE_BATCH`. <Badge color="blue" size="sm">Complementado · api-6-F05</Badge>
+</ResponseField>
+
+<ResponseField name="data.details.amount" type="string">
+Valor da transação, como string decimal.
+</ResponseField>
+
+<ResponseField name="data.details.memo" type="string">
+Observação da transação.
+</ResponseField>
+
+<ResponseField name="data.details.credit_fee" type="string">
+Tarifa do recebedor, em string decimal.
+</ResponseField>
+
+<ResponseField name="data.details.debit_fee" type="string">
+Tarifa do pagador, string decimal.
+</ResponseField>
+
+<ResponseField name="data.details.currency" type="string">
+Moeda.
+</ResponseField>
+
+<ResponseField name="data.details.rejection_reason" type="string">
+Motivo da rejeição ou falha da transação. Atualmente, este endpoint não preenche o campo: string vazia.
+</ResponseField>
+
+<ResponseField name="data.details.created_at" type="integer">
+Data e hora de criação, em timestamp Unix UTC em milissegundos. Pode ser 0 se a criação não tiver ocorrido ou se a data e hora não forem informadas. Este endpoint não preenche o campo: 0.
+</ResponseField>
+
+<ResponseField name="data.details.completed_at" type="integer">
+Data e hora de conclusão. Pode ser 0 se a conclusão ainda não tiver ocorrido. Timestamp Unix UTC em milissegundos, que pode ser 0 se a conclusão não tiver ocorrido ou se a data e hora não forem informadas. Este endpoint não preenche o campo: 0.
+</ResponseField>
+
+<ResponseField name="data.details.pix_details" type="object">
+Dados exclusivos de transações Pix. Atualmente, este endpoint não preenche o campo: null.
+</ResponseField>
+
+<ResponseField name="data.details.pix_details.pix_key" type="string">
+Valor da chave Pix.
+</ResponseField>
+
+<ResponseField name="data.details.pix_details.pix_key_type" type="integer">
+Tipo de chave Pix. Enum: 0 PIX_KEY_TYPE_UNSPECIFIED; 1 PIX_KEY_TYPE_CPF; 2 PIX_KEY_TYPE_CNPJ; 3 PIX_KEY_TYPE_EMAIL; 4 PIX_KEY_TYPE_PHONE; 5 PIX_KEY_TYPE_EVP.
+</ResponseField>
+
+<ResponseField name="data.details.pix_details.qr_code_id" type="string">
+ID do QR Code.
+</ResponseField>
+
+<ResponseField name="data.details.ted_details" type="object">
+Dados exclusivos de transações TED. Atualmente, este endpoint não preenche o campo: null.
+</ResponseField>
+
+<ResponseField name="data.details.ted_details.spb_request_id" type="string">
+ID da requisição SPB da transação TED.
+</ResponseField>
+
+<ResponseField name="data.details.original_settlement_id" type="string">
+ID da transação de liquidação original. Atualmente, este endpoint não preenche o campo: string vazia.
+</ResponseField>
+
+## Respostas
+
+Consulte os exemplos de resposta pelo `code` de negócio no JSON. <Badge color="orange" size="sm">Corrigido · api-6-F09</Badge> Verifique o status HTTP e o `code` de negócio separadamente. JSON malformado ou um valor JSON com tipo incompatível com o campo pode retornar HTTP `400` com uma resposta de texto, em vez deste envelope JSON; interprete o `code` de negócio apenas quando o corpo for JSON. <Badge color="blue" size="sm">Complementado · api-6-F12</Badge> Uma resposta HTTP 200 também pode retornar um erro de negócio.
+
+| `code` | Significado | Ação recomendada |
+| --- | --- | --- |
+| `200` | Requisição bem-sucedida | Leia data e avalie o resultado do processamento conforme o status de negócio deste endpoint. |
+| `400` | Falha na requisição ou validação | Problema nos parâmetros. Verifique e corrija os parâmetros da requisição. |
+| `500` | Erro do sistema | Registre a resposta e confirme primeiro o resultado de negócio. |
+
+Os exemplos ilustram a estrutura da resposta. Os valores de message e do status de negócio devem ser obtidos da resposta efetiva. Para outros erros de parâmetros, permissões e serviço, consulte [Catálogo de erros](/pt-br/api-reference/error-catalog). Esta seção não indica que o endpoint retorna apenas os três valores de `code` apresentados. Se ambos os identificadores estiverem vazios, será retornado o `code` `4000` (Field refund_id or settlement_refund_id is required). Se a devolução não for encontrada ou estiver oculta para o recebedor por ainda não ter sido concluída, será retornado o `code` `4003003` (Transaction detail not found). Uma conta-alvo sem relação com a devolução recebe o `code` `4004101` (Authorization is required). Uma falha de comunicação pode retornar o `code` `501`. <Badge color="blue" size="sm">Complementado · api-6-F11</Badge>
+
+<Tip>
+Para testar este endpoint, envie o exemplo de requisição para a Base URL do Sandbox `https://ebanking-openapi-sandbox.pagsmile.com.br` com sua AK/SK de Sandbox. Assine cada requisição conforme descrito em [Ambientes e credenciais](/pt-br/environments-and-credentials#assinatura-de-requisições-à-api).
+</Tip>
+
+
+<Accordion title="Correções em relação ao documento original (10)" icon="clipboard-check">
+Esta página foi conferida com o código-fonte da Pagsmile Open API em 2026-11-10. Cada alteração abaixo está marcada na página com um selo que mostra o seu ID.
+
+| ID | Alteração | Local | Texto do documento original | Texto atualizado |
+| --- | --- | --- | --- | --- |
+| api-6-F01 | Corrigido (não correspondia ao código) | Request parameters | `txn_id` do primeiro lançamento do extrato da conta com `txn_type=2`; é obrigatório fornecer pelo menos um dos campos: refund_id ou settlement_refund_id | `txn_id` do lançamento do extrato correspondente à devolução que você deseja consultar, com `txn_type=2`; é obrigatório fornecer pelo menos um dos campos: refund_id ou settlement_refund_id |
+| api-6-F02 | Corrigido (não correspondia ao código) | Parameter sources | Selecione o primeiro registro com `txn_type=2` na resposta de sucesso de Consultar extrato da conta ↗ (`/v3/statements`). | Selecione o registro correspondente à devolução que você deseja consultar, com `txn_type=2`, na resposta de sucesso de Consultar extrato da conta ↗ (`/v3/statements`). |
+| api-6-F03 | Complementado (ausente no original) | Request parameters | `settlement_id` do mesmo lançamento de devolução no extrato; é obrigatório fornecer pelo menos um dos campos: refund_id ou settlement_refund_id | `settlement_id` do mesmo lançamento de devolução no extrato; é obrigatório fornecer pelo menos um dos campos: refund_id ou settlement_refund_id. Se ambos forem informados, refund_id tem prioridade: settlement_refund_id não é usado como alternativa e não é verificado para confirmar a correspondência. |
+| api-6-F04 | Complementado (ausente no original) | Permissions and account ownership | ACCOUNT, ou USER com o header da conta-alvo. | ACCOUNT, ou USER com X-ISPB e X-Account-Number de uma conta de titularidade desse USER. As credenciais ACCOUNT usam a conta vinculada; se os headers da conta forem enviados, ambos devem ser preenchidos e corresponder a essa conta. A conta-alvo deve ser a do pagador ou do recebedor da devolução. O recebedor da devolução (pagador original) só pode consultar devoluções concluídas; devoluções ainda não concluídas retornam o code de negócio 4003003 (Transaction detail not found). Uma conta que não seja de nenhuma das partes recebe o code de negócio 4004101 (Authorization is required). |
+| api-6-F05 | Complementado (ausente no original) | Response fields | Tipo de origem. Enum: 0 SOURCE_TYPE_UNSPECIFIED; 1 SOURCE_TYPE_APP; 2 SOURCE_TYPE_API; 3 SOURCE_TYPE_SCHEDULE; 4 SOURCE_TYPE_BATCH. | Tipo de origem. Atualmente, este endpoint retorna 0 (SOURCE_TYPE_UNSPECIFIED), inclusive para devoluções iniciadas via API. Enum compartilhado: 0 SOURCE_TYPE_UNSPECIFIED; 1 SOURCE_TYPE_APP; 2 SOURCE_TYPE_API; 3 SOURCE_TYPE_SCHEDULE; 4 SOURCE_TYPE_BATCH. |
+| api-6-F06 | Complementado (ausente no original) | Response fields | Status da transação. Enum: 0 TXN_STATUS_UNSPECIFIED; 1 TXN_STATUS_PENDING; 2 TXN_STATUS_COMPLETED; 3 TXN_STATUS_FAILED; 4 TXN_STATUS_CANCELLED; 5 TXN_STATUS_PROCESSING; 6 TXN_STATUS_REFUNDED; 7 TXN_STATUS_PARTIALLY_REFUNDED; 8 TXN_STATUS_DISPUTED. | Status do processamento da devolução. Este endpoint mapeia os estados da devolução para 1 TXN_STATUS_PENDING, 5 TXN_STATUS_PROCESSING, 2 TXN_STATUS_COMPLETED ou 3 TXN_STATUS_FAILED; um estado não reconhecido é mapeado para 0 TXN_STATUS_UNSPECIFIED. Os demais valores pertencem ao enum compartilhado de transações e não são produzidos por esse mapeamento de estados da devolução. |
+| api-6-F09 | Corrigido (não correspondia ao código) | Responses / Request succeeded | `{ "code": 200, "message": "success", "data": { "details": { "payee": {}, "payer": {}, "txn_id": "example-txn_id", "settlement_id": "example-settlement_id", "merchant_order_id": "example-merchant_order_id", "txn_status": 0, "source_type": 0, "amount": "10.00", "memo": "example-memo", "credit_fee": "example-credit_fee", "debit_fee": "example-debit_fee", "currency": "BRL", "rejection_reason": "example-rejection_reason", "created_at": 0, "completed_at": 0, "pix_details": {}, "ted_details": {}, "original_settlement_id": "example-original_settlement_id" } }, "time": 1791792000000 }` | `{ "code": 200, "message": "success", "data": { "details": { "payee": { "name": "Example Recipient", "document_id": "12345678901", "document_type": 1, "bank_account": "00000001", "bank_account_type": 1, "bank_branch": "0001", "bank_code": "12345678", "bank_name": "Example Bank" }, "payer": { "name": "Example Sender", "document_id": "98765432100", "document_type": 1, "bank_account": "00000002", "bank_account_type": 1, "bank_branch": "0001", "bank_code": "87654321", "bank_name": "Example Bank" }, "txn_id": "example-txn_id", "settlement_id": "", "merchant_order_id": "example-merchant_order_id", "txn_status": 2, "source_type": 0, "amount": "10.00", "memo": "example-memo", "credit_fee": "0.00", "debit_fee": "0.00", "currency": "BRL", "rejection_reason": "", "created_at": 0, "completed_at": 0, "pix_details": null, "ted_details": null, "original_settlement_id": "" }, "error": null, "result": null }, "time": 1791792000000 }` |
+| api-6-F10 | Complementado (ausente no original) | Links between original transactions, refunds, and statement entries | Vincule o lançamento da devolução no extrato à devolução e à transação original para concluir a conferência. | Vincule o lançamento da devolução no extrato à devolução e à transação original para concluir a conferência. Use parent_txn_id e parent_settlement_id do lançamento correspondente à devolução para identificar a transação original; esta resposta de detalhes da devolução não preenche original_settlement_id. |
+| api-6-F11 | Complementado (ausente no original) | Responses | Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados. | Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados. Se ambos os identificadores estiverem vazios, será retornado o code 4000 (Field refund_id or settlement_refund_id is required). Se a devolução não for encontrada ou estiver oculta para o recebedor por ainda não ter sido concluída, será retornado o code 4003003 (Transaction detail not found). Uma conta-alvo sem relação com a devolução recebe o code 4004101 (Authorization is required). Uma falha de comunicação pode retornar o code 501. |
+| api-6-F12 | Complementado (ausente no original) | Responses | Verifique o status HTTP e o code de negócio separadamente. | Verifique o status HTTP e o code de negócio separadamente. JSON malformado ou um valor JSON com tipo incompatível com o campo pode retornar HTTP 400 com uma resposta de texto, em vez deste envelope JSON; interprete o code de negócio apenas quando o corpo for JSON. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "refund_id": "replace-with-refund-id"
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/refunds/details' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${ACCOUNT_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Requisição bem-sucedida
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "details": {
+      "payee": {
+        "name": "Example Recipient",
+        "document_id": "12345678901",
+        "document_type": 1,
+        "bank_account": "00000001",
+        "bank_account_type": 1,
+        "bank_branch": "0001",
+        "bank_code": "12345678",
+        "bank_name": "Example Bank"
+      },
+      "payer": {
+        "name": "Example Sender",
+        "document_id": "98765432100",
+        "document_type": 1,
+        "bank_account": "00000002",
+        "bank_account_type": 1,
+        "bank_branch": "0001",
+        "bank_code": "87654321",
+        "bank_name": "Example Bank"
+      },
+      "txn_id": "example-txn_id",
+      "settlement_id": "",
+      "merchant_order_id": "example-merchant_order_id",
+      "txn_status": 2,
+      "source_type": 0,
+      "amount": "10.00",
+      "memo": "example-memo",
+      "credit_fee": "0.00",
+      "debit_fee": "0.00",
+      "currency": "BRL",
+      "rejection_reason": "",
+      "created_at": 0,
+      "completed_at": 0,
+      "pix_details": null,
+      "ted_details": null,
+      "original_settlement_id": ""
+    },
+    "error": null,
+    "result": null
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Falha na requisição ou validação
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 Erro do sistema
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

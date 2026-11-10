@@ -1,0 +1,302 @@
+---
+title: "Initiate internal transfer"
+description: "Initiate an internal transfer within the supported scope. Verify the target account and amount. Save the transaction ID and query the result."
+api: "POST /v3/transfers/internal"
+keywords: ["/v3/transfers/internal"]
+---
+
+## Behavior and handling
+
+Initiate an internal transfer between different eligible accounts at the same institution. A successful submission accepts the transfer for asynchronous processing and returns `txn_status` `5` (`TXN_STATUS_PROCESSING`); it does not mean that funds have already been transferred. Query the original transaction to confirm its final status. <Badge color="blue" size="sm">Added · api-16-F12</Badge>
+
+Verify the payer account, payee account, and amount. The payer must be enabled to send payments. The payee must be an existing active internal account, enabled to receive payments and not undergoing closure; its ISPB, account number, branch, account type, and holder document details must match the request. <Badge color="blue" size="sm">Added · api-16-F17</Badge>
+
+Applicable fees for both the payer and payee are checked before the transfer is accepted. The transfer amount must exceed the payee's total fee so that the amount credited after that fee is greater than zero. Save the transaction ID and query the result. <Badge color="blue" size="sm">Added · api-16-F22</Badge>
+
+If the request result is unknown, check the original transaction as described in [Error scenarios in the outgoing payment module](/api-reference/payout/overview). Do not resend the request directly.
+
+## Permissions and account ownership
+
+Use ACCOUNT credentials for the bound payer account, or USER credentials with both `X-ISPB` and `X-Account-Number` to select a payer account authorized for that USER. The target headers select the payer account, not the payee. Both USER target headers must be present and nonempty. PLATFORM credentials are not supported. If ACCOUNT credentials include target headers, both must be present and match the bound payer account; they cannot select another account. <Badge color="blue" size="sm">Added · api-16-F11</Badge> Requests must follow [Environments & Credentials](/environments-and-credentials).
+
+## Request parameters
+
+<ParamField body="payee" type="object" required>
+Payee identity and bank account information
+</ParamField>
+
+<ParamField body="payee.name" type="string" required>
+↳ Payee name
+</ParamField>
+
+<ParamField body="payee.document_id" type="string" required>
+↳ Payee document ID, consistent with the document type and the actual payee account
+</ParamField>
+
+<ParamField body="payee.document_type" type="integer" required>
+↳ **Required:** Yes. <Badge color="orange" size="sm">Corrected · api-16-F01</Badge> Required. Accepted values: `1 CPF`; `2 CNPJ`. The value must match the actual payee account holder's document type. `0 UNSPECIFIED` and other values are not accepted. <Badge color="orange" size="sm">Corrected · api-16-F02</Badge>
+</ParamField>
+
+<ParamField body="payee.bank_account" type="string" required>
+↳ Payee account number; preserve leading zeros. Use digits only, with no whitespace. It must identify an existing internal payee account and differ from the payer account. <Badge color="blue" size="sm">Added · api-16-F05</Badge>
+</ParamField>
+
+<ParamField body="payee.bank_account_type" type="integer" required>
+↳ **Required:** Yes. <Badge color="orange" size="sm">Corrected · api-16-F03</Badge> Required. Accepted values: `1 CHECKING`; `2 SALARY`; `3 SAVINGS`; `4 PAYMENT`. The value must match the actual payee account. `0 UNSPECIFIED`, `5 TRANSCTIONAL_PI`, `6 GUARANTEED`, `7 DEPOSIT`, and other values are not accepted for this request. <Badge color="orange" size="sm">Corrected · api-16-F04</Badge>
+</ParamField>
+
+<ParamField body="payee.bank_branch" type="string" required>
+↳ Payee bank branch code; preserve leading zeros. Use digits only. Values shorter than four characters are left-padded with zeros when checking the account, and the resulting branch code must match the actual payee account. <Badge color="blue" size="sm">Added · api-16-F06</Badge>
+</ParamField>
+
+<ParamField body="payee.bank_code" type="string" required>
+↳ Payee bank ISPB string; preserve leading zeros. Open API removes all whitespace, converts letters to uppercase, and pads values shorter than 8 characters with leading zeros. After normalization, the value must contain exactly 8 uppercase letters or digits; internal transfers accept digits only. Provide an actual, valid 8-digit ISPB that matches the payer account's ISPB. Transfers to another institution are not supported. <Badge color="blue" size="sm">Added · api-16-F07</Badge>
+</ParamField>
+
+<ParamField body="payee.bank_name" type="string">
+↳ **Required:** No (ignored). <Badge color="orange" size="sm">Corrected · api-16-F08</Badge> Optional bank name. This endpoint accepts the field but ignores its value for internal transfers. <Badge color="orange" size="sm">Corrected · api-16-F09</Badge>
+</ParamField>
+
+<ParamField body="amount" type="string" required>
+Decimal amount string; the value must be greater than `0` and have at most two effective decimal places (for example, `10.00`). Additional trailing zeros do not add precision, so `10.000` is accepted; `0`, negative numbers, and `10.555` are not accepted. <Badge color="orange" size="sm">Corrected · api-16-F20</Badge>
+
+Internal transfers are also subject to the payer's configured transaction and period limits, taking the payer and payee document types into account. A limit rejection returns business code `4001998`. No universal numeric transfer limit is specified here. <Badge color="blue" size="sm">Added · api-16-F18</Badge>
+</ParamField>
+
+<ParamField body="currency" type="string">
+**Required:** No (not enforced at this layer). Currency; bank account payments are processed in BRL in this version
+</ParamField>
+
+<ParamField body="memo" type="string">
+**Required:** No (not enforced at this layer). Transaction note
+</ParamField>
+
+<ParamField body="merchant_order_id" type="string" required>
+Merchant order ID; only English letters, digits, hyphens, and underscores are allowed. Use at least six characters, beginning with a valid YYMMDD UTC date whose day overlaps the current UTC ±1-hour window. Use an ID unique across operations in the same environment, not only within one payer account. Accepted IDs are reserved for up to 48 hours; a duplicate is rejected with business code `4001013` and does not replay the original success response. If the result is unknown, query the original operation first. Do not blindly resubmit with a new ID. <Badge color="blue" size="sm">Added · api-16-F16</Badge>
+</ParamField>
+
+## cURL request example
+
+The example uses ACCOUNT-level credentials. Enter the actual parameters and generate the signature from the final body.json. <Badge color="orange" size="sm">Corrected · api-16-F15</Badge>
+
+The example account number and document details illustrate the structure only. You must replace them with details for an actual Sandbox payee.
+
+## Response fields
+
+Field paths start at the response root. `[]` indicates an array element. Amounts use decimal strings. Enum values are defined separately for each field. The structure below describes a success response. A null value or 0 alone does not indicate that processing is complete.
+
+<ResponseField name="code" type="integer">
+Business result code. A value of 200 indicates success. Business errors are returned in this field. It is not the HTTP status code.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Business result description. On failure, use this with code to determine the cause.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Data object in a successful response. Can be null in an error response.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Response time as a UTC Unix timestamp in milliseconds.
+</ResponseField>
+
+<ResponseField name="data.merchant_order_id" type="string">
+Caller's merchant order ID.
+</ResponseField>
+
+<ResponseField name="data.txn_id" type="string">
+Transaction ID.
+</ResponseField>
+
+<ResponseField name="data.txn_status" type="integer">
+Transaction status. Enum: 0 TXN_STATUS_UNSPECIFIED; 1 TXN_STATUS_PENDING; 2 TXN_STATUS_COMPLETED; 3 TXN_STATUS_FAILED; 4 TXN_STATUS_CANCELLED; 5 TXN_STATUS_PROCESSING; 6 TXN_STATUS_REFUNDED; 7 TXN_STATUS_PARTIALLY_REFUNDED; 8 TXN_STATUS_DISPUTED.
+</ResponseField>
+
+<ResponseField name="data.payee" type="object">
+Payee details. This payment endpoint does not populate this field and returns null. Call Get payment details to retrieve the actual participant details.
+</ResponseField>
+
+<ResponseField name="data.payee.name" type="string">
+Name.
+</ResponseField>
+
+<ResponseField name="data.payee.document_id" type="string">
+Transaction participant's document number. It may be masked based on the merchant's configuration.
+</ResponseField>
+
+<ResponseField name="data.payee.document_type" type="integer">
+Document type. Enum: 0 DOCUMENT_TYPE_UNSPECIFIED; 1 DOCUMENT_TYPE_CPF; 2 DOCUMENT_TYPE_CNPJ.
+</ResponseField>
+
+<ResponseField name="data.payee.bank_account" type="string">
+Account number.
+</ResponseField>
+
+<ResponseField name="data.payee.bank_account_type" type="integer">
+Bank account type. Enum: 0 BANK_ACCOUNT_TYPE_UNSPECIFIED; 1 BANK_ACCOUNT_TYPE_CHECKING; 2 BANK_ACCOUNT_TYPE_SALARY; 3 BANK_ACCOUNT_TYPE_SAVINGS; 4 BANK_ACCOUNT_TYPE_PAYMENT; 5 BANK_ACCOUNT_TYPE_TRANSCTIONAL_PI; 7 BANK_ACCOUNT_TYPE_DEPOSIT; 6 BANK_ACCOUNT_TYPE_GUARANTEED.
+</ResponseField>
+
+<ResponseField name="data.payee.bank_branch" type="string">
+Bank branch code.
+</ResponseField>
+
+<ResponseField name="data.payee.bank_code" type="string">
+Bank ISPB.
+</ResponseField>
+
+<ResponseField name="data.payee.bank_name" type="string">
+Bank name.
+</ResponseField>
+
+<ResponseField name="data.payer" type="object">
+Payer details. This payment endpoint does not populate this field and returns null. Call Get payment details to retrieve the actual participant details.
+</ResponseField>
+
+<ResponseField name="data.payer.name" type="string">
+Name.
+</ResponseField>
+
+<ResponseField name="data.payer.document_id" type="string">
+Transaction participant's document number. It may be masked based on the merchant's configuration.
+</ResponseField>
+
+<ResponseField name="data.payer.document_type" type="integer">
+Document type. Enum: 0 DOCUMENT_TYPE_UNSPECIFIED; 1 DOCUMENT_TYPE_CPF; 2 DOCUMENT_TYPE_CNPJ.
+</ResponseField>
+
+<ResponseField name="data.payer.bank_account" type="string">
+Account number.
+</ResponseField>
+
+<ResponseField name="data.payer.bank_account_type" type="integer">
+Bank account type. Enum: 0 BANK_ACCOUNT_TYPE_UNSPECIFIED; 1 BANK_ACCOUNT_TYPE_CHECKING; 2 BANK_ACCOUNT_TYPE_SALARY; 3 BANK_ACCOUNT_TYPE_SAVINGS; 4 BANK_ACCOUNT_TYPE_PAYMENT; 5 BANK_ACCOUNT_TYPE_TRANSCTIONAL_PI; 7 BANK_ACCOUNT_TYPE_DEPOSIT; 6 BANK_ACCOUNT_TYPE_GUARANTEED.
+</ResponseField>
+
+<ResponseField name="data.payer.bank_branch" type="string">
+Bank branch code.
+</ResponseField>
+
+<ResponseField name="data.payer.bank_code" type="string">
+Bank ISPB.
+</ResponseField>
+
+<ResponseField name="data.payer.bank_name" type="string">
+Bank name.
+</ResponseField>
+
+<ResponseField name="data.error" type="object">
+Returns `null` in this endpoint's success response. Business failures are returned through the root `code` and `message` fields, with `data` `null`. <Badge color="blue" size="sm">Added · api-16-F13</Badge>
+</ResponseField>
+
+## Responses
+
+View response examples by the business `code` in the JSON response. Check the HTTP status and business code separately. An HTTP 200 response can also return a business error. <Badge color="orange" size="sm">Corrected · api-16-F14</Badge>
+
+| `code` | Meaning | Recommended action |
+| --- | --- | --- |
+| `200` | Request succeeded | Read data and determine the result using the business status defined for this endpoint. |
+| `400` | Request or validation failed | Parameter issue. Check and correct the request parameters. |
+| `500` | System error | Log the response and confirm the business result first. |
+
+The examples illustrate the response structure. Use the actual response for message and business status values. See [Error Catalog](/api-reference/error-catalog) for other parameter, permission, and service errors. This section does not imply that the endpoint returns only these three code values. Other errors include `4000` for a required field, `4002` for an invalid amount or normalized ISPB format, `4001` for a payee ISPB that differs from the payer's ISPB, `4001013` for a duplicate `merchant_order_id`, `4001998` for a configured payment-limit rejection, and `4003014` when payment processing or account verification cannot be confirmed. Downstream account, document, account-type, and order-ID validation failures can return `400` with a specific message. If processing may have started, investigate the original transaction before resubmitting. <Badge color="blue" size="sm">Added · api-16-F19</Badge>
+
+<Tip>
+To try this endpoint, send the request example to the Sandbox base URL `https://ebanking-openapi-sandbox.pagsmile.com.br` with your Sandbox AK/SK. Sign every request as described in [Environments & Credentials](/environments-and-credentials#api-request-signing).
+</Tip>
+
+
+<Accordion title="Corrections to the source document (20)" icon="clipboard-check">
+This page was checked against the Pagsmile Open API source code on 2026-11-10. Each change below is marked in the page with a badge that shows its ID.
+
+| ID | Change | Location | Source document text | Updated text |
+| --- | --- | --- | --- | --- |
+| api-16-F01 | Corrected (did not match the code) | Request parameters | Depends on the parent object's conditions | Yes |
+| api-16-F02 | Corrected (did not match the code) | Request parameters | Enter the value based on the actual information. Validity is determined by server-side and downstream validation. Values: 0 UNSPECIFIED; 1 CPF; 2 CNPJ | Required. Accepted values: 1 CPF; 2 CNPJ. The value must match the actual payee account holder's document type. 0 UNSPECIFIED and other values are not accepted. |
+| api-16-F03 | Corrected (did not match the code) | Request parameters | Depends on the parent object's conditions | Yes |
+| api-16-F04 | Corrected (did not match the code) | Request parameters | Enter the value based on the actual details. Validity is determined by server-side and downstream validation. Values: 0 UNSPECIFIED; 1 CHECKING; 2 SALARY; 3 SAVINGS; 4 PAYMENT; 5 TRANSCTIONAL_PI | Required. Accepted values: 1 CHECKING; 2 SALARY; 3 SAVINGS; 4 PAYMENT. The value must match the actual payee account. 0 UNSPECIFIED, 5 TRANSCTIONAL_PI, 6 GUARANTEED, 7 DEPOSIT, and other values are not accepted for this request. |
+| api-16-F05 | Added (missing in the source) | Request parameters | Payee account number; preserve leading zeros | Payee account number; preserve leading zeros. Use digits only, with no whitespace. It must identify an existing internal payee account and differ from the payer account. |
+| api-16-F06 | Added (missing in the source) | Request parameters | Payee bank branch code; preserve leading zeros | Payee bank branch code; preserve leading zeros. Use digits only. Values shorter than four characters are left-padded with zeros when checking the account, and the resulting branch code must match the actual payee account. |
+| api-16-F07 | Added (missing in the source) | Request parameters | Payee bank ISPB string; preserve leading zeros. Open API removes all whitespace, converts letters to uppercase, and pads values shorter than 8 characters with leading zeros. After normalization, the value must contain exactly 8 uppercase letters or digits. The current transaction service further restricts this to digits only. Provide an actual, valid 8-digit ISPB | Payee bank ISPB string; preserve leading zeros. Open API removes all whitespace, converts letters to uppercase, and pads values shorter than 8 characters with leading zeros. After normalization, the value must contain exactly 8 uppercase letters or digits; internal transfers accept digits only. Provide an actual, valid 8-digit ISPB that matches the payer account's ISPB. Transfers to another institution are not supported. |
+| api-16-F08 | Corrected (did not match the code) | Request parameters | Depends on the parent object's conditions | No (ignored) |
+| api-16-F09 | Corrected (did not match the code) | Request parameters | Enter actual business details; validity is determined by server-side and downstream validation | Optional bank name. This endpoint accepts the field but ignores its value for internal transfers. |
+| api-16-F11 | Added (missing in the source) | Permissions and account ownership | ACCOUNT, or USER with the target account header. | Use ACCOUNT credentials for the bound payer account, or USER credentials with both X-ISPB and X-Account-Number to select a payer account authorized for that USER. The target headers select the payer account, not the payee. Both USER target headers must be present and nonempty. PLATFORM credentials are not supported. If ACCOUNT credentials include target headers, both must be present and match the bound payer account; they cannot select another account. |
+| api-16-F12 | Added (missing in the source) | Behavior and handling | Initiate an internal transfer within the supported scope. | Initiate an internal transfer between different eligible accounts at the same institution. A successful submission accepts the transfer for asynchronous processing and returns txn_status 5 (TXN_STATUS_PROCESSING); it does not mean that funds have already been transferred. Query the original transaction to confirm its final status. |
+| api-16-F13 | Added (missing in the source) | Response fields | — | `data.error` \| object or null \| — \| Returns null in this endpoint's success response. Business failures are returned through the root code and message fields, with data null. |
+| api-16-F14 | Corrected (did not match the code) | Responses / Request succeeded | `{ "code": 200, "message": "success", "data": { "merchant_order_id": "example-merchant_order_id", "txn_id": "example-txn_id", "txn_status": 0, "payee": { "name": "example-name", "document_id": "example-document_id", "document_type": 0, "bank_account": "example-bank_account", "bank_account_type": 0, "bank_branch": "example-bank_branch", "bank_code": "example-bank_code", "bank_name": "example-bank_name" }, "payer": { "name": "example-name", "document_id": "example-document_id", "document_type": 0, "bank_account": "example-bank_account", "bank_account_type": 0, "bank_branch": "example-bank_branch", "bank_code": "example-bank_code", "bank_name": "example-bank_name" } }, "time": 1791792000000 }` | `{ "code": 200, "message": "success", "data": { "merchant_order_id": "261012-internal-001", "txn_id": "example-txn_id", "txn_status": 5, "payee": null, "payer": null, "error": null }, "time": 1791792000000 }` |
+| api-16-F15 | Corrected (did not match the code) | cURL request example | `ORDER_ID="$(date +%y%m%d%H%M%S)$(openssl rand -hex 3 \| python3 -c 'import sys; print(str(int(sys.stdin.read().strip(),16)%1000000).zfill(6))')"` | `ORDER_ID="$(date -u +%y%m%d%H%M%S)$(openssl rand -hex 3 \| python3 -c 'import sys; print(str(int(sys.stdin.read().strip(),16)%1000000).zfill(6))')"` |
+| api-16-F16 | Added (missing in the source) | Request parameters | Merchant order ID; only English letters, digits, hyphens, and underscores are allowed. The first six characters must be a valid YYMMDD UTC date. The date must overlap the window within ±1 hour of the current UTC time. If the result is unknown, query the original operation first. Do not blindly resubmit with a new ID | Merchant order ID; only English letters, digits, hyphens, and underscores are allowed. Use at least six characters, beginning with a valid YYMMDD UTC date whose day overlaps the current UTC ±1-hour window. Use an ID unique across operations in the same environment, not only within one payer account. Accepted IDs are reserved for up to 48 hours; a duplicate is rejected with business code 4001013 and does not replay the original success response. If the result is unknown, query the original operation first. Do not blindly resubmit with a new ID. |
+| api-16-F17 | Added (missing in the source) | Behavior and handling | Verify the target account and amount. | Verify the payer account, payee account, and amount. The payer must be enabled to send payments. The payee must be an existing active internal account, enabled to receive payments and not undergoing closure; its ISPB, account number, branch, account type, and holder document details must match the request. |
+| api-16-F18 | Added (missing in the source) | Request parameters | Decimal amount string; the value must be greater than 0 and have at most two decimal places (for example, 10.00); 0, negative numbers, and 10.555 are not accepted | Decimal amount string; the value must be greater than 0 and have at most two effective decimal places (for example, 10.00). Additional trailing zeros do not add precision, so 10.000 is accepted; 0, negative numbers, and 10.555 are not accepted. Internal transfers are also subject to the payer's configured transaction and period limits, taking the payer and payee document types into account. A limit rejection returns business code 4001998. No universal numeric transfer limit is specified here. |
+| api-16-F19 | Added (missing in the source) | Responses | This section does not imply that the endpoint returns only these three code values. | This section does not imply that the endpoint returns only these three code values. Other errors include 4000 for a required field, 4002 for an invalid amount or normalized ISPB format, 4001 for a payee ISPB that differs from the payer's ISPB, 4001013 for a duplicate merchant_order_id, 4001998 for a configured payment-limit rejection, and 4003014 when payment processing or account verification cannot be confirmed. Downstream account, document, account-type, and order-ID validation failures can return 400 with a specific message. If processing may have started, investigate the original transaction before resubmitting. |
+| api-16-F20 | Corrected (did not match the code) | Request parameters | Decimal amount string; the value must be greater than 0 and have at most two decimal places (for example, 10.00); 0, negative numbers, and 10.555 are not accepted | Decimal amount string; the value must be greater than 0 and have at most two effective decimal places (for example, 10.00). Additional trailing zeros do not add precision, so 10.000 is accepted; 0, negative numbers, and 10.555 are not accepted. |
+| api-16-F22 | Added (missing in the source) | Behavior and handling | Save the transaction ID and query the result. | Applicable fees for both the payer and payee are checked before the transfer is accepted. The transfer amount must exceed the payee's total fee so that the amount credited after that fee is greater than zero. Save the transaction ID and query the result. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+ORDER_ID="$(date -u +%y%m%d%H%M%S)$(openssl rand -hex 3 | python3 -c 'import sys; print(str(int(sys.stdin.read().strip(),16)%1000000).zfill(6))')"
+cat > body.json <<JSON
+{
+  "payee": {
+    "bank_code": "00000000",
+    "bank_account": "00000001",
+    "bank_branch": "0001",
+    "document_id": "00000000000",
+    "name": "Demo Receiver",
+    "document_type": 1,
+    "bank_account_type": 1
+  },
+  "amount": "10.00",
+  "currency": "BRL",
+  "merchant_order_id": "${ORDER_ID}"
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/transfers/internal' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${ACCOUNT_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Request succeeded
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "merchant_order_id": "261012-internal-001",
+    "txn_id": "example-txn_id",
+    "txn_status": 5,
+    "payee": null,
+    "payer": null,
+    "error": null
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Request or validation failed
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 System error
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

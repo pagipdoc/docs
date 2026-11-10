@@ -1,0 +1,294 @@
+---
+title: "Inicializar pagamento via QR Code"
+description: "Interprete o QR Code Pix fornecido pelo pagador e inicialize o pagamento. Confira o recebedor e o valor."
+api: "POST /v3/transfers/pix/qr-code-initiate"
+keywords: ["/v3/transfers/pix/qr-code-initiate"]
+---
+
+## Funcionamento e tratamento
+
+Interprete o QR Code Pix fornecido pelo pagador e inicialize o pagamento. Para um QR Code dinâmico com vencimento, a conta do pagador deve ter um código de município disponível em seus dados. Quando informado pela conta, esse código deve conter exatamente 7 dígitos. Ele não é um campo do corpo da requisição deste endpoint. <Badge color="blue" size="sm">Complementado · api-9-F27</Badge> Confira o recebedor e o valor. Após obter o ref_id, chame o endpoint Confirmar pagamento via QR Code.
+
+### Validade e contexto do pagamento em duas etapas
+
+A referência de inicialização via chave Pix é válida por 1 minuto. A referência de inicialização via QR Code é válida por 5 minutos. A inicialização e a confirmação devem usar a mesma conta do pagador. Se a referência expirar, interprete novamente os dados e confira as informações do pagamento.
+
+O prazo de validade da referência de inicialização e o prazo de validade do próprio QR Code são verificados separadamente. O `ref_id` é usado para confirmar o pagamento em um prazo curto. Ele não substitui um ID permanente do pedido do comerciante nem o ID da transação.
+
+## Permissões e titularidade da conta
+
+ACCOUNT, ou USER com `X-ISPB` e `X-Account-Number` identificando uma conta ativa pertencente a esse USER. As credenciais ACCOUNT são limitadas à conta vinculada; se os headers da conta-alvo forem enviados, ambos devem ser preenchidos e corresponder a essa conta. Credenciais PLATFORM não são aceitas. O usuário deve estar ativo e não pode ter a permissão de PayOut desabilitada. <Badge color="blue" size="sm">Complementado · api-9-F25</Badge> As requisições devem seguir as orientações de [Ambientes e credenciais](/pt-br/environments-and-credentials).
+
+## Parâmetros da requisição
+
+<ParamField body="qr_code_payload" type="string" required>
+Payload de pagamento Pix codificado em Base64. Você pode enviar `data.payload_base64` da resposta de sucesso de [Gerar QR Code dinâmico](/pt-br/api-reference/payin/generate-dynamic-qr-code) sem alterações e sem decodificá-lo. São aceitos QR Codes estáticos, dinâmicos para pagamento imediato e dinâmicos com vencimento; QR Codes compostos não são suportados por este endpoint. Para um payload obtido de outra fonte, codifique o texto completo do pagamento Pix em Base64 padrão, incluindo o preenchimento necessário. Não envie o texto Pix sem codificação, o `qr_code_id` nem a imagem do QR Code `payload_image_base64`. <Badge color="blue" size="sm">Complementado · api-9-F22</Badge>
+</ParamField>
+
+## Exemplo de requisição cURL
+
+O exemplo usa credenciais de nível ACCOUNT. Preencha os parâmetros reais e gere a assinatura com base no body.json final.
+
+expires retorna sem alterações o valor ExpiresIn do QR Code. O fluxo atual não garante uma unidade, um marco inicial nem um significado para o valor zero que sejam uniformes. Não use esse campo para determinar a expiração do QR Code no cliente. A referência de confirmação ref_id fica em cache por 5 minutos, o que é diferente de expires. A confirmação continua sujeita à validação do status e do prazo de validade do QR Code no servidor.
+
+## Campos da resposta
+
+Os caminhos dos campos partem da raiz da resposta. `[]` indica um elemento de array. Os valores monetários usam strings decimais. Os enums são interpretados conforme cada campo. A estrutura abaixo representa os dados de uma resposta de sucesso. Um valor nulo ou 0, por si só, não indica a conclusão da operação.
+
+<ResponseField name="code" type="integer">
+Código de resultado de negócio; 200 indica sucesso. Os erros de negócio são retornados neste campo, que não equivale ao código de status HTTP.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Descrição do resultado de negócio; em caso de falha, analise esta descrição junto com o campo code para identificar a causa.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Objeto de dados da resposta de sucesso; pode ser null em respostas de erro.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Horário da resposta, em timestamp Unix UTC em milissegundos.
+</ResponseField>
+
+<ResponseField name="data.pix_key" type="string">
+Valor da chave Pix.
+</ResponseField>
+
+<ResponseField name="data.pix_key_type" type="integer">
+Tipo de chave Pix. Enum: 0 PIX_KEY_TYPE_UNSPECIFIED; 1 PIX_KEY_TYPE_CPF; 2 PIX_KEY_TYPE_CNPJ; 3 PIX_KEY_TYPE_EMAIL; 4 PIX_KEY_TYPE_PHONE; 5 PIX_KEY_TYPE_EVP.
+</ResponseField>
+
+<ResponseField name="data.payee" type="object">
+Dados do recebedor.
+</ResponseField>
+
+<ResponseField name="data.payee.name" type="string">
+Nome.
+</ResponseField>
+
+<ResponseField name="data.payee.document_id" type="string">
+Número do documento do participante da transação, que pode ser mascarado conforme a configuração do comerciante.
+</ResponseField>
+
+<ResponseField name="data.payee.document_type" type="integer">
+Tipo de documento. Enum: 0 DOCUMENT_TYPE_UNSPECIFIED; 1 DOCUMENT_TYPE_CPF; 2 DOCUMENT_TYPE_CNPJ.
+</ResponseField>
+
+<ResponseField name="data.payee.bank_account" type="string">
+Número da conta.
+</ResponseField>
+
+<ResponseField name="data.payee.bank_account_type" type="integer">
+Tipo de conta bancária. Enum: 0 BANK_ACCOUNT_TYPE_UNSPECIFIED; 1 BANK_ACCOUNT_TYPE_CHECKING; 2 BANK_ACCOUNT_TYPE_SALARY; 3 BANK_ACCOUNT_TYPE_SAVINGS; 4 BANK_ACCOUNT_TYPE_PAYMENT; 5 BANK_ACCOUNT_TYPE_TRANSCTIONAL_PI; 7 BANK_ACCOUNT_TYPE_DEPOSIT; 6 BANK_ACCOUNT_TYPE_GUARANTEED.
+</ResponseField>
+
+<ResponseField name="data.payee.bank_branch" type="string">
+Código da agência bancária.
+</ResponseField>
+
+<ResponseField name="data.payee.bank_code" type="string">
+ISPB do banco.
+</ResponseField>
+
+<ResponseField name="data.payee.bank_name" type="string">
+Nome do banco.
+</ResponseField>
+
+<ResponseField name="data.qr_code_id" type="string">
+ID do QR Code.
+</ResponseField>
+
+<ResponseField name="data.expires" type="integer">
+Valor de expiração do QR Code retornado na inicialização. Não é uma contagem calculada do prazo de validade restante e não deve ser usado para determinar a expiração no cliente. É separado da validade de 5 minutos do `ref_id`. <Badge color="orange" size="sm">Corrigido · api-9-F01</Badge>
+</ResponseField>
+
+<ResponseField name="data.amount" type="string">
+Valor do QR Code, como string decimal. A inicialização pode retornar zero ou um valor vazio para um QR Code que não especifica um valor a pagar. Para um QR Code dinâmico com vencimento, este é o valor final calculado, separado de `dynamic_due_properties.face_amount`. A confirmação valida separadamente o valor solicitado e aplica as condições de valor pertinentes ao QR Code. <Badge color="blue" size="sm">Complementado · api-9-F24</Badge>
+</ResponseField>
+
+<ResponseField name="data.settlement_id" type="string">
+ID da transação de liquidação.
+</ResponseField>
+
+<ResponseField name="data.qr_code_type" type="integer">
+Tipo de QR Code. Enum: 0 QRCODE_TYPE_UNSPECIFIED; 1 QRCODE_TYPE_NOT_SET; 11 QRCODE_TYPE_STATIC; 12 QRCODE_TYPE_DYNAMIC_INSTANT_PAYMENT; 13 QRCODE_TYPE_DYNAMIC_EXPIRE_PAYMENT; 14 QRCODE_TYPE_COMPOSITE_PAYMENT.
+</ResponseField>
+
+<ResponseField name="data.currency" type="string">
+Moeda. Retorna `BRL` para QR Codes dinâmicos de pagamento imediato e dinâmicos com vencimento. Para QR Codes estáticos, este endpoint retorna atualmente uma string vazia; a confirmação Pix é processada em `BRL`. <Badge color="blue" size="sm">Complementado · api-9-F23</Badge>
+</ResponseField>
+
+<ResponseField name="data.ref_id" type="string">
+Referência de inicialização do pagamento, usada para confirmar o pagamento.
+</ResponseField>
+
+<ResponseField name="data.qr_code_status" type="integer">
+Status do QR Code. Este endpoint retorna atualmente `0` (`QR_CODE_STATUS_UNSPECIFIED`), pois não preenche este campo. A inicialização só é bem-sucedida após verificar que o QR Code está ativo; códigos não ativos retornam um erro de negócio. Não use este campo para determinar a conclusão do pagamento. Enum do contrato: `0` `QR_CODE_STATUS_UNSPECIFIED`; `1` `QR_CODE_STATUS_ACTIVE`; `2` `QR_CODE_STATUS_COMPLETED`; `3` `QR_CODE_STATUS_PAYEE_REMOVED`; `4` `QR_CODE_STATUS_PSP_REMOVED`. <Badge color="orange" size="sm">Corrigido · api-9-F02</Badge>
+</ResponseField>
+
+<ResponseField name="data.memo" type="string">
+Observação da transação.
+</ResponseField>
+
+<ResponseField name="data.amount_editable" type="boolean">
+Este endpoint retorna atualmente `false`, pois não preenche este campo. Não o use para decidir se o valor do QR Code pode ser alterado. A confirmação aplica as verificações de valor pertinentes de forma independente. <Badge color="orange" size="sm">Corrigido · api-9-F03</Badge>
+</ResponseField>
+
+<ResponseField name="data.qr_code_issuance" type="integer">
+Modo de emissão do QR Code. Este endpoint não preenche este campo e retorna atualmente `0` (`QR_CODE_ISSUANCE_UNSPECIFIED`). Não o use para determinar a reutilização do QR Code. Enum do contrato: `0` `QR_CODE_ISSUANCE_UNSPECIFIED`; `1` `QR_CODE_ISSUANCE_PER_TRANSACTION`; `2` `QR_CODE_ISSUANCE_SHARED`. <Badge color="orange" size="sm">Corrigido · api-9-F04</Badge>
+</ResponseField>
+
+<ResponseField name="data.merchant_city" type="string">
+Este endpoint não preenche este campo e retorna atualmente uma string vazia, mesmo quando o QR Code contém a cidade do comerciante. <Badge color="orange" size="sm">Corrigido · api-9-F05</Badge>
+</ResponseField>
+
+<ResponseField name="data.merchant_name" type="string">
+Este endpoint não preenche este campo e retorna atualmente uma string vazia, mesmo quando o QR Code contém o nome do comerciante. Use `data.payee.name` para o nome do recebedor consultado. <Badge color="orange" size="sm">Corrigido · api-9-F06</Badge>
+</ResponseField>
+
+<ResponseField name="data.dynamic_due_properties" type="object">
+Dados retornados para um QR Code dinâmico com vencimento (`qr_code_type` `13`). `Null` para os demais tipos de QR Code. <Badge color="blue" size="sm">Complementado · api-9-F07</Badge>
+</ResponseField>
+
+<ResponseField name="data.dynamic_due_properties.due_date" type="string">
+Data de vencimento do QR Code no formato `YYYY-MM-DD`; retornada em `dynamic_due_properties`. <Badge color="blue" size="sm">Complementado · api-9-F08</Badge>
+</ResponseField>
+
+<ResponseField name="data.dynamic_due_properties.face_amount" type="string">
+Valor original antes dos ajustes, como string decimal. <Badge color="blue" size="sm">Complementado · api-9-F09</Badge>
+</ResponseField>
+
+<ResponseField name="data.dynamic_due_properties.reduction" type="string">
+Valor do abatimento aplicado ao valor original, como string decimal. <Badge color="blue" size="sm">Complementado · api-9-F10</Badge>
+</ResponseField>
+
+<ResponseField name="data.dynamic_due_properties.discount" type="string">
+Valor do desconto, como string decimal. <Badge color="blue" size="sm">Complementado · api-9-F11</Badge>
+</ResponseField>
+
+<ResponseField name="data.dynamic_due_properties.interest" type="string">
+Valor dos juros, como string decimal. <Badge color="blue" size="sm">Complementado · api-9-F12</Badge>
+</ResponseField>
+
+<ResponseField name="data.dynamic_due_properties.fine" type="string">
+Valor da multa, como string decimal. <Badge color="blue" size="sm">Complementado · api-9-F13</Badge>
+</ResponseField>
+
+## Respostas
+
+Consulte os exemplos de resposta pelo `code` de negócio no JSON. <Badge color="orange" size="sm">Corrigido · api-9-F20</Badge> Verifique o status HTTP e o code de negócio separadamente. Uma resposta HTTP 200 também pode retornar um erro de negócio. <Badge color="orange" size="sm">Corrigido · api-9-F21</Badge>
+
+| `code` | Significado | Ação recomendada |
+| --- | --- | --- |
+| `200` | Requisição bem-sucedida | Leia data e avalie o resultado do processamento conforme o status de negócio deste endpoint. |
+| `400` | Falha na requisição ou validação | Problema nos parâmetros. Verifique e corrija os parâmetros da requisição. A ausência de `qr_code_payload` ou um valor vazio retorna o `code` de negócio `4000` com a mensagem "Field qr_code_payload is required". Base64 inválido retorna o `code` `400` com "Invalid base64 QR code payload". Um QR Code concluído retorna `4001014` ("QR code has been used"); um QR Code removido ou sem status especificado retorna `4001010` ("Invalid QR code"). A consulta da chave Pix também pode falhar: `4001096` indica uma chave inativa ou excluída, e `4004029` indica um limite de tentativas de consulta. Ao atingir esse limite, aguarde antes de tentar novamente; não inicialize repetidamente o mesmo pagamento. Consulte a mensagem da resposta real e o [Catálogo de erros](/pt-br/api-reference/error-catalog) para outros erros. <Badge color="blue" size="sm">Complementado · api-9-F26</Badge> |
+| `500` | Erro do sistema | Registre a resposta e confirme primeiro o resultado de negócio. |
+
+Os exemplos ilustram a estrutura da resposta. Os valores de message e do status de negócio devem ser obtidos da resposta efetiva. Para outros erros de parâmetros, permissões e serviço, consulte [Catálogo de erros](/pt-br/api-reference/error-catalog). Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados.
+
+<Tip>
+Para testar este endpoint, envie o exemplo de requisição para a Base URL do Sandbox `https://ebanking-openapi-sandbox.pagsmile.com.br` com sua AK/SK de Sandbox. Assine cada requisição conforme descrito em [Ambientes e credenciais](/pt-br/environments-and-credentials#assinatura-de-requisições-à-api).
+</Tip>
+
+
+<Accordion title="Correções em relação ao documento original (21)" icon="clipboard-check">
+Esta página foi conferida com o código-fonte da Pagsmile Open API em 2026-11-10. Cada alteração abaixo está marcada na página com um selo que mostra o seu ID.
+
+| ID | Alteração | Local | Texto do documento original | Texto atualizado |
+| --- | --- | --- | --- | --- |
+| api-9-F01 | Corrigido (não correspondia ao código) | Response fields | Tempo de validade restante do QR Code, em segundos. Não é um timestamp. | Valor de expiração do QR Code retornado na inicialização. Não é uma contagem calculada do prazo de validade restante e não deve ser usado para determinar a expiração no cliente. É separado da validade de 5 minutos do ref_id. |
+| api-9-F02 | Corrigido (não correspondia ao código) | Response fields | Status do QR Code. Valores do enum: 0 QR_CODE_STATUS_UNSPECIFIED; 1 QR_CODE_STATUS_ACTIVE; 2 QR_CODE_STATUS_COMPLETED; 3 QR_CODE_STATUS_PAYEE_REMOVED; 4 QR_CODE_STATUS_PSP_REMOVED. | Status do QR Code. Este endpoint retorna atualmente 0 (QR_CODE_STATUS_UNSPECIFIED), pois não preenche este campo. A inicialização só é bem-sucedida após verificar que o QR Code está ativo; códigos não ativos retornam um erro de negócio. Não use este campo para determinar a conclusão do pagamento. Enum do contrato: 0 QR_CODE_STATUS_UNSPECIFIED; 1 QR_CODE_STATUS_ACTIVE; 2 QR_CODE_STATUS_COMPLETED; 3 QR_CODE_STATUS_PAYEE_REMOVED; 4 QR_CODE_STATUS_PSP_REMOVED. |
+| api-9-F03 | Corrigido (não correspondia ao código) | Response fields | Indica se o pagador pode alterar o valor do QR Code. | Este endpoint retorna atualmente false, pois não preenche este campo. Não o use para decidir se o valor do QR Code pode ser alterado. A confirmação aplica as verificações de valor pertinentes de forma independente. |
+| api-9-F04 | Corrigido (não correspondia ao código) | Response fields | Modo de emissão do QR Code. Valores do enum: 0 QR_CODE_ISSUANCE_UNSPECIFIED; 1 QR_CODE_ISSUANCE_PER_TRANSACTION; 2 QR_CODE_ISSUANCE_SHARED. | Modo de emissão do QR Code. Este endpoint não preenche este campo e retorna atualmente 0 (QR_CODE_ISSUANCE_UNSPECIFIED). Não o use para determinar a reutilização do QR Code. Enum do contrato: 0 QR_CODE_ISSUANCE_UNSPECIFIED; 1 QR_CODE_ISSUANCE_PER_TRANSACTION; 2 QR_CODE_ISSUANCE_SHARED. |
+| api-9-F05 | Corrigido (não correspondia ao código) | Response fields | Cidade do comerciante informada no QR Code. | Este endpoint não preenche este campo e retorna atualmente uma string vazia, mesmo quando o QR Code contém a cidade do comerciante. |
+| api-9-F06 | Corrigido (não correspondia ao código) | Response fields | Nome do comerciante informado no QR Code. | Este endpoint não preenche este campo e retorna atualmente uma string vazia, mesmo quando o QR Code contém o nome do comerciante. Use data.payee.name para o nome do recebedor consultado. |
+| api-9-F07 | Complementado (ausente no original) | Response fields; append after data.merchant_name | — | `data.dynamic_due_properties` \| object \| Condicional \| Dados retornados para um QR Code dinâmico com vencimento (qr_code_type 13). Null para os demais tipos de QR Code. |
+| api-9-F08 | Complementado (ausente no original) | Response fields; under data.dynamic_due_properties | — | `data.dynamic_due_properties.due_date` \| string \| Condicional \| Data de vencimento do QR Code no formato YYYY-MM-DD; retornada em dynamic_due_properties. |
+| api-9-F09 | Complementado (ausente no original) | Response fields; under data.dynamic_due_properties | — | `data.dynamic_due_properties.face_amount` \| string \| Condicional \| Valor original antes dos ajustes, como string decimal. |
+| api-9-F10 | Complementado (ausente no original) | Response fields; under data.dynamic_due_properties | — | `data.dynamic_due_properties.reduction` \| string \| Condicional \| Valor do abatimento aplicado ao valor original, como string decimal. |
+| api-9-F11 | Complementado (ausente no original) | Response fields; under data.dynamic_due_properties | — | `data.dynamic_due_properties.discount` \| string \| Condicional \| Valor do desconto, como string decimal. |
+| api-9-F12 | Complementado (ausente no original) | Response fields; under data.dynamic_due_properties | — | `data.dynamic_due_properties.interest` \| string \| Condicional \| Valor dos juros, como string decimal. |
+| api-9-F13 | Complementado (ausente no original) | Response fields; under data.dynamic_due_properties | — | `data.dynamic_due_properties.fine` \| string \| Condicional \| Valor da multa, como string decimal. |
+| api-9-F20 | Corrigido (não correspondia ao código) | Responses; Request succeeded JSON | "pix_key": "example-pix_key", "pix_key_type": 0, | "pix_key": "12345678-1234-4abc-8abc-1234567890ab", "pix_key_type": 5, |
+| api-9-F21 | Corrigido (não correspondia ao código) | Responses; Request succeeded JSON | "qr_code_type": 0, | "qr_code_type": 12, |
+| api-9-F22 | Complementado (ausente no original) | Request parameters | `data.payload_base64` da resposta de sucesso de Gerar QR Code dinâmico. Envie o valor sem alterações e sem decodificá-lo. Não é o `qr_code_id` nem a imagem do QR Code `payload_image_base64`. | Payload de pagamento Pix codificado em Base64. Você pode enviar `data.payload_base64` da resposta de sucesso de Gerar QR Code dinâmico sem alterações e sem decodificá-lo. São aceitos QR Codes estáticos, dinâmicos para pagamento imediato e dinâmicos com vencimento; QR Codes compostos não são suportados por este endpoint. Para um payload obtido de outra fonte, codifique o texto completo do pagamento Pix em Base64 padrão, incluindo o preenchimento necessário. Não envie o texto Pix sem codificação, o `qr_code_id` nem a imagem do QR Code `payload_image_base64`. |
+| api-9-F23 | Complementado (ausente no original) | Response fields | Moeda. | Moeda. Retorna BRL para QR Codes dinâmicos de pagamento imediato e dinâmicos com vencimento. Para QR Codes estáticos, este endpoint retorna atualmente uma string vazia; a confirmação Pix é processada em BRL. |
+| api-9-F24 | Complementado (ausente no original) | Response fields | Valor da transação, como string decimal. | Valor do QR Code, como string decimal. A inicialização pode retornar zero ou um valor vazio para um QR Code que não especifica um valor a pagar. Para um QR Code dinâmico com vencimento, este é o valor final calculado, separado de dynamic_due_properties.face_amount. A confirmação valida separadamente o valor solicitado e aplica as condições de valor pertinentes ao QR Code. |
+| api-9-F25 | Complementado (ausente no original) | Permissions and account ownership | ACCOUNT, ou USER com o header da conta-alvo. | ACCOUNT, ou USER com `X-ISPB` e `X-Account-Number` identificando uma conta ativa pertencente a esse USER. As credenciais ACCOUNT são limitadas à conta vinculada; se os headers da conta-alvo forem enviados, ambos devem ser preenchidos e corresponder a essa conta. Credenciais PLATFORM não são aceitas. O usuário deve estar ativo e não pode ter a permissão de PayOut desabilitada. |
+| api-9-F26 | Complementado (ausente no original) | Responses; Request or validation failed recommended action | Problema nos parâmetros. Verifique e corrija os parâmetros da requisição. | Problema nos parâmetros. Verifique e corrija os parâmetros da requisição. A ausência de `qr_code_payload` ou um valor vazio retorna o code de negócio 4000 com a mensagem "Field qr_code_payload is required". Base64 inválido retorna o code 400 com "Invalid base64 QR code payload". Um QR Code concluído retorna 4001014 ("QR code has been used"); um QR Code removido ou sem status especificado retorna 4001010 ("Invalid QR code"). A consulta da chave Pix também pode falhar: 4001096 indica uma chave inativa ou excluída, e 4004029 indica um limite de tentativas de consulta. Ao atingir esse limite, aguarde antes de tentar novamente; não inicialize repetidamente o mesmo pagamento. Consulte a mensagem da resposta real e o Catálogo de erros para outros erros. |
+| api-9-F27 | Complementado (ausente no original) | Behavior and handling; QR initialization prerequisites | Interprete o QR Code Pix fornecido pelo pagador e inicialize o pagamento. | Interprete o QR Code Pix fornecido pelo pagador e inicialize o pagamento. Para um QR Code dinâmico com vencimento, a conta do pagador deve ter um código de município disponível em seus dados. Quando informado pela conta, esse código deve conter exatamente 7 dígitos. Ele não é um campo do corpo da requisição deste endpoint. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "qr_code_payload": "replace-with-complete-pix-payload"
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/transfers/pix/qr-code-initiate' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${ACCOUNT_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Requisição bem-sucedida
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "pix_key": "12345678-1234-4abc-8abc-1234567890ab",
+    "pix_key_type": 5,
+    "payee": {
+      "name": "example-name",
+      "document_id": "example-document_id",
+      "document_type": 0,
+      "bank_account": "example-bank_account",
+      "bank_account_type": 0,
+      "bank_branch": "example-bank_branch",
+      "bank_code": "example-bank_code",
+      "bank_name": "example-bank_name"
+    },
+    "qr_code_id": "example-qr_code_id",
+    "expires": 0,
+    "amount": "10.00",
+    "settlement_id": "example-settlement_id",
+    "qr_code_type": 12,
+    "currency": "BRL",
+    "ref_id": "example-ref_id",
+    "qr_code_status": 0,
+    "memo": "example-memo",
+    "amount_editable": false,
+    "qr_code_issuance": 0
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Falha na requisição ou validação
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 Erro do sistema
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

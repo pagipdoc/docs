@@ -1,0 +1,262 @@
+---
+title: "List managed accounts"
+description: "List managed accounts visible to the current USER. You can filter by account model, status, or tax ID and paginate the results."
+api: "POST /v3/onboarding/managed_accounts/list"
+keywords: ["/v3/onboarding/managed_accounts/list"]
+---
+
+## Behavior and handling
+
+List managed accounts visible to the current USER. You can filter by account model, status, or tax ID and paginate the results. Model and status filters are applied before pagination. Tax-ID and account-visibility filters are applied to the selected page afterward, so a page can contain fewer accounts than `page_size` or be empty even when other pages contain matches. Pagination totals describe the records before these later filters; do not stop pagination solely because `managed_accounts` is empty. <Badge color="blue" size="sm">Added · api-38-F07</Badge>
+
+## Permissions and account ownership
+
+USER, without `X-ISPB` or `X-Account-Number` headers, including explicitly empty headers. The USER must have exactly one `ACTIVE` master account with matching, `ACTIVE` bank account details; otherwise the request returns business code `4004003` (Permission denied). MOR and VA must belong directly to that master account. PA must belong to that master account or to an `ACTIVE` VA directly under it, and its direct parent's bank account must also be `ACTIVE` and match the parent account details. <Badge color="blue" size="sm">Added · api-38-F06</Badge> Requests must follow [Environments & Credentials](/environments-and-credentials).
+
+## Request parameters
+
+All parameters are optional. Omit filter fields to apply no filters. You can provide only page for pagination.
+
+<ParamField body="model" type="integer">
+**Required:** No (not enforced at this layer). Managed account model. Values: `1` MOR; `2` VA; `3` PA. Omit this field to apply no model filter. An explicitly supplied `0` or any other value returns business code `4001` (Invalid model value). <Badge color="blue" size="sm">Added · api-38-F03</Badge>
+</ParamField>
+
+<ParamField body="status" type="integer">
+**Required:** No (not enforced at this layer). Managed account status filter. Values: `1` `PENDING`; `2` `ACTIVE`; `3` `FROZEN`; `4` `CLOSED`; `5` `REJECTED`; `6` `EXPIRED`. Omit this field to apply no status filter. Values `0` and `7`, and all other values, return business code `4001` (Invalid status value). <Badge color="blue" size="sm">Added · api-38-F04</Badge>
+</ParamField>
+
+<ParamField body="tax_id" type="string">
+**Required:** No (not enforced at this layer). Entity tax ID. Matches the compliance document number exactly, ignoring letter case and leading or trailing whitespace. Document punctuation is not removed. An empty or whitespace-only value applies no tax-ID filter. <Badge color="blue" size="sm">Added · api-38-F05</Badge>
+</ParamField>
+
+<ParamField body="page" type="object">
+**Required:** No (not enforced at this layer). Pagination conditions/page number, distinguished by type
+</ParamField>
+
+<ParamField body="page.page" type="integer">
+↳ **Required:** No. Page number, starting at `1`. Optional signed 32-bit integer; omitted values and values below `1` use page `1`. <Badge color="blue" size="sm">Added · api-38-F01</Badge>
+</ParamField>
+
+<ParamField body="page.page_size" type="integer">
+↳ **Required:** No. Page size. Optional signed 32-bit integer; omitted values and values below `1` use `10`. Values above `100` are reduced to `100`. <Badge color="blue" size="sm">Added · api-38-F02</Badge>
+</ParamField>
+
+## cURL request example
+
+The example uses USER-level credentials. Enter your actual parameters and generate the signature from the final body.json.
+
+## Response fields
+
+Field paths start at the response root. `[]` indicates an array element. Amounts use decimal strings. Enum values are defined separately for each field. The structure below describes a success response. A null value or 0 alone does not indicate that processing is complete.
+
+<ResponseField name="code" type="integer">
+Business result code. A value of 200 indicates success. Business errors are returned in this field. It is not the HTTP status code.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Business result description. On failure, use this with code to determine the cause.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Data object in a successful response. Can be null in an error response.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Response time as a UTC Unix timestamp in milliseconds.
+</ResponseField>
+
+<ResponseField name="data.managed_accounts" type="array">
+List of managed account query results.
+</ResponseField>
+
+<ResponseField name="data.managed_accounts[].reference_id" type="string">
+Resource reference ID supplied by the caller when creating the managed account.
+</ResponseField>
+
+<ResponseField name="data.managed_accounts[].account_holder_document" type="string">
+CPF/CNPJ document number of the account holder.
+</ResponseField>
+
+<ResponseField name="data.managed_accounts[].account_holder_name" type="string">
+Name of the account holder, taken from the legal name in the compliance information. Empty if no information is available.
+</ResponseField>
+
+<ResponseField name="data.managed_accounts[].document_type" type="string">
+Document type string: CPF or CNPJ.
+</ResponseField>
+
+<ResponseField name="data.managed_accounts[].model" type="integer">
+Managed account model. Enum: 0 VA_ACCOUNT_MODEL_UNSPECIFIED; 1 VA_ACCOUNT_MODEL_MOR; 2 VA_ACCOUNT_MODEL_VA; 3 VA_ACCOUNT_MODEL_PA.
+</ResponseField>
+
+<ResponseField name="data.managed_accounts[].status" type="integer">
+Current managed account status. Enum: `0` `MANAGED_ACCOUNT_STATUS_V3_UNSPECIFIED`; `1` `MANAGED_ACCOUNT_STATUS_V3_PENDING`; `2` `MANAGED_ACCOUNT_STATUS_V3_ACTIVE`; `3` `MANAGED_ACCOUNT_STATUS_V3_FROZEN`; `4` `MANAGED_ACCOUNT_STATUS_V3_CLOSED`; `5` `MANAGED_ACCOUNT_STATUS_V3_REJECTED`; `6` `MANAGED_ACCOUNT_STATUS_V3_EXPIRED`; `7` `MANAGED_ACCOUNT_STATUS_V3_PENDING_SUBMISSION`. Value `7` is defined in the contract but is not currently emitted by this endpoint; an unmapped account status is returned as `0`. Check `compliance_status` separately for `COMPLIANCE_STATUS_V3_PENDING_SUBMISSION=2`. <Badge color="blue" size="sm">Added · api-38-F09</Badge>
+</ResponseField>
+
+<ResponseField name="data.managed_accounts[].compliance_status" type="integer">
+KYC/KYB compliance status. Enum: 0 COMPLIANCE_STATUS_V3_UNSPECIFIED; 1 COMPLIANCE_STATUS_V3_PENDING; 2 COMPLIANCE_STATUS_V3_PENDING_SUBMISSION; 3 COMPLIANCE_STATUS_V3_APPROVED; 4 COMPLIANCE_STATUS_V3_REJECTED; 5 COMPLIANCE_STATUS_V3_EXPIRED; 6 COMPLIANCE_STATUS_V3_CREATION_FAILED; 7 COMPLIANCE_STATUS_V3_REVIEWING; 8 COMPLIANCE_STATUS_V3_ERROR; 9 COMPLIANCE_STATUS_V3_FORCE_APPROVED.
+</ResponseField>
+
+<ResponseField name="data.managed_accounts[].compliance_session_id" type="string">
+Linked compliance process ID.
+</ResponseField>
+
+<ResponseField name="data.managed_accounts[].trading_name" type="string">
+Trade name.
+</ResponseField>
+
+<ResponseField name="data.managed_accounts[].notification_email" type="string">
+Email address for account notifications.
+</ResponseField>
+
+<ResponseField name="data.managed_accounts[].created_at" type="integer">
+Creation time in UTC Unix milliseconds. Can be 0 if creation has not occurred or the time is not provided.
+</ResponseField>
+
+<ResponseField name="data.managed_accounts[].updated_at" type="integer">
+Last update time in UTC Unix milliseconds. Can be 0 if no update has occurred or the time is not provided.
+</ResponseField>
+
+<ResponseField name="data.managed_accounts[].activated_at" type="integer">
+Account compliance approval time. The value is 0 if approval has not been granted. UTC Unix milliseconds; can be 0 if the event has not occurred or the time is not provided.
+</ResponseField>
+
+<ResponseField name="data.managed_accounts[].account" type="object">
+The resource's own bank account details. Can be empty if the account has not been opened.
+</ResponseField>
+
+<ResponseField name="data.managed_accounts[].account.ispb" type="string">
+Bank ISPB code.
+</ResponseField>
+
+<ResponseField name="data.managed_accounts[].account.account_number" type="string">
+Account number.
+</ResponseField>
+
+<ResponseField name="data.managed_accounts[].linked_account" type="object">
+Details of the PA's direct parent account. Empty for MOR/VA.
+</ResponseField>
+
+<ResponseField name="data.managed_accounts[].linked_account.ispb" type="string">
+Bank ISPB code.
+</ResponseField>
+
+<ResponseField name="data.managed_accounts[].linked_account.account_number" type="string">
+Account number.
+</ResponseField>
+
+<ResponseField name="data.page" type="object">
+Pagination information.
+</ResponseField>
+
+<ResponseField name="data.page.page" type="integer">
+Pagination information.
+</ResponseField>
+
+<ResponseField name="data.page.total" type="integer">
+Number of USER-owned records matching the model and status filters before managed-account visibility and tax-ID filtering. If `model` is omitted, this count can include the master account. It can exceed the number of managed accounts that will be returned across all pages. <Badge color="orange" size="sm">Corrected · api-38-F08</Badge>
+</ResponseField>
+
+<ResponseField name="data.page.page_size" type="integer">
+Number of records per page.
+</ResponseField>
+
+<ResponseField name="data.page.total_pages" type="integer">
+Total number of pages, calculated from `data.page.total` before managed-account visibility and tax-ID filtering. <Badge color="orange" size="sm">Corrected · api-38-F08</Badge>
+</ResponseField>
+
+## Responses
+
+View response examples by the business `code` in the JSON response. Check the HTTP status and business code separately. An HTTP 200 response can also return a business error. <Badge color="orange" size="sm">Corrected · api-38-F14</Badge>
+
+| `code` | Meaning | Recommended action |
+| --- | --- | --- |
+| `200` | Request succeeded | Read data and determine the result using the business status defined for this endpoint. |
+| `400` | Request or validation failed | Parameter issue. Check and correct the request parameters. |
+| `500` | System error | Log the response and confirm the business result first. |
+
+The examples illustrate the response structure. Use the actual response for message and business status values. See [Error Catalog](/api-reference/error-catalog) for other parameter, permission, and service errors. This section does not imply that the endpoint returns only these three code values.
+
+<Tip>
+To try this endpoint, send the request example to the Sandbox base URL `https://ebanking-openapi-sandbox.pagsmile.com.br` with your Sandbox AK/SK. Sign every request as described in [Environments & Credentials](/environments-and-credentials#api-request-signing).
+</Tip>
+
+
+<Accordion title="Corrections to the source document (10)" icon="clipboard-check">
+This page was checked against the Pagsmile Open API source code on 2026-11-10. Each change below is marked in the page with a badge that shows its ID.
+
+| ID | Change | Location | Source document text | Updated text |
+| --- | --- | --- | --- | --- |
+| api-38-F01 | Added (missing in the source) | Request parameters / page.page | Enter actual business details; validity is determined by server-side and downstream validation | Page number, starting at 1. Optional signed 32-bit integer; omitted values and values below 1 use page 1. |
+| api-38-F02 | Added (missing in the source) | Request parameters / page.page_size | Page size; see the conditions on this page for each endpoint's limits | Page size. Optional signed 32-bit integer; omitted values and values below 1 use 10. Values above 100 are reduced to 100. |
+| api-38-F03 | Added (missing in the source) | Request parameters / model | Managed account type. Values: 1 MOR; 2 VA; 3 PA | Managed account model. Values: 1 MOR; 2 VA; 3 PA. Omit this field to apply no model filter. An explicitly supplied 0 or any other value returns business code 4001 (Invalid model value). |
+| api-38-F04 | Added (missing in the source) | Request parameters / status | Resource status, interpreted according to the object's enum. Values: 1 PENDING; 2 ACTIVE; 3 FROZEN; 4 CLOSED; 5 REJECTED; 6 EXPIRED | Managed account status filter. Values: 1 PENDING; 2 ACTIVE; 3 FROZEN; 4 CLOSED; 5 REJECTED; 6 EXPIRED. Omit this field to apply no status filter. Values 0 and 7, and all other values, return business code 4001 (Invalid status value). |
+| api-38-F05 | Added (missing in the source) | Request parameters / tax_id | Entity tax ID | Entity tax ID. Matches the compliance document number exactly, ignoring letter case and leading or trailing whitespace. Document punctuation is not removed. An empty or whitespace-only value applies no tax-ID filter. |
+| api-38-F06 | Added (missing in the source) | Permissions and account ownership | USER, without an account header. | USER, without X-ISPB or X-Account-Number headers, including explicitly empty headers. The USER must have exactly one ACTIVE master account with matching, ACTIVE bank account details; otherwise the request returns business code 4004003 (Permission denied). MOR and VA must belong directly to that master account. PA must belong to that master account or to an ACTIVE VA directly under it, and its direct parent's bank account must also be ACTIVE and match the parent account details. |
+| api-38-F07 | Added (missing in the source) | Behavior and handling | You can filter by account model, status, or tax ID and paginate the results. | You can filter by account model, status, or tax ID and paginate the results. Model and status filters are applied before pagination. Tax-ID and account-visibility filters are applied to the selected page afterward, so a page can contain fewer accounts than page_size or be empty even when other pages contain matches. Pagination totals describe the records before these later filters; do not stop pagination solely because managed_accounts is empty. |
+| api-38-F08 | Corrected (did not match the code) | Response fields / data.page.total | Total number of records. | Number of USER-owned records matching the model and status filters before managed-account visibility and tax-ID filtering. If model is omitted, this count can include the master account. It can exceed the number of managed accounts that will be returned across all pages. |
+| api-38-F09 | Added (missing in the source) | Response fields / data.managed_accounts[].status | Current business status, interpreted using the enum values listed for this field. Enum: 0 MANAGED_ACCOUNT_STATUS_V3_UNSPECIFIED; 1 MANAGED_ACCOUNT_STATUS_V3_PENDING; 2 MANAGED_ACCOUNT_STATUS_V3_ACTIVE; 3 MANAGED_ACCOUNT_STATUS_V3_FROZEN; 4 MANAGED_ACCOUNT_STATUS_V3_CLOSED; 5 MANAGED_ACCOUNT_STATUS_V3_REJECTED; 6 MANAGED_ACCOUNT_STATUS_V3_EXPIRED; 7 MANAGED_ACCOUNT_STATUS_V3_PENDING_SUBMISSION. | Current managed account status. Enum: 0 MANAGED_ACCOUNT_STATUS_V3_UNSPECIFIED; 1 MANAGED_ACCOUNT_STATUS_V3_PENDING; 2 MANAGED_ACCOUNT_STATUS_V3_ACTIVE; 3 MANAGED_ACCOUNT_STATUS_V3_FROZEN; 4 MANAGED_ACCOUNT_STATUS_V3_CLOSED; 5 MANAGED_ACCOUNT_STATUS_V3_REJECTED; 6 MANAGED_ACCOUNT_STATUS_V3_EXPIRED; 7 MANAGED_ACCOUNT_STATUS_V3_PENDING_SUBMISSION. Value 7 is defined in the contract but is not currently emitted by this endpoint; an unmapped account status is returned as 0. Check compliance_status separately for COMPLIANCE_STATUS_V3_PENDING_SUBMISSION=2. |
+| api-38-F14 | Corrected (did not match the code) | Responses / 200 example | `{ "code": 200, "message": "success", "data": { "managed_accounts": [], "page": { "page": 0, "page_size": 0, "total": 0, "total_pages": 0 } }, "time": 1791792000000 }` | `{ "code": 200, "message": "success", "data": { "managed_accounts": [], "page": { "page": 1, "page_size": 20, "total": 1, "total_pages": 1 }, "error": null, "result": null }, "time": 1791792000000 }` |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "page": {
+    "page": 1,
+    "page_size": 20
+  }
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/onboarding/managed_accounts/list' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${USER_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Request succeeded
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "managed_accounts": [],
+    "page": {
+      "page": 1,
+      "page_size": 20,
+      "total": 1,
+      "total_pages": 1
+    },
+    "error": null,
+    "result": null
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Request or validation failed
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 System error
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

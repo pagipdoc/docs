@@ -1,0 +1,111 @@
+---
+title: "Error Catalog"
+description: "Record the HTTP status and the JSON business code separately. When you receive a normal JSON response, the outer code=200 means the API request succeeded."
+---
+
+## Response evaluation
+
+Record the HTTP status and the JSON business code separately. When you receive a normal JSON response, the outer `code=200` means the API request succeeded. Other code values indicate failure. HTTP 200 alone does not indicate business success. Check the final status of payments, refunds, and account opening through the appropriate endpoints. Use `message` for display or troubleshooting, not as a stable condition for programmatic decisions.
+
+| Scenario | Action |
+| --- | --- |
+| HTTP 200, outer code=200 | Read data and check the business status |
+| HTTP 200, outer code is not 200 | Handle the business error using the codes below |
+| Non-JSON or plain-text error | Handle response format and transport errors separately |
+| Timeout or dropped connection | Unknown result. Query the original operation first |
+
+## Success
+
+| code | Meaning | What to check |
+| --- | --- | --- |
+| `200` | Success | Read data. Check the completion status as specified for the endpoint. |
+
+## Request parameters
+
+| code | Meaning | What to check |
+| --- | --- | --- |
+| `400` | Request or validation failed | Check the endpoint parameters. If managed account creation reports that the compliance submission was rejected, the account creation fee was not charged. Correct the request and retry with a new `reference_id`; this differs from a technical retry after code `504`. <Badge color="blue" size="sm">Added · error-catalog-F09</Badge> |
+| `4000` | Required field missing | Add the missing fields. |
+| `4001` | Invalid field value | Check the allowed values. |
+| `4002` | Invalid field format | Check the format and JSON type. |
+| `4003` | Field out of range | Check the amount, time, and numeric ranges. |
+| `4001011 / 4001012` | Request expired/invalid time range | Check the request time and allowed range. |
+
+## Authentication and permissions
+
+| code | Meaning | What to check |
+| --- | --- | --- |
+| `4003008` | Authentication required | Check the endpoint authentication and target account. |
+| `4004003` | Insufficient permissions/MED return capability unavailable | Check permissions for the endpoint. For MED, also check the return capability. If a payout is restricted because of MED recovery, check the MED status and the account's available balance. <Badge color="blue" size="sm">Added · error-catalog-F11</Badge> |
+| `4004101` | Authorization is required | Check the identity associated with the credentials. |
+| `4004102` | Invalid header or request metadata | Check the required headers and their format. |
+| `4004103` | Source IP is not on the allowlist | Verify the outbound IP configuration. |
+| `4004104` | Request body hash does not match | Compute the hash from the raw bytes actually sent. |
+| `4004105` | Timestamp is invalid or expired | Use Unix milliseconds and synchronize your clock. The official documentation specifies an acceptance window of 5 minutes. |
+| `4004106` | Nonce is invalid or already used | Generate a new nonce for each request, including retries after authentication failures. Nonces are tracked separately for each AK for 10 minutes and can be consumed even when the signature or permissions are rejected. <Badge color="blue" size="sm">Added · error-catalog-F06</Badge> |
+| `4004107` | Signature does not match | Check the SK, string to sign, and raw request. |
+| `401` | Invalid user | Check the user and credentials context. |
+| `4010 / 4011 / 4012` | Authentication failed/invalid token/expired token | Check authentication for the endpoint. These names do not indicate that v3 supports OAuth. v3 still uses HMAC signatures. |
+
+## Accounts and compliance
+
+| code | Meaning | What to check |
+| --- | --- | --- |
+| `4001092` | Invalid or incomplete KYC/KYB status | Check the compliance status. |
+| `4002003` | Information or application already registered | Query the existing record. |
+| `4004004` | Resource does not exist | Check the identifier and account scope. |
+| `4004008 / 4004010` | Account inactive or unable to send payments/account does not exist <Badge color="orange" size="sm">Corrected · error-catalog-F03</Badge> | Check the target account and its status. |
+
+## Pix keys and QR codes
+
+| code | Meaning | What to check |
+| --- | --- | --- |
+| `4001001` | Invalid Pix key or fraud-related restriction associated with the user, account, or Pix key <Badge color="blue" size="sm">Added · error-catalog-F07</Badge> | Check the Pix key value and type. |
+| `4001010` | Invalid QR code | Check the full QR code content. |
+| `4001014 / 4001015` | QR code already used/expired | Query the QR code status. |
+| `4001090` | Pix key already linked | Query the existing link. |
+| `4001094` | Pix key linked by a third party | Check ownership. |
+| `4001096` | Pix key inactive or deleted | Select a valid Pix key. |
+
+## Payments and refunds
+
+| code | Meaning | What to check |
+| --- | --- | --- |
+| `4001002 / 4001003` | Invalid account/account type | Check the account number and type. |
+| `4001004` | Invalid amount or amount limit | Check the amount format and limit. |
+| `4001013` | Already processed or duplicate request | Query the original transaction first. |
+| `4001093` | Payments to yourself are not allowed | Check the payer and payee. |
+| `4001998 / 4001999` | Limit exceeded/insufficient balance | Check the limit and available balance. |
+| `4003003` | Transaction details do not exist | Check the transaction ID and account. |
+| `4003005` | Refund processing failed or amount rejected | Check the original transaction, remaining returnable amount, and refund status. |
+| `4003012` | Pix validation failed | Check the endpoint's validation conditions. |
+| `4003014` | Payment processing failed | Query the payment result first. |
+| `4003016` | Risk control or AML validation failed | Contact integration support to investigate. |
+
+## Rate limiting and service status
+
+| code | Meaning | What to check |
+| --- | --- | --- |
+| `4004029` | Too many requests | Reduce the request rate and decide whether to retry based on the endpoint's conditions. |
+| `500` | System error | Log the response and confirm the business result first. |
+| `501 / 502 / 503` | Service unavailable/bank busy/not currently supported | Check the service status and the result of the original operation. |
+| `504` | Compliance verification temporarily unavailable | For managed account creation, the compliance submission result could not be confirmed and the account creation fee was not charged. Retry with the same `reference_id` and regenerate the signature information. Do not add `request_id` to this request. <Badge color="orange" size="sm">Corrected · error-catalog-F01</Badge> |
+
+## Retries and troubleshooting
+
+First, correct the parameters, signature, permissions, or account conditions. After a timeout, duplicate request, or payment failure, query the original operation before deciding whether to resubmit. You must not resend with a different order ID solely because no response was received. For technical retries, follow the endpoint's rules for business identifiers. Regenerate the timestamp, nonce, and request body hash each time you sign.
+
+If you encounter an unknown error code, record the environment, endpoint path, request time, HTTP status, code, message, resource identifier, and masked response. Contact integration support.
+
+<Accordion title="Corrections to the source document (6)" icon="clipboard-check">
+This page was checked against the Pagsmile Open API source code on 2026-11-10. Each change below is marked in the page with a badge that shows its ID.
+
+| ID | Change | Location | Source document text | Updated text |
+| --- | --- | --- | --- | --- |
+| error-catalog-F01 | Corrected (did not match the code) | Rate limiting and service status | For technical retries on applicable endpoints, retain request_id and regenerate the signature information. Do not add request_id to endpoints that do not define this field. | For managed account creation, the compliance submission result could not be confirmed and the account creation fee was not charged. Retry with the same reference_id and regenerate the signature information. Do not add request_id to this request. |
+| error-catalog-F03 | Corrected (did not match the code) | Accounts and compliance | Account not activated/account does not exist | Account inactive or unable to send payments/account does not exist |
+| error-catalog-F06 | Added (missing in the source) | Authentication and permissions | Generate a new nonce for each request. | Generate a new nonce for each request, including retries after authentication failures. Nonces are tracked separately for each AK for 10 minutes and can be consumed even when the signature or permissions are rejected. |
+| error-catalog-F07 | Added (missing in the source) | Pix keys and QR codes | Invalid Pix key | Invalid Pix key or fraud-related restriction associated with the user, account, or Pix key |
+| error-catalog-F09 | Added (missing in the source) | Request parameters | Check the endpoint parameters. | Check the endpoint parameters. If managed account creation reports that the compliance submission was rejected, the account creation fee was not charged. Correct the request and retry with a new reference_id; this differs from a technical retry after code 504. |
+| error-catalog-F11 | Added (missing in the source) | Authentication and permissions | Check permissions for the endpoint. For MED, also check the return capability. | Check permissions for the endpoint. For MED, also check the return capability. If a payout is restricted because of MED recovery, check the MED status and the account's available balance. |
+</Accordion>

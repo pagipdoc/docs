@@ -1,0 +1,188 @@
+---
+title: "Consultar assinatura de eventos"
+description: "Consulte a configuração da assinatura de eventos para o tipo de evento e o escopo da conta especificados."
+api: "POST /v3/webhooks/get"
+keywords: ["/v3/webhooks/get"]
+---
+
+## Funcionamento e tratamento
+
+Consulte a configuração da assinatura de eventos no escopo da identidade titular das credenciais, pelo ID da assinatura de eventos ou pelo tipo de evento. Consultas com credenciais `USER` não filtram por `account_number`. <Badge color="orange" size="sm">Corrigido · api-28-F04</Badge> Confira a URL de callback e se a assinatura de eventos está ativa.
+
+## Permissões e titularidade da conta
+
+Credenciais `ACCOUNT` podem consultar assinaturas de eventos de transações (`1-4`) e `VA_ACCOUNT_KYB` (`5`) da conta vinculada. Credenciais `USER` podem consultar assinaturas de eventos de transações (`1-4`), com `account_number` obrigatório, e `VA_ACCOUNT_KYB` (`5`), com `account_number` omitido ou em branco. Credenciais `PLATFORM` podem consultar apenas `MASTER_ACCOUNT_KYB` (`6`), com `account_number` omitido ou em branco. Não envie `X-ISPB` nem `X-Account-Number` com credenciais `USER` ou `PLATFORM` neste endpoint. Esses cabeçalhos não são obrigatórios com credenciais `ACCOUNT`; se enviados, informe ambos com os valores da conta vinculada. <Badge color="blue" size="sm">Complementado · api-28-F02</Badge> Veja [Webhooks](/pt-br/api-reference/webhooks/overview). As requisições devem seguir as orientações de [Ambientes e credenciais](/pt-br/environments-and-credentials).
+
+## Parâmetros da requisição
+
+<ParamField body="event_type" type="integer" required>
+Tipos de evento de webhook: `1` `PIX_IN`; `2` `PIX_OUT`; `3` `REFUND_IN`; `4` `REFUND_OUT`; `5` `VA_ACCOUNT_KYB`; `6` `MASTER_ACCOUNT_KYB`. Omitir o campo ou informar `0` causa rejeição. Os tipos de evento permitidos dependem do escopo das credenciais; veja Permissões e titularidade da conta. <Badge color="blue" size="sm">Complementado · api-28-F01</Badge>
+</ParamField>
+
+<ParamField body="account_number" type="string">
+**Obrigatório:** Obrigatório sob condição. Remova primeiro os espaços em branco no início e no fim. Preserve os zeros à esquerda. O campo pode ser omitido com credenciais `ACCOUNT`. Se informado, deve corresponder ao número da conta vinculada. É obrigatório ao consultar assinaturas de eventos de transações com credenciais `USER`. Nessas consultas com credenciais `USER`, `account_number` é obrigatório, mas não filtra a consulta da assinatura de eventos; a consulta usa a identidade titular `USER`. <Badge color="blue" size="sm">Complementado · api-28-F05</Badge> <Badge color="orange" size="sm">Corrigido · api-28-F11</Badge>
+</ParamField>
+
+<ParamField body="subscription_id" type="string">
+Remova os espaços em branco no início e no fim. Se `subscription_id` for informado, a assinatura de eventos é selecionada pelo ID no escopo da identidade titular das credenciais; a aplicação e o tipo de evento não são filtros adicionais da consulta. Se o campo for omitido, a consulta usa a identidade titular das credenciais, a aplicação e o tipo de evento; credenciais `ACCOUNT` também restringem a consulta à conta vinculada. `event_type` e `account_number`, quando obrigatório sob condição, ainda devem ser informados. Confira o `event_type` retornado para confirmar que consultou a assinatura de eventos pretendida. <Badge color="orange" size="sm">Corrigido · api-28-F03</Badge>
+</ParamField>
+
+## Exemplo de requisição cURL
+
+O exemplo usa credenciais de nível ACCOUNT. Preencha os parâmetros reais e gere a assinatura com base no body.json final.
+
+## Campos da resposta
+
+Os caminhos dos campos partem da raiz da resposta. `[]` indica um elemento de array. Os valores monetários usam strings decimais. Os enums são interpretados conforme cada campo. A estrutura abaixo representa os dados de uma resposta de sucesso. Um valor nulo ou 0, por si só, não indica a conclusão da operação.
+
+<ResponseField name="code" type="integer">
+Código de resultado de negócio; 200 indica sucesso. Os erros de negócio são retornados neste campo, que não equivale ao código de status HTTP.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Descrição do resultado de negócio; em caso de falha, analise esta descrição junto com o campo code para identificar a causa.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Objeto de dados da resposta de sucesso; pode ser null em respostas de erro.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Horário da resposta, em timestamp Unix UTC em milissegundos.
+</ResponseField>
+
+<ResponseField name="data.webhook" type="object">
+Dados da assinatura de eventos.
+</ResponseField>
+
+<ResponseField name="data.webhook.webhook_id" type="string">
+ID da assinatura de eventos.
+</ResponseField>
+
+<ResponseField name="data.webhook.event_type" type="string">
+Nome do evento da assinatura de eventos como string: `PIX_PAYMENT_IN`, `PIX_PAYMENT_OUT`, `PIX_REFUND_IN`, `PIX_REFUND_OUT`, `VA_ACCOUNT_KYB` ou `MASTER_ACCOUNT_KYB`. No endpoint de criação, `event_type` usa um enum numérico. <Badge color="blue" size="sm">Complementado · api-28-F06</Badge>
+</ResponseField>
+
+<ResponseField name="data.webhook.callback_url" type="string">
+Endereço para receber callbacks da assinatura de eventos.
+</ResponseField>
+
+<ResponseField name="data.webhook.status" type="integer">
+Status de negócio atual, interpretado conforme o enum listado para este campo. Valores: 0 BASE_STATUS_UNSPECIFIED; 1 BASE_STATUS_ACTIVE; 2 BASE_STATUS_INACTIVE.
+</ResponseField>
+
+<ResponseField name="data.webhook.created_at" type="integer">
+Data e hora de criação, em timestamp Unix UTC em milissegundos. Pode ser 0 se a criação não ocorreu ou se a data e hora não foram informadas.
+</ResponseField>
+
+<ResponseField name="data.webhook.updated_at" type="integer">
+Data e hora da última atualização, em timestamp Unix UTC em milissegundos. Pode ser 0 se não houve atualização ou se a data e hora não foram informadas.
+</ResponseField>
+
+<ResponseField name="data.webhook.account_number" type="string">
+Número da conta. O mapeamento atual da consulta de assinaturas de eventos não preenche este campo de compatibilidade, que pode estar vazio. O ID disponível da assinatura de eventos está em webhook_id.
+</ResponseField>
+
+<ResponseField name="data.webhook.subscription_id" type="string">
+ID estável da assinatura de eventos. O mapeamento atual da consulta de assinaturas de eventos não preenche este campo de compatibilidade, que pode estar vazio. O ID disponível da assinatura de eventos está em webhook_id.
+</ResponseField>
+
+<ResponseField name="data.webhook.suspend_reason" type="string">
+Motivo da suspensão da assinatura de eventos. O mapeamento atual da consulta de assinaturas de eventos não preenche este campo de compatibilidade, que pode estar vazio. O ID disponível da assinatura de eventos está em webhook_id.
+</ResponseField>
+
+## Respostas
+
+Consulte os exemplos de resposta pelo `code` de negócio no JSON. Verifique o status HTTP e o code de negócio separadamente. Uma resposta HTTP 200 também pode retornar um erro de negócio. <Badge color="orange" size="sm">Corrigido · api-28-F07</Badge>
+
+| `code` | Significado | Ação recomendada |
+| --- | --- | --- |
+| `200` | Requisição bem-sucedida | Leia data e avalie o resultado do processamento conforme o status de negócio deste endpoint. |
+| `400` | Falha na requisição ou validação | Problema nos parâmetros. Verifique e corrija os parâmetros da requisição. |
+| `500` | Erro do sistema | Registre a resposta e confirme primeiro o resultado de negócio. |
+
+Os exemplos ilustram a estrutura da resposta. Os valores de `message` e do status de negócio devem ser obtidos da resposta efetiva. Para outros erros de parâmetros, permissões e serviço, consulte [Catálogo de erros](/pt-br/api-reference/error-catalog). Esta seção não indica que o endpoint retorna apenas os três valores de `code` apresentados. Nesta consulta, `code` `4000` indica a ausência de `event_type` ou de `account_number`, quando obrigatório para consultas de eventos de transações com credenciais `USER`. Code `4004003` indica permissão negada para as credenciais, o evento ou o escopo da conta solicitado. Code `4004004` indica que nenhuma assinatura de eventos foi encontrada; isso é um erro, não uma resposta de sucesso com `webhook` vazio. Code `501` indica uma falha temporária na consulta. <Badge color="blue" size="sm">Complementado · api-28-F10</Badge>
+
+<Tip>
+Para testar este endpoint, envie o exemplo de requisição para a Base URL do Sandbox `https://ebanking-openapi-sandbox.pagsmile.com.br` com sua AK/SK de Sandbox. Assine cada requisição conforme descrito em [Ambientes e credenciais](/pt-br/environments-and-credentials#assinatura-de-requisições-à-api).
+</Tip>
+
+
+<Accordion title="Correções em relação ao documento original (9)" icon="clipboard-check">
+Esta página foi conferida com o código-fonte da Pagsmile Open API em 2026-11-10. Cada alteração abaixo está marcada na página com um selo que mostra o seu ID.
+
+| ID | Alteração | Local | Texto do documento original | Texto atualizado |
+| --- | --- | --- | --- | --- |
+| api-28-F01 | Complementado (ausente no original) | Request parameters / event_type description | Tipos de evento de webhook: 1 PIX_IN; 2 PIX_OUT; 3 REFUND_IN; 4 REFUND_OUT. | Tipos de evento de webhook: 1 PIX_IN; 2 PIX_OUT; 3 REFUND_IN; 4 REFUND_OUT; 5 VA_ACCOUNT_KYB; 6 MASTER_ACCOUNT_KYB. Omitir o campo ou informar 0 causa rejeição. Os tipos de evento permitidos dependem do escopo das credenciais; veja Permissões e titularidade da conta. |
+| api-28-F02 | Complementado (ausente no original) | Permissions and account ownership / replace the first sentence with explicit rules | A autorização depende da identidade titular da assinatura de eventos e do escopo. | Credenciais ACCOUNT podem consultar assinaturas de eventos de transações (1-4) e VA_ACCOUNT_KYB (5) da conta vinculada. Credenciais USER podem consultar assinaturas de eventos de transações (1-4), com account_number obrigatório, e VA_ACCOUNT_KYB (5), com account_number omitido ou em branco. Credenciais PLATFORM podem consultar apenas MASTER_ACCOUNT_KYB (6), com account_number omitido ou em branco. Não envie X-ISPB nem X-Account-Number com credenciais USER ou PLATFORM neste endpoint. Esses cabeçalhos não são obrigatórios com credenciais ACCOUNT; se enviados, informe ambos com os valores da conta vinculada. |
+| api-28-F03 | Corrigido (não correspondia ao código) | Request parameters / subscription_id description | Remova os espaços em branco no início e no fim antes de enviar o valor ao serviço de consulta de assinaturas de eventos. O valor identifica a assinatura de eventos em conjunto com a titularidade das credenciais, a aplicação, o tipo de evento e o escopo da conta. Não acesse outros escopos sem autorização | Remova os espaços em branco no início e no fim. Se subscription_id for informado, a assinatura de eventos é selecionada pelo ID no escopo da identidade titular das credenciais; a aplicação e o tipo de evento não são filtros adicionais da consulta. Se o campo for omitido, a consulta usa a identidade titular das credenciais, a aplicação e o tipo de evento; credenciais ACCOUNT também restringem a consulta à conta vinculada. event_type e account_number, quando obrigatório sob condição, ainda devem ser informados. Confira o event_type retornado para confirmar que consultou a assinatura de eventos pretendida. |
+| api-28-F04 | Corrigido (não correspondia ao código) | Behavior and handling / opening sentence | Consulte a configuração da assinatura de eventos para o tipo de evento e o escopo da conta especificados. | Consulte a configuração da assinatura de eventos no escopo da identidade titular das credenciais, pelo ID da assinatura de eventos ou pelo tipo de evento. Consultas com credenciais USER não filtram por account_number. |
+| api-28-F05 | Complementado (ausente no original) | Request parameters / append USER query behavior to account_number description | Remova primeiro os espaços em branco no início e no fim. Preserve os zeros à esquerda. O campo pode ser omitido com credenciais ACCOUNT. Se informado, deve corresponder ao número da conta vinculada. É obrigatório ao usar credenciais USER para criar uma assinatura de eventos de transações. | Remova primeiro os espaços em branco no início e no fim. Preserve os zeros à esquerda. O campo pode ser omitido com credenciais ACCOUNT. Se informado, deve corresponder ao número da conta vinculada. É obrigatório ao consultar assinaturas de eventos de transações com credenciais USER. Nessas consultas com credenciais USER, account_number é obrigatório, mas não filtra a consulta da assinatura de eventos; a consulta usa a identidade titular USER. |
+| api-28-F06 | Complementado (ausente no original) | Response fields / event_type meaning | Na assinatura de eventos, o nome do evento é uma string. No endpoint de criação, event_type usa um enum numérico. | Nome do evento da assinatura de eventos como string: PIX_PAYMENT_IN, PIX_PAYMENT_OUT, PIX_REFUND_IN, PIX_REFUND_OUT, VA_ACCOUNT_KYB ou MASTER_ACCOUNT_KYB. No endpoint de criação, event_type usa um enum numérico. |
+| api-28-F07 | Corrigido (não correspondia ao código) | Responses / Request succeeded JSON example | `{ "code": 200, "message": "success", "data": { "webhook": { "webhook_id": "example-webhook_id", "event_type": "PIX_IN", "callback_url": "example-callback_url", "status": 0, "created_at": 0, "updated_at": 0, "account_number": "example-account_number", "subscription_id": "example-subscription_id", "suspend_reason": "example-suspend_reason" } }, "time": 1791792000000 }` | `{ "code": 200, "message": "success", "data": { "webhook": { "webhook_id": "example-webhook_id", "event_type": "PIX_PAYMENT_IN", "callback_url": "https://merchant.example.test/webhooks", "status": 1, "created_at": 1791792000000, "updated_at": 1791792000000, "account_number": "", "subscription_id": "", "suspend_reason": "" }, "error": null, "result": null }, "time": 1791792000000 }` |
+| api-28-F10 | Complementado (ausente no original) | Responses / append endpoint-specific outcomes to the Error Catalog paragraph | Os exemplos ilustram a estrutura da resposta. Os valores de message e do status de negócio devem ser obtidos da resposta efetiva. Para outros erros de parâmetros, permissões e serviço, consulte Catálogo de erros. Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados. | Os exemplos ilustram a estrutura da resposta. Os valores de message e do status de negócio devem ser obtidos da resposta efetiva. Para outros erros de parâmetros, permissões e serviço, consulte Catálogo de erros. Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados. Nesta consulta, code 4000 indica a ausência de event_type ou de account_number, quando obrigatório para consultas de eventos de transações com credenciais USER. Code 4004003 indica permissão negada para as credenciais, o evento ou o escopo da conta solicitado. Code 4004004 indica que nenhuma assinatura de eventos foi encontrada; isso é um erro, não uma resposta de sucesso com webhook vazio. Code 501 indica uma falha temporária na consulta. |
+| api-28-F11 | Corrigido (não correspondia ao código) | Parâmetros da requisição / account_number description | Remova primeiro os espaços em branco no início e no fim. Preserve os zeros à esquerda. O campo pode ser omitido com credenciais ACCOUNT. Se informado, deve corresponder ao número da conta vinculada. É obrigatório ao usar credenciais USER para criar uma assinatura de eventos de transações. | Remova primeiro os espaços em branco no início e no fim. Preserve os zeros à esquerda. O campo pode ser omitido com credenciais ACCOUNT. Se informado, deve corresponder ao número da conta vinculada. É obrigatório ao consultar assinaturas de eventos de transações com credenciais USER. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "event_type": 1
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/webhooks/get' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${ACCOUNT_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Requisição bem-sucedida
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "webhook": {
+      "webhook_id": "example-webhook_id",
+      "event_type": "PIX_PAYMENT_IN",
+      "callback_url": "https://merchant.example.test/webhooks",
+      "status": 1,
+      "created_at": 1791792000000,
+      "updated_at": 1791792000000,
+      "account_number": "",
+      "subscription_id": "",
+      "suspend_reason": ""
+    },
+    "error": null,
+    "result": null
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Falha na requisição ou validação
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 Erro do sistema
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

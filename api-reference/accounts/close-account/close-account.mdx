@@ -1,0 +1,249 @@
+---
+title: "Close account"
+description: "Submit a managed account closure request to receive a persistent operation ID and the actual current progress. Synchronous completion is not guaranteed."
+api: "POST /v3/bank_account/close"
+keywords: ["/v3/bank_account/close"]
+---
+
+## Behavior and handling
+
+Submit a managed account closure request to receive a persistent operation ID and the actual current progress. Once the request is accepted, new payment activity is restricted even while `account_status` is `ACTIVE`. Existing business obligations continue to be checked. If the operation is `REJECTED`, its temporary closure restriction is released without changing the bank account status. <Badge color="blue" size="sm">Added · bank-account-close-F03</Badge> Synchronous completion is not guaranteed. Check closure eligibility and reasons first. Save operation_id to query subsequent status.
+
+### Pre-initiation checks
+
+The balance and frozen funds must be zero. Resolve outstanding payments, refunds, disputes, MED/infraction reports, fees, and subaccount obligations. If active Pix keys exist, delete them first or explicitly set auto_delete_active_pix_keys=true. A failed dependency query is not treated as a passing check.
+
+### Idempotency and result evaluation
+
+Reuse the same idempotency_key for the same closure intent. Do not blindly change the key and resubmit while waiting or after a network error. `WAITING` means the operation is waiting for existing business obligations or for eligibility information to be confirmed. It can also require manual verification. Check `reasons[].kind` and `next_action` before deciding what to do. <Badge color="orange" size="sm">Corrected · bank-account-close-F01</Badge> `CLOSED` means the bank account is closed, but cleanup may still be in progress. Cleanup closes the managed account identity, updates the default-account selection, retires Pix keys, clears limits, removes account fee configurations, disables account webhook subscriptions, and revokes account credentials. A cleanup error does not reopen the account; check `reasons` and `next_action` while processing resumes. <Badge color="blue" size="sm">Added · bank-account-close-F08</Badge> COMPLETED means all processing is complete. REJECTED means the account has not been closed. A successful HTTP response or business query does not replace checking the closure status.
+
+## Permissions and account ownership
+
+Use v3 AK/SK signature authentication. We recommend using shared USER credentials from the owning Master and specifying the target account through `X-ISPB` and `X-Account-Number`. Account-level credentials can only operate on their authorized account. This endpoint does not support PLATFORM credentials. The account_number in the request must match the authentication context. The authentication context determines the ISPB; do not send it separately in the request JSON.
+
+This endpoint supports MOR, VA, and PA managed accounts. It does not support MA_MOR master accounts. The account must be `ACTIVE` when a merchant initiates a new closure request. With shared `USER` credentials, the target managed identity and its owning Master must also be `ACTIVE` with valid account bindings. For a PA under a VA, that parent VA must meet the same conditions. <Badge color="blue" size="sm">Added · bank-account-close-F09</Badge> After account closure, do not rely on revoked account credentials. You must use authorized shared USER credentials to query the original operation.
+
+## Request parameters
+
+<ParamField body="account_number" type="string" required>
+Target account number, 1 to 32 digits. Preserve leading zeros. Must match the target account number in the authentication context and fall within the scope of the currently authorized Master.
+</ParamField>
+
+<ParamField body="reason" type="integer" required>
+Closure reason: 1 MERCHANT_REQUESTED, merchant request; 2 USER_OFFBOARDING, user offboarding; 3 COMPLIANCE_EXIT, compliance exit. 0 and other values are not accepted.
+</ParamField>
+
+<ParamField body="idempotency_key" type="string" required>
+Non-whitespace string, up to 128 bytes. Keys are scoped to the authenticated owning user, across that user's accounts and credentials. The same key with the same ISPB, account number, reason, and deletion option returns the original operation with its current progress. A different intent with the same scoped key causes a conflict. Reusing a rejected operation's key returns that rejected operation; after resolving the reasons, use a new key for a new closure request. If the result is unknown, query first and keep the original key and intent unchanged when resubmitting. <Badge color="blue" size="sm">Added · bank-account-close-F02</Badge>
+</ParamField>
+
+<ParamField body="auto_delete_active_pix_keys" type="boolean">
+Default: false. true allows active Pix keys to be deleted after the eligibility check passes. The precheck does not actually delete them.
+</ParamField>
+
+## cURL request example
+
+The example uses shared `USER` credentials. Before running it, replace `replace-with-account-number` in `body.json` with the same 1-to-32-digit account number used in `TARGET_ACCOUNT_NUMBER`. Replace `replace-with-idempotency-key` with your own non-whitespace key of up to 128 bytes, then compute the hash and signature from the resulting file. <Badge color="orange" size="sm">Corrected · bank-account-close-F12</Badge> The account number in the request JSON must match the target account header. Generate the signature from the final `body.json`, including its exact bytes and trailing newline. Include the sent `X-ISPB` and `X-Account-Number` headers in the canonical signed headers. For each transmission, generate a new nonce and a fresh Unix-millisecond timestamp within 5 minutes of server time, and recalculate the body hash and signature. Keep the business `idempotency_key` unchanged when retrying the original request. <Badge color="blue" size="sm">Added · bank-account-close-F11</Badge>
+
+## Response fields
+
+Field paths start at the response root. `[]` indicates an array element. Amounts use decimal strings. Enum values are defined separately for each field. The structure below describes a success response. A null value or 0 alone does not indicate that processing is complete.
+
+<ResponseField name="code" type="integer">
+Business result code. A value of 200 indicates success. Business errors are returned in this field. It is not the HTTP status code.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Business result description. On failure, use this with code to determine the cause.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Data object in a successful response. Can be null in an error response.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Response time as a UTC Unix timestamp in milliseconds.
+</ResponseField>
+
+<ResponseField name="data.operation" type="object">
+Account closure operation and actual progress.
+</ResponseField>
+
+<ResponseField name="data.operation.operation_id" type="string">
+Account closure operation ID. Used to query the same operation later.
+</ResponseField>
+
+<ResponseField name="data.operation.ispb" type="string">
+Bank ISPB code.
+</ResponseField>
+
+<ResponseField name="data.operation.account_number" type="string">
+Account number.
+</ResponseField>
+
+<ResponseField name="data.operation.account_status" type="integer">
+Bank account status. Enum: 0 BANK_ACCOUNT_STATUS_UNSPECIFIED; 1 BANK_ACCOUNT_STATUS_ACTIVE; 2 BANK_ACCOUNT_STATUS_INACTIVE; 3 BANK_ACCOUNT_STATUS_BLOCKED; 4 BANK_ACCOUNT_STATUS_CLOSED.
+</ResponseField>
+
+<ResponseField name="data.operation.status" type="integer">
+Current business status, interpreted using the enum values listed for this field. Enum: 0 ACCOUNT_CLOSURE_STATUS_UNSPECIFIED; 1 ACCOUNT_CLOSURE_STATUS_CHECKING; 2 ACCOUNT_CLOSURE_STATUS_WAITING; 3 ACCOUNT_CLOSURE_STATUS_DELETING_KEYS; 4 ACCOUNT_CLOSURE_STATUS_CLOSED; 5 ACCOUNT_CLOSURE_STATUS_COMPLETED; 6 ACCOUNT_CLOSURE_STATUS_REJECTED.
+</ResponseField>
+
+<ResponseField name="data.operation.current_step" type="string">
+Current processing step, not a progress percentage.
+</ResponseField>
+
+<ResponseField name="data.operation.reasons" type="array">
+List of reasons for a failed check, waiting, or an exception. An empty list alone does not mean the process is complete.
+</ResponseField>
+
+<ResponseField name="data.operation.reasons[].code" type="string">
+Stable reason code. Common values include `NON_ZERO_BALANCE`, `FROZEN_BALANCE`, `ACTIVE_PIX_KEYS`, `OPEN_CHILD_ACCOUNTS`, `OPEN_MED_CASE`, `PENDING_PAYMENT`, `PENDING_REFUND`, and `UNPAID_BILL`. Other possible values include `OPEN_INFRACTION`, `PENDING_MED_REFUND`, `PENDING_CHILD_CREATION`, `PENDING_BILLING`, `BILLING_RESULT_UNKNOWN`, `PENDING_DISPUTE`, `MED_QUERY_UNAVAILABLE`, `USER_QUERY_UNAVAILABLE`, `TRANSACTION_QUERY_UNAVAILABLE`, `BALANCE_QUERY_UNAVAILABLE`, `PIX_KEYS_QUERY_UNAVAILABLE`, `DEPENDENCY_UNAVAILABLE`, `ACCOUNT_TYPE_NOT_SUPPORTED`, `ACCOUNT_INVALID_STATUS`, `PIX_KEY_RESULT_UNKNOWN`, `ELIGIBILITY_AFTER_KEY_DELETION`, `ELIGIBILITY_RESULT_INVALID`, `CLEANUP_FAILED`, `CLEANUP_STATE_INVALID`, and `CLOSURE_SOURCE_INVALID`. Evaluate `kind` and `next_action` with the code. The actual response is authoritative. <Badge color="blue" size="sm">Added · bank-account-close-F06</Badge>
+</ResponseField>
+
+<ResponseField name="data.operation.reasons[].message" type="string">
+Reason description.
+</ResponseField>
+
+<ResponseField name="data.operation.reasons[].step" type="string">
+Processing step that produced this reason.
+</ResponseField>
+
+<ResponseField name="data.operation.reasons[].kind" type="integer">
+Account closure reason category. Enum: 0 ACCOUNT_CLOSURE_ISSUE_KIND_UNSPECIFIED; 1 ACCOUNT_CLOSURE_ISSUE_KIND_WAITING; 2 ACCOUNT_CLOSURE_ISSUE_KIND_BLOCKING; 3 ACCOUNT_CLOSURE_ISSUE_KIND_RETRYABLE; 4 ACCOUNT_CLOSURE_ISSUE_KIND_MANUAL.
+</ResponseField>
+
+<ResponseField name="data.operation.reasons[].count" type="integer">
+Number of associated records for record-count checks. For `NON_ZERO_BALANCE` and `FROZEN_BALANCE`, `1` indicates a failed balance condition rather than a record count. `ACTIVE_PIX_KEYS` and dependency or processing errors may return `0` even when the check has not passed. Never interpret `0` alone as a passing result. <Badge color="orange" size="sm">Corrected · bank-account-close-F04</Badge>
+</ResponseField>
+
+<ResponseField name="data.operation.reasons[].references" type="array">
+Associated business record IDs, when provided. This field can be `null`. Current closure checks return counts and reasons without populating record IDs; do not require this field to be a populated array. <Badge color="blue" size="sm">Added · bank-account-close-F05</Badge>
+</ResponseField>
+
+<ResponseField name="data.operation.updated_at" type="integer">
+Last update time in UTC Unix milliseconds. Can be 0 if no update has occurred or the time is not provided.
+</ResponseField>
+
+<ResponseField name="data.operation.checked_at" type="integer">
+Time of the most recent check, in UTC Unix milliseconds. The value can be 0 if the check has not occurred or the time is not provided.
+</ResponseField>
+
+<ResponseField name="data.operation.next_action" type="integer">
+Recommended next action. Enum: 0 ACCOUNT_CLOSURE_NEXT_ACTION_UNSPECIFIED; 1 ACCOUNT_CLOSURE_NEXT_ACTION_WAIT_SYSTEM; 2 ACCOUNT_CLOSURE_NEXT_ACTION_RESOLVE_AND_REAPPLY; 3 ACCOUNT_CLOSURE_NEXT_ACTION_CONTACT_OPERATIONS; 4 ACCOUNT_CLOSURE_NEXT_ACTION_NONE.
+</ResponseField>
+
+<ResponseField name="data.operation.next_retry_at" type="integer">
+Next processing time scheduled by the server. 0 means no processing is scheduled. It does not mean completion and does not trigger a page retry. Expressed in UTC Unix milliseconds. Can be 0 if processing has not occurred or the time is not provided.
+</ResponseField>
+
+<ResponseField name="data.operation.closed_at" type="integer">
+Bank account closure time. 0 if closure has not occurred. Expressed in UTC Unix milliseconds. Can be 0 if closure has not occurred or the time is not provided.
+</ResponseField>
+
+<ResponseField name="data.operation.completed_at" type="integer">
+Completion time. Can be 0 if completion has not occurred. Expressed in UTC Unix milliseconds. Can be 0 if completion has not occurred or the time is not provided.
+</ResponseField>
+
+## Responses
+
+The following example shows the structure. Identifiers and timestamps are sample values. Evaluate the HTTP status and the JSON business code separately. For business errors, see [Error Catalog](/api-reference/error-catalog). For this endpoint, code `4001013` can mean an existing closure request or an idempotency conflict; do not treat it as completion. Code `4004008` can indicate an already closed account, `4004010` a missing account, and `501` temporary closure unavailability. Code `400` can also indicate an unsupported master account. Business error responses have `data=null`, so retain the `operation_id` from the original successful response and query that operation first. <Badge color="blue" size="sm">Added · bank-account-close-F10</Badge>
+
+| `code` | Meaning | Recommended action |
+| --- | --- | --- |
+| `200` | Request succeeded | Save operation_id. Use operation.status, reasons, and next_action to determine what to do next. |
+| `400` | Request or validation failed | Parameter issue. Check and correct the request parameters. |
+| `500` | System error | Log the response and confirm the business result first. |
+
+<Tip>
+To try this endpoint, send the request example to the Sandbox base URL `https://ebanking-openapi-sandbox.pagsmile.com.br` with your Sandbox AK/SK. Sign every request as described in [Environments & Credentials](/environments-and-credentials#api-request-signing).
+</Tip>
+
+
+<Accordion title="Corrections to the source document (11)" icon="clipboard-check">
+This page was checked against the Pagsmile Open API source code on 2026-11-10. Each change below is marked in the page with a badge that shows its ID.
+
+| ID | Change | Location | Source document text | Updated text |
+| --- | --- | --- | --- | --- |
+| bank-account-close-F01 | Corrected (did not match the code) | Idempotency and result evaluation | WAITING means the operation is waiting for existing business obligations to finish. | WAITING means the operation is waiting for existing business obligations or for eligibility information to be confirmed. It can also require manual verification. Check reasons[].kind and next_action before deciding what to do. |
+| bank-account-close-F02 | Added (missing in the source) | Request parameters / idempotency | Nonempty, up to 128 bytes. The same key with the same account, reason, and deletion option returns the original operation. The same key with a different intent causes a conflict. If the result is unknown, query first. Keep this key and intent unchanged when resubmitting the original request. | Non-whitespace string, up to 128 bytes. Keys are scoped to the authenticated owning user, across that user's accounts and credentials. The same key with the same ISPB, account number, reason, and deletion option returns the original operation with its current progress. A different intent with the same scoped key causes a conflict. Reusing a rejected operation's key returns that rejected operation; after resolving the reasons, use a new key for a new closure request. If the result is unknown, query first and keep the original key and intent unchanged when resubmitting. |
+| bank-account-close-F03 | Added (missing in the source) | Behavior and handling | Submit a managed account closure request to receive a persistent operation ID and the actual current progress. | Submit a managed account closure request to receive a persistent operation ID and the actual current progress. Once the request is accepted, new payment activity is restricted even while account_status is ACTIVE. Existing business obligations continue to be checked. If the operation is REJECTED, its temporary closure restriction is released without changing the bank account status. |
+| bank-account-close-F04 | Corrected (did not match the code) | Response fields | Total number of associated business records. If the check fails, you must not interpret 0 as a passing result. | Number of associated records for record-count checks. For NON_ZERO_BALANCE and FROZEN_BALANCE, 1 indicates a failed balance condition rather than a record count. ACTIVE_PIX_KEYS and dependency or processing errors may return 0 even when the check has not passed. Never interpret 0 alone as a passing result. |
+| bank-account-close-F05 | Added (missing in the source) | Response fields | List of associated business record IDs that the caller is authorized to view. Can be truncated. | Associated business record IDs, when provided. This field can be null. Current closure checks return counts and reasons without populating record IDs; do not require this field to be a populated array. |
+| bank-account-close-F06 | Added (missing in the source) | Response fields | Stable reason code. Common values include NON_ZERO_BALANCE, FROZEN_BALANCE, ACTIVE_PIX_KEYS, OPEN_CHILD_ACCOUNTS, OPEN_MED_CASE, PENDING_PAYMENT, PENDING_REFUND, and UNPAID_BILL. The actual response is authoritative. | Stable reason code. Common values include NON_ZERO_BALANCE, FROZEN_BALANCE, ACTIVE_PIX_KEYS, OPEN_CHILD_ACCOUNTS, OPEN_MED_CASE, PENDING_PAYMENT, PENDING_REFUND, and UNPAID_BILL. Other possible values include OPEN_INFRACTION, PENDING_MED_REFUND, PENDING_CHILD_CREATION, PENDING_BILLING, BILLING_RESULT_UNKNOWN, PENDING_DISPUTE, MED_QUERY_UNAVAILABLE, USER_QUERY_UNAVAILABLE, TRANSACTION_QUERY_UNAVAILABLE, BALANCE_QUERY_UNAVAILABLE, PIX_KEYS_QUERY_UNAVAILABLE, DEPENDENCY_UNAVAILABLE, ACCOUNT_TYPE_NOT_SUPPORTED, ACCOUNT_INVALID_STATUS, PIX_KEY_RESULT_UNKNOWN, ELIGIBILITY_AFTER_KEY_DELETION, ELIGIBILITY_RESULT_INVALID, CLEANUP_FAILED, CLEANUP_STATE_INVALID, and CLOSURE_SOURCE_INVALID. Evaluate kind and next_action with the code. The actual response is authoritative. |
+| bank-account-close-F08 | Added (missing in the source) | Idempotency and result evaluation | CLOSED means the bank account is closed, but cleanup may still be in progress. | CLOSED means the bank account is closed, but cleanup may still be in progress. Cleanup closes the managed account identity, updates the default-account selection, retires Pix keys, clears limits, removes account fee configurations, disables account webhook subscriptions, and revokes account credentials. A cleanup error does not reopen the account; check reasons and next_action while processing resumes. |
+| bank-account-close-F09 | Added (missing in the source) | Permissions and account ownership | The account must be ACTIVE when a merchant initiates a new closure request. | The account must be ACTIVE when a merchant initiates a new closure request. With shared USER credentials, the target managed identity and its owning Master must also be ACTIVE with valid account bindings. For a PA under a VA, that parent VA must meet the same conditions. |
+| bank-account-close-F10 | Added (missing in the source) | Responses | For business errors, see Error Catalog. | For business errors, see Error Catalog. For this endpoint, code 4001013 can mean an existing closure request or an idempotency conflict; do not treat it as completion. Code 4004008 can indicate an already closed account, 4004010 a missing account, and 501 temporary closure unavailability. Code 400 can also indicate an unsupported master account. Business error responses have data=null, so retain the operation_id from the original successful response and query that operation first. |
+| bank-account-close-F11 | Added (missing in the source) | cURL request example | Generate the signature from the final body.json. | Generate the signature from the final body.json, including its exact bytes and trailing newline. Include the sent X-ISPB and X-Account-Number headers in the canonical signed headers. For each transmission, generate a new nonce and a fresh Unix-millisecond timestamp within 5 minutes of server time, and recalculate the body hash and signature. Keep the business idempotency_key unchanged when retrying the original request. |
+| bank-account-close-F12 | Corrected (did not match the code) | cURL request example | The example uses shared USER credentials. | The example uses shared USER credentials. Before running it, replace replace-with-account-number in body.json with the same 1-to-32-digit account number used in TARGET_ACCOUNT_NUMBER. Replace replace-with-idempotency-key with your own non-whitespace key of up to 128 bytes, then compute the hash and signature from the resulting file. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "account_number": "replace-with-account-number",
+  "reason": 1,
+  "idempotency_key": "replace-with-idempotency-key",
+  "auto_delete_active_pix_keys": false
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/bank_account/close' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${USER_AK}" \
+  --header "X-ISPB: ${TARGET_ISPB}" \
+  --header "X-Account-Number: ${TARGET_ACCOUNT_NUMBER}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Request succeeded
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "operation": {
+      "operation_id": "closure_demo_001",
+      "ispb": "37753531",
+      "account_number": "00012345",
+      "account_status": 1,
+      "status": 1,
+      "current_step": "CHECK_ELIGIBILITY",
+      "reasons": [],
+      "updated_at": 1792713600000,
+      "checked_at": 0,
+      "next_action": 1,
+      "next_retry_at": 1792713600000,
+      "closed_at": 0,
+      "completed_at": 0
+    }
+  },
+  "time": 1792713600000
+}
+```
+
+```json 400 Request or validation failed
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 System error
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

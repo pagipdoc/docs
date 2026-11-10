@@ -1,0 +1,179 @@
+---
+title: "List event subscriptions"
+description: "List event subscriptions within the authorization scope of your credentials to check the configured events, callback URLs, and statuses."
+api: "POST /v3/webhooks/list"
+keywords: ["/v3/webhooks/list"]
+---
+
+## Behavior and handling
+
+List event subscriptions within the authorization scope of your credentials to check the configured events, callback URLs, and statuses. ACCOUNT credentials return only active subscriptions. USER and PLATFORM credentials do not apply a status filter, so their results can also include inactive subscriptions. <Badge color="blue" size="sm">Added · api-31-F05</Badge>
+
+## Permissions and account ownership
+
+ACCOUNT, USER and PLATFORM credentials list subscriptions in their own owner scope. Results are also restricted to the credential's application when an application is bound. ACCOUNT credentials use the bound ISPB and account number; USER credentials use the credential's user identity; PLATFORM credentials use the credential's platform tenant. With USER or PLATFORM credentials, do not send `X-ISPB` or `X-Account-Number`, even with an empty value. The `account_number` body field follows the separate conditions in the request table. <Badge color="blue" size="sm">Added · api-31-F04</Badge> See [Webhooks](/api-reference/webhooks/overview). Requests must follow [Environments & Credentials](/environments-and-credentials).
+
+## Request parameters
+
+<ParamField body="event_type" type="integer">
+Webhook event filters: `1` `PIX_IN`; `2` `PIX_OUT`; `3` `REFUND_IN`; `4` `REFUND_OUT`; `5` `VA_ACCOUNT_KYB`; `6` `MASTER_ACCOUNT_KYB`. Omit this parameter or pass `0` to skip filtering by event type. USER credentials accept filters `1` through `5`; PLATFORM credentials accept only `6` or no filter. ACCOUNT credentials cannot use filter `6`. Follow the `account_number` conditions for each credential type. <Badge color="blue" size="sm">Added · api-31-F03</Badge>
+</ParamField>
+
+<ParamField body="account_number" type="string">
+**Required:** Conditionally required <Badge color="orange" size="sm">Corrected · api-31-F01</Badge>
+
+Trim leading and trailing whitespace first and preserve leading zeros. Optional for ACCOUNT credentials; if provided, the value must match the bound account number, and the list always uses that bound account. With USER credentials, this field is required when `event_type` is `1`, `2`, `3` or `4`, but it does not filter the returned subscriptions by account. It may be omitted when `event_type` is omitted or `0`. Leave it empty for USER `event_type` `5` and for PLATFORM credentials. <Badge color="orange" size="sm">Corrected · api-31-F02</Badge>
+</ParamField>
+
+<ParamField body="subscription_id" type="string">
+**Required:** Not used for filtering. This version does not use this field when listing subscriptions
+</ParamField>
+
+## cURL request example
+
+The example uses ACCOUNT-level credentials. Enter the actual parameters and generate the signature from the final body.json.
+
+## Response fields
+
+Field paths start at the response root. `[]` indicates an array element. Amounts use decimal strings. Enum values are defined separately for each field. The structure below describes a success response. A null value or 0 alone does not indicate that processing is complete.
+
+<ResponseField name="code" type="integer">
+Business result code. A value of 200 indicates success. Business errors are returned in this field. It is not the HTTP status code.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Business result description. On failure, use this with code to determine the cause.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Data object in a successful response. Can be null in an error response.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Response time as a UTC Unix timestamp in milliseconds.
+</ResponseField>
+
+<ResponseField name="data.webhooks" type="array">
+List of event subscriptions.
+</ResponseField>
+
+<ResponseField name="data.webhooks[].webhook_id" type="string">
+Event subscription ID.
+</ResponseField>
+
+<ResponseField name="data.webhooks[].event_type" type="string">
+Subscribed event name as a string. The request filters `1`, `2`, `3`, `4`, `5` and `6` correspond to `PIX_PAYMENT_IN`, `PIX_PAYMENT_OUT`, `PIX_REFUND_IN`, `PIX_REFUND_OUT`, `VA_ACCOUNT_KYB` and `MASTER_ACCOUNT_KYB`, respectively. The creation endpoint uses a numeric enum for `event_type`. Unfiltered lists may include other event names; do not interpret this response field as a numeric enum. <Badge color="blue" size="sm">Added · api-31-F07</Badge>
+</ResponseField>
+
+<ResponseField name="data.webhooks[].callback_url" type="string">
+Callback URL for the subscribed event.
+</ResponseField>
+
+<ResponseField name="data.webhooks[].status" type="integer">
+Current business status, interpreted according to the enum listed for this field. Values: 0 BASE_STATUS_UNSPECIFIED; 1 BASE_STATUS_ACTIVE; 2 BASE_STATUS_INACTIVE.
+</ResponseField>
+
+<ResponseField name="data.webhooks[].created_at" type="integer">
+Creation time in UTC Unix milliseconds. Can be 0 if creation has not occurred or the time is not provided.
+</ResponseField>
+
+<ResponseField name="data.webhooks[].updated_at" type="integer">
+Last update time in UTC Unix milliseconds. Can be 0 if no update has occurred or the time is not provided.
+</ResponseField>
+
+<ResponseField name="data.webhooks[].account_number" type="string">
+Account number. The current subscription query mapping does not populate this compatibility field, so it can be empty. webhook_id provides the subscription ID.
+</ResponseField>
+
+<ResponseField name="data.webhooks[].subscription_id" type="string">
+Stable subscription ID. The current subscription query mapping does not populate this compatibility field, so it can be empty. webhook_id provides the subscription ID.
+</ResponseField>
+
+<ResponseField name="data.webhooks[].suspend_reason" type="string">
+Reason for subscription suspension. The current subscription query mapping does not populate this compatibility field, so it can be empty. webhook_id provides the subscription ID.
+</ResponseField>
+
+## Responses
+
+View response examples by the business `code` in the JSON response. Check the HTTP status and business code separately. An HTTP 200 response can also return a business error.
+
+Malformed JSON or a request-body read failure can return HTTP 400 with a plain-text error instead of the JSON envelope. Check the response `Content-Type` before parsing it as JSON. <Badge color="blue" size="sm">Added · api-31-F10</Badge>
+
+| `code` | Meaning | Recommended action |
+| --- | --- | --- |
+| `200` | Request succeeded | Read data and determine the result using the business status defined for this endpoint. |
+| `400` | Request or validation failed | Parameter issue. Check and correct the request parameters. |
+| `500` | System error | Log the response and confirm the business result first. |
+
+The examples illustrate the response structure. Use the actual response for message and business status values.
+
+This endpoint can also return code `4000` when USER credentials filter transaction events without `account_number`, code `4004003` for a forbidden event/account combination or account-targeting headers, code `4003008` when a required authenticated owner identifier or account binding is unavailable, and code `501` when the subscription query service is unavailable. See [Error Catalog](/api-reference/error-catalog) for these and other parameter, permission, and service errors. This section does not imply that the endpoint returns only the three example code values. <Badge color="blue" size="sm">Added · api-31-F11</Badge>
+
+<Tip>
+To try this endpoint, send the request example to the Sandbox base URL `https://ebanking-openapi-sandbox.pagsmile.com.br` with your Sandbox AK/SK. Sign every request as described in [Environments & Credentials](/environments-and-credentials#api-request-signing).
+</Tip>
+
+
+<Accordion title="Corrections to the source document (8)" icon="clipboard-check">
+This page was checked against the Pagsmile Open API source code on 2026-11-10. Each change below is marked in the page with a badge that shows its ID.
+
+| ID | Change | Location | Source document text | Updated text |
+| --- | --- | --- | --- | --- |
+| api-31-F01 | Corrected (did not match the code) | Request parameters | No | Conditionally required |
+| api-31-F02 | Corrected (did not match the code) | Request parameters | Optional. Filter by target account number. Trim leading and trailing whitespace first and preserve leading zeros. For ACCOUNT credentials, the value must match the bound account number if provided. | Trim leading and trailing whitespace first and preserve leading zeros. Optional for ACCOUNT credentials; if provided, the value must match the bound account number, and the list always uses that bound account. With USER credentials, this field is required when event_type is 1, 2, 3 or 4, but it does not filter the returned subscriptions by account. It may be omitted when event_type is omitted or 0. Leave it empty for USER event_type 5 and for PLATFORM credentials. |
+| api-31-F03 | Added (missing in the source) | Request parameters | Webhook event types: 1 PIX_IN; 2 PIX_OUT; 3 REFUND_IN; 4 REFUND_OUT. Omit this parameter or pass 0 to skip filtering by event type. | Webhook event filters: 1 PIX_IN; 2 PIX_OUT; 3 REFUND_IN; 4 REFUND_OUT; 5 VA_ACCOUNT_KYB; 6 MASTER_ACCOUNT_KYB. Omit this parameter or pass 0 to skip filtering by event type. USER credentials accept filters 1 through 5; PLATFORM credentials accept only 6 or no filter. ACCOUNT credentials cannot use filter 6. Follow the account_number conditions for each credential type. |
+| api-31-F04 | Added (missing in the source) | Permissions and account ownership | Authorization depends on the subscription owner identity and scope. | ACCOUNT, USER and PLATFORM credentials list subscriptions in their own owner scope. Results are also restricted to the credential's application when an application is bound. ACCOUNT credentials use the bound ISPB and account number; USER credentials use the credential's user identity; PLATFORM credentials use the credential's platform tenant. With USER or PLATFORM credentials, do not send X-ISPB or X-Account-Number, even with an empty value. The account_number body field follows the separate conditions in the request table. |
+| api-31-F05 | Added (missing in the source) | Behavior and handling | List event subscriptions within the authorization scope of your credentials to check the configured events, callback URLs, and statuses. | List event subscriptions within the authorization scope of your credentials to check the configured events, callback URLs, and statuses. ACCOUNT credentials return only active subscriptions. USER and PLATFORM credentials do not apply a status filter, so their results can also include inactive subscriptions. |
+| api-31-F07 | Added (missing in the source) | Response fields | Subscribed event name as a string. The creation endpoint uses a numeric enum for event_type. | Subscribed event name as a string. The request filters 1, 2, 3, 4, 5 and 6 correspond to PIX_PAYMENT_IN, PIX_PAYMENT_OUT, PIX_REFUND_IN, PIX_REFUND_OUT, VA_ACCOUNT_KYB and MASTER_ACCOUNT_KYB, respectively. The creation endpoint uses a numeric enum for event_type. Unfiltered lists may include other event names; do not interpret this response field as a numeric enum. |
+| api-31-F10 | Added (missing in the source) | Responses / add transport-error note after HTTP/business-code guidance | View response examples by the business `code` in the JSON response. Check the HTTP status and business code separately. An HTTP 200 response can also return a business error. | View response examples by the business `code` in the JSON response. Check the HTTP status and business code separately. An HTTP 200 response can also return a business error. Malformed JSON or a request-body read failure can return HTTP 400 with a plain-text error instead of the JSON envelope. Check the response Content-Type before parsing it as JSON. |
+| api-31-F11 | Added (missing in the source) | Responses / endpoint-specific errors after the example disclaimer | The examples illustrate the response structure. Use the actual response for message and business status values. See Error Catalog for other parameter, permission, and service errors. This section does not imply that the endpoint returns only these three code values. | The examples illustrate the response structure. Use the actual response for message and business status values. This endpoint can also return code 4000 when USER credentials filter transaction events without account_number, code 4004003 for a forbidden event/account combination or account-targeting headers, code 4003008 when a required authenticated owner identifier or account binding is unavailable, and code 501 when the subscription query service is unavailable. See Error Catalog for these and other parameter, permission, and service errors. This section does not imply that the endpoint returns only the three example code values. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+cat > body.json <<'JSON'
+{}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/webhooks/list' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${ACCOUNT_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Request succeeded
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "webhooks": []
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Request or validation failed
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 System error
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

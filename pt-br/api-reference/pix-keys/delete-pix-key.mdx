@@ -1,0 +1,144 @@
+---
+title: "Excluir chave Pix"
+description: "Exclua uma chave Pix pertencente à conta-alvo. Após a exclusão, consulte novamente as chaves válidas e atualize a configuração de recebimento usada pelo…"
+api: "POST /v3/pix_keys/delete"
+keywords: ["/v3/pix_keys/delete"]
+---
+
+## Funcionamento e tratamento
+
+Exclua uma chave Pix pertencente à conta-alvo. Após a exclusão, consulte novamente as chaves válidas e atualize a configuração de recebimento usada pelo sistema. Cada chamada de exclusão verifica primeiro o registro atual e a titularidade da chave. Repetir uma chamada após a exclusão da chave não garante o retorno da resposta de sucesso anterior. Se a resposta não for recebida ou o resultado for desconhecido, consulte as chaves válidas da conta antes de decidir se deve tentar novamente. <Badge color="blue" size="sm">Complementado · api-26-F08</Badge>
+
+## Permissões e titularidade da conta
+
+Use credenciais `ACCOUNT` para a conta vinculada a elas, ou credenciais `USER` com `X-ISPB` e `X-Account-Number` para uma conta ativa pertencente a esse `USER`. Com credenciais `ACCOUNT`, os dois headers da conta podem ser omitidos; se enviados, ambos devem estar preenchidos e corresponder à conta vinculada. Credenciais `PLATFORM` não são aceitas. <Badge color="orange" size="sm">Corrigido · api-26-F01</Badge> As requisições devem seguir as orientações de [Ambientes e credenciais](/pt-br/environments-and-credentials).
+
+## Parâmetros da requisição
+
+<ParamField body="pix_key" type="string" required>
+Valor de uma chave Pix existente pertencente à conta-alvo. Os espaços no início e no fim são removidos; um valor no formato de CNPJ é convertido para letras maiúsculas. O valor deve corresponder a um destes formatos: CPF, 11 dígitos; CNPJ, 12 letras ou dígitos seguidos de 2 dígitos; e-mail, no máximo 77 caracteres, conforme `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]\{2,\}$`; telefone, `+55` seguido de 10 ou 11 dígitos; ou EVP, UUID de 36 caracteres em hexadecimal com letras minúsculas. Valores ausentes ou compostos apenas por espaços retornam o code de negócio `4000`, com a mensagem em inglês `Field pix_key is required`. <Badge color="blue" size="sm">Complementado · api-26-F02</Badge>
+</ParamField>
+
+## Exemplo de requisição cURL
+
+O exemplo usa credenciais de nível `ACCOUNT` e opera na conta vinculada a elas, por isso omite `X-ISPB` e `X-Account-Number`. <Badge color="orange" size="sm">Corrigido · api-26-F11</Badge> Preencha os parâmetros reais e gere a assinatura com base no body.json final.
+
+## Campos da resposta
+
+Os caminhos dos campos partem da raiz da resposta. `[]` indica um elemento de array. Os valores monetários usam strings decimais. Os enums são interpretados conforme cada campo. A estrutura abaixo representa os dados de uma resposta de sucesso. Um valor nulo ou 0, por si só, não indica a conclusão da operação.
+
+<ResponseField name="code" type="integer">
+Código de resultado de negócio; 200 indica sucesso. Os erros de negócio são retornados neste campo, que não equivale ao código de status HTTP.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Descrição do resultado de negócio; em caso de falha, analise esta descrição junto com o campo code para identificar a causa.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Objeto de dados da resposta de sucesso; pode ser null em respostas de erro.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Horário da resposta, em timestamp Unix UTC em milissegundos.
+</ResponseField>
+
+<ResponseField name="data.pix_key" type="string">
+Valor da chave Pix.
+</ResponseField>
+
+<ResponseField name="data.deleted_at" type="integer">
+Timestamp retornado para a exclusão bem-sucedida, em milissegundos Unix UTC. Se a atualização de exclusão não informar um timestamp, será usado o horário de geração da resposta. O valor é diferente de zero em uma resposta de sucesso e não representa uma operação separada de desativação. <Badge color="orange" size="sm">Corrigido · api-26-F03</Badge>
+</ResponseField>
+
+## Respostas
+
+Consulte os exemplos de resposta pelo `code` de negócio no JSON. Verifique o status HTTP e o code de negócio separadamente. Um corpo JSON malformado pode retornar HTTP 400 com uma resposta em texto simples, em vez do formato JSON mostrado abaixo; trate respostas que não sejam JSON antes de ler `code`, `message` ou `data`. <Badge color="blue" size="sm">Complementado · api-26-F09</Badge> Uma resposta HTTP 200 também pode retornar um erro de negócio. <Badge color="orange" size="sm">Corrigido · api-26-F04</Badge>
+
+| `code` | Significado | Ação recomendada |
+| --- | --- | --- |
+| `200` | Requisição bem-sucedida | O campo externo `code` igual a `200` indica uma chamada de exclusão bem-sucedida. Leia `data.pix_key` e `data.deleted_at`, consulte novamente as chaves válidas da conta e atualize a configuração de recebimento. Esta resposta não retorna um campo separado de status de negócio. <Badge color="orange" size="sm">Corrigido · api-26-F07</Badge> |
+| `400` | Falha na requisição ou validação | Problema nos parâmetros. Verifique e corrija os parâmetros da requisição. |
+| `500` | Erro do sistema | Registre a resposta e confirme primeiro o resultado de negócio. |
+
+Os exemplos ilustram a estrutura da resposta. Esta resposta não retorna um campo separado de status de negócio. <Badge color="orange" size="sm">Corrigido · api-26-F07</Badge> Para outros erros de parâmetros, permissões e serviço, consulte [Catálogo de erros](/pt-br/api-reference/error-catalog). Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados.
+
+## Exemplo de acesso ao Sandbox
+
+Considere a resposta real como referência para os dados da transação ou do recurso, o status do processamento e as informações de erro.
+
+`X-Client-ID` usa a AK informada. O timestamp, o nonce, o hash do corpo da requisição e a assinatura são gerados automaticamente. A SK é usada apenas para assinar localmente, não é enviada na requisição nem armazenada. A visualização não envia a requisição; o botão de acesso envia uma requisição real. Se o resultado for desconhecido, consulte antes de tentar novamente. Não há novas tentativas automáticas. O acesso pelo navegador deve atender aos requisitos de CORS, IP e credenciais do Sandbox.
+
+<Tip>
+Para testar este endpoint, envie o exemplo de requisição para a Base URL do Sandbox `https://ebanking-openapi-sandbox.pagsmile.com.br` com sua AK/SK de Sandbox. Assine cada requisição conforme descrito em [Ambientes e credenciais](/pt-br/environments-and-credentials#assinatura-de-requisições-à-api).
+</Tip>
+
+
+<Accordion title="Correções em relação ao documento original (8)" icon="clipboard-check">
+Esta página foi conferida com o código-fonte da Pagsmile Open API em 2026-11-10. Cada alteração abaixo está marcada na página com um selo que mostra o seu ID.
+
+| ID | Alteração | Local | Texto do documento original | Texto atualizado |
+| --- | --- | --- | --- | --- |
+| api-26-F01 | Corrigido (não correspondia ao código) | Permissions and account ownership | ACCOUNT com o header da conta-alvo. | Use credenciais ACCOUNT para a conta vinculada a elas, ou credenciais USER com `X-ISPB` e `X-Account-Number` para uma conta ativa pertencente a esse USER. Com credenciais ACCOUNT, os dois headers da conta podem ser omitidos; se enviados, ambos devem estar preenchidos e corresponder à conta vinculada. Credenciais PLATFORM não são aceitas. |
+| api-26-F02 | Complementado (ausente no original) | Request parameters / pix_key description cell | Valor da chave Pix | Valor de uma chave Pix existente pertencente à conta-alvo. Os espaços no início e no fim são removidos; um valor no formato de CNPJ é convertido para letras maiúsculas. O valor deve corresponder a um destes formatos: CPF, 11 dígitos; CNPJ, 12 letras ou dígitos seguidos de 2 dígitos; e-mail, no máximo 77 caracteres, conforme `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]\{2,\}$`; telefone, `+55` seguido de 10 ou 11 dígitos; ou EVP, UUID de 36 caracteres em hexadecimal com letras minúsculas. Valores ausentes ou compostos apenas por espaços retornam o code de negócio `4000`, com a mensagem em inglês `Field pix_key is required`. |
+| api-26-F03 | Corrigido (não correspondia ao código) | Response fields | Data e hora da exclusão ou desativação, em timestamp Unix em milissegundos (UTC). Pode ser 0 se nenhuma delas tiver ocorrido ou se o horário não tiver sido informado. | Timestamp retornado para a exclusão bem-sucedida, em milissegundos Unix UTC. Se a atualização de exclusão não informar um timestamp, será usado o horário de geração da resposta. O valor é diferente de zero em uma resposta de sucesso e não representa uma operação separada de desativação. |
+| api-26-F04 | Corrigido (não correspondia ao código) | Responses / Request succeeded example | `{ "code": 200, "message": "success", "data": { "pix_key": "example-pix_key", "deleted_at": 0 }, "time": 1791792000000 }` | `{ "code": 200, "message": "success", "data": { "pix_key": "123e4567-e89b-12d3-a456-426614174000", "deleted_at": 1791792000000, "error": null, "result": null }, "time": 1791792000000 }` |
+| api-26-F07 | Corrigido (não correspondia ao código) | Responses / Recommended action for success | Leia data e avalie o resultado do processamento conforme o status de negócio deste endpoint. | O campo externo `code` igual a `200` indica uma chamada de exclusão bem-sucedida. Leia `data.pix_key` e `data.deleted_at`, consulte novamente as chaves válidas da conta e atualize a configuração de recebimento. Esta resposta não retorna um campo separado de status de negócio. |
+| api-26-F08 | Complementado (ausente no original) | Behavior and handling / append after deletion advice | Após a exclusão, consulte novamente as chaves válidas e atualize a configuração de recebimento usada pelo sistema. | Após a exclusão, consulte novamente as chaves válidas e atualize a configuração de recebimento usada pelo sistema. Cada chamada de exclusão verifica primeiro o registro atual e a titularidade da chave. Repetir uma chamada após a exclusão da chave não garante o retorno da resposta de sucesso anterior. Se a resposta não for recebida ou o resultado for desconhecido, consulte as chaves válidas da conta antes de decidir se deve tentar novamente. |
+| api-26-F09 | Complementado (ausente no original) | Responses / introductory paragraph | Verifique o status HTTP e o code de negócio separadamente. | Verifique o status HTTP e o code de negócio separadamente. Um corpo JSON malformado pode retornar HTTP 400 com uma resposta em texto simples, em vez do formato JSON mostrado abaixo; trate respostas que não sejam JSON antes de ler `code`, `message` ou `data`. |
+| api-26-F11 | Corrigido (não correspondia ao código) | cURL request example / introductory sentence | O exemplo usa credenciais de nível ACCOUNT. | O exemplo usa credenciais de nível ACCOUNT e opera na conta vinculada a elas, por isso omite `X-ISPB` e `X-Account-Number`. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "pix_key": "replace-with-own-pix-key"
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/pix_keys/delete' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${ACCOUNT_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Requisição bem-sucedida
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "pix_key": "123e4567-e89b-12d3-a456-426614174000",
+    "deleted_at": 1791792000000,
+    "error": null,
+    "result": null
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Falha na requisição ou validação
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 Erro do sistema
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

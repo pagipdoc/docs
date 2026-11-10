@@ -1,0 +1,133 @@
+---
+title: "Get refund status"
+description: "Query the current refund processing status to track the progress of a refund you initiated."
+api: "POST /v3/refunds/status/check"
+keywords: ["/v3/refunds/status/check"]
+---
+
+## Behavior and handling
+
+Query the current refund processing status to track a refund. The original payee account that sends the refund can query its recorded status. When the original payer account that receives the refund queries it, any refund that is not completed is reported as `5 TXN_STATUS_PROCESSING`, including a failed refund. That receiving-account query reports `2 TXN_STATUS_COMPLETED` only after completion is recorded. Therefore, `5` does not by itself prove that processing is still progressing or that the refund will succeed. Verify the final funds outcome against the refund details and statement entries. <Badge color="blue" size="sm">Added · api-7-F03</Badge>
+
+## Permissions and account ownership
+
+ACCOUNT credentials query only their bound account. If target headers are supplied, both `X-ISPB` and `X-Account-Number` must match that account. USER credentials must supply both headers for an active target account within their authorized ownership scope. PLATFORM credentials are not accepted. The target account must be either the original payee account that sends the refund or the original payer account that receives it. <Badge color="blue" size="sm">Added · api-7-F01</Badge> Requests must follow [Environments & Credentials](/environments-and-credentials).
+
+## Request parameters
+
+<ParamField body="refund_id" type="string" required>
+Refund identifier from `data.refund_id` in the successful response to [Initiate Pix refund](/api-reference/refunds/initiate-pix-refund) (`/v3/refunds/pix`)
+</ParamField>
+
+## cURL request example
+
+The example uses ACCOUNT-level credentials. Enter the actual parameters and generate the signature from the final body.json.
+
+## Response fields
+
+Field paths start at the response root. `[]` indicates an array element. Amounts use decimal strings. Enum values are defined separately for each field. The structure below describes a success response. A null value or 0 alone does not indicate that processing is complete.
+
+<ResponseField name="code" type="integer">
+Business result code. A value of 200 indicates success. Business errors are returned in this field. It is not the HTTP status code.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Business result description. On failure, use this with code to determine the cause.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Data object in a successful response. Can be null in an error response.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Response time as a UTC Unix timestamp in milliseconds.
+</ResponseField>
+
+<ResponseField name="data.refund_status" type="integer">
+Refund status. This field uses the shared transaction enum: `0 TXN_STATUS_UNSPECIFIED`; `1 TXN_STATUS_PENDING`; `2 TXN_STATUS_COMPLETED`; `3 TXN_STATUS_FAILED`; `4 TXN_STATUS_CANCELLED`; `5 TXN_STATUS_PROCESSING`; `6 TXN_STATUS_REFUNDED`; `7 TXN_STATUS_PARTIALLY_REFUNDED`; `8 TXN_STATUS_DISPUTED`. For this endpoint, refund states map to `1 PENDING`, `5 PROCESSING`, `2 COMPLETED`, or `3 FAILED`; `0` is the fallback for an unspecified state. Values `4`, `6`, `7`, and `8` are not returned for the refund lifecycle. A completed partial refund also has status `2 COMPLETED`; verify its amount in the refund details and statement entries. <Badge color="blue" size="sm">Added · api-7-F02</Badge>
+</ResponseField>
+
+## Responses
+
+View response examples by the business `code` in the JSON response. Check the HTTP status and business code separately. An HTTP 200 response can also return a business error. <Badge color="orange" size="sm">Corrected · api-7-F07</Badge>
+
+| `code` | Meaning | Recommended action |
+| --- | --- | --- |
+| `200` | Request succeeded | Read data and determine the result using the business status defined for this endpoint. For a non-final refund queried by the account that sends it, the query may refresh the recorded status. If that refresh cannot be completed but the recorded refund remains readable, the response can still have code `200` and contain the last recorded status. A successful query therefore does not guarantee that the latest bank status was obtained. Verify the final funds outcome against the refund details and statement entries. <Badge color="blue" size="sm">Added · api-7-F04</Badge> |
+| `400` | Request or validation failed | Parameter issue. Check and correct the request parameters. |
+| `500` | System error | Log the response and confirm the business result first. |
+
+The examples illustrate the response structure. Use the actual response for message and business status values. See [Error Catalog](/api-reference/error-catalog) for other parameter, permission, and service errors. This section does not imply that the endpoint returns only these three code values.
+
+For this endpoint, a missing or empty `refund_id` returns code `4000`. A refund that cannot be found returns code `4003003`; verify the refund identifier. A target account that is not a participant in the refund returns code `4004101`; verify account ownership and credentials. Code `4003014` can indicate that the refund record could not be read or that another operation is already processing it; it does not by itself mean the refund failed. A temporary service-call failure can return code `501`. Correct the identifier or account context where applicable, and query the existing refund again after a temporary failure without initiating a new refund. <Badge color="blue" size="sm">Added · api-7-F08</Badge>
+
+<Tip>
+To try this endpoint, send the request example to the Sandbox base URL `https://ebanking-openapi-sandbox.pagsmile.com.br` with your Sandbox AK/SK. Sign every request as described in [Environments & Credentials](/environments-and-credentials#api-request-signing).
+</Tip>
+
+
+<Accordion title="Corrections to the source document (6)" icon="clipboard-check">
+This page was checked against the Pagsmile Open API source code on 2026-11-10. Each change below is marked in the page with a badge that shows its ID.
+
+| ID | Change | Location | Source document text | Updated text |
+| --- | --- | --- | --- | --- |
+| api-7-F01 | Added (missing in the source) | Permissions and account ownership | ACCOUNT, or USER with the target account header. | ACCOUNT credentials query only their bound account. If target headers are supplied, both `X-ISPB` and `X-Account-Number` must match that account. USER credentials must supply both headers for an active target account within their authorized ownership scope. PLATFORM credentials are not accepted. The target account must be either the original payee account that sends the refund or the original payer account that receives it. |
+| api-7-F02 | Added (missing in the source) | Response fields | Refund status. Enum: 0 TXN_STATUS_UNSPECIFIED; 1 TXN_STATUS_PENDING; 2 TXN_STATUS_COMPLETED; 3 TXN_STATUS_FAILED; 4 TXN_STATUS_CANCELLED; 5 TXN_STATUS_PROCESSING; 6 TXN_STATUS_REFUNDED; 7 TXN_STATUS_PARTIALLY_REFUNDED; 8 TXN_STATUS_DISPUTED. | Refund status. This field uses the shared transaction enum: 0 TXN_STATUS_UNSPECIFIED; 1 TXN_STATUS_PENDING; 2 TXN_STATUS_COMPLETED; 3 TXN_STATUS_FAILED; 4 TXN_STATUS_CANCELLED; 5 TXN_STATUS_PROCESSING; 6 TXN_STATUS_REFUNDED; 7 TXN_STATUS_PARTIALLY_REFUNDED; 8 TXN_STATUS_DISPUTED. For this endpoint, refund states map to 1 PENDING, 5 PROCESSING, 2 COMPLETED, or 3 FAILED; 0 is the fallback for an unspecified state. Values 4, 6, 7, and 8 are not returned for the refund lifecycle. A completed partial refund also has status 2 COMPLETED; verify its amount in the refund details and statement entries. |
+| api-7-F03 | Added (missing in the source) | Behavior and handling | Query the current refund processing status to track the progress of a refund you initiated. Verify the final funds outcome against the refund details and statement entries. | Query the current refund processing status to track a refund. The original payee account that sends the refund can query its recorded status. When the original payer account that receives the refund queries it, any refund that is not completed is reported as 5 TXN_STATUS_PROCESSING, including a failed refund. That receiving-account query reports 2 TXN_STATUS_COMPLETED only after completion is recorded. Therefore, 5 does not by itself prove that processing is still progressing or that the refund will succeed. Verify the final funds outcome against the refund details and statement entries. |
+| api-7-F04 | Added (missing in the source) | Responses / Request succeeded / Recommended action | Read data and determine the result using the business status defined for this endpoint. | Read data and determine the result using the business status defined for this endpoint. For a non-final refund queried by the account that sends it, the query may refresh the recorded status. If that refresh cannot be completed but the recorded refund remains readable, the response can still have code 200 and contain the last recorded status. A successful query therefore does not guarantee that the latest bank status was obtained. Verify the final funds outcome against the refund details and statement entries. |
+| api-7-F07 | Corrected (did not match the code) | Responses / Request succeeded / JSON example | `{ "code": 200, "message": "success", "data": { "refund_status": 0 }, "time": 1791792000000 }` | `{ "code": 200, "message": "success", "data": { "refund_status": 0, "error": null, "result": null }, "time": 1791792000000 }` |
+| api-7-F08 | Added (missing in the source) | Responses / endpoint-specific errors after the general example disclaimer | This section does not imply that the endpoint returns only these three code values. | This section does not imply that the endpoint returns only these three code values. For this endpoint, a missing or empty `refund_id` returns code 4000. A refund that cannot be found returns code 4003003; verify the refund identifier. A target account that is not a participant in the refund returns code 4004101; verify account ownership and credentials. Code 4003014 can indicate that the refund record could not be read or that another operation is already processing it; it does not by itself mean the refund failed. A temporary service-call failure can return code 501. Correct the identifier or account context where applicable, and query the existing refund again after a temporary failure without initiating a new refund. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "refund_id": "replace-with-refund-id"
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/refunds/status/check' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${ACCOUNT_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Request succeeded
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "refund_status": 0,
+    "error": null,
+    "result": null
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Request or validation failed
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 System error
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

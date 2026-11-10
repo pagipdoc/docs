@@ -1,0 +1,167 @@
+---
+title: "Criar assinatura de eventos"
+description: "Configure a URL de callback para eventos de recebimento, pagamento e devolução."
+api: "POST /v3/webhooks/create"
+keywords: ["/v3/webhooks/create"]
+---
+
+## Funcionamento e tratamento
+
+Configure a URL de callback para eventos de recebimento, pagamento e devolução. Para a mesma identidade titular da assinatura de eventos, aplicação e tipo de evento, a criação de uma assinatura de eventos já ativa retorna o `code` de negócio `4001013`. As assinaturas de eventos `ACCOUNT` são identificadas pelo ISPB e pelo número da conta vinculada; as assinaturas de eventos `USER` são identificadas pelo `USER` e não variam conforme `account_number`; as assinaturas de eventos `PLATFORM` são identificadas pelo tenant da plataforma. Com credenciais `ACCOUNT` e `USER`, criar uma assinatura de eventos já inativa a reativa e substitui sua URL de callback, preservando `webhook_id` e o `created_at` original. Com credenciais `PLATFORM`, a criação retorna `4001013` mesmo que a assinatura de eventos existente esteja inativa; atualize a assinatura de eventos existente. <Badge color="blue" size="sm">Complementado · api-27-F06</Badge>
+
+Selecione primeiro o evento e o escopo da conta. Depois, configure a URL de callback. Consulte os tipos de evento e os escopos aplicáveis às credenciais na tabela de parâmetros.
+
+## Permissões e titularidade da conta
+
+A autorização depende da identidade titular da assinatura de eventos e do escopo. Neste endpoint, omita `X-ISPB` e `X-Account-Number` ao usar credenciais `USER` ou `PLATFORM`, inclusive cabeçalhos explicitamente vazios. Nas assinaturas de eventos de transações com credenciais `USER`, informe o `account_number` obrigatório no corpo JSON. <Badge color="blue" size="sm">Complementado · api-27-F03</Badge> Veja [Webhooks](/pt-br/api-reference/webhooks/overview). As requisições devem seguir as orientações de [Ambientes e credenciais](/pt-br/environments-and-credentials). Com credenciais `ACCOUNT`, não é possível criar ou reativar uma assinatura de eventos enquanto a conta vinculada estiver encerrada ou em processo de encerramento. <Badge color="blue" size="sm">Complementado · api-27-F04</Badge>
+
+## Parâmetros da requisição
+
+<ParamField body="event_type" type="integer" required>
+Tipos de evento de webhook: `1` `PIX_IN`; `2` `PIX_OUT`; `3` `REFUND_IN`; `4` `REFUND_OUT`; `5` `VA_ACCOUNT_KYB`; `6` `MASTER_ACCOUNT_KYB`. As credenciais `ACCOUNT` e `USER` podem usar os valores 1–5. As credenciais `PLATFORM` podem usar apenas o valor `6`. O valor `0` não é aceito na criação. <Badge color="blue" size="sm">Complementado · api-27-F01</Badge>
+</ParamField>
+
+<ParamField body="callback_url" type="string" required>
+URL de callback do webhook. Os espaços em branco no início e no fim são removidos; o valor não pode ficar vazio após essa remoção. Use seu endpoint HTTPS real de callback. A criação não confirma que a URL é acessível. <Badge color="blue" size="sm">Complementado · api-27-F05</Badge>
+</ParamField>
+
+<ParamField body="account_number" type="string">
+**Obrigatório:** Obrigatório sob condição. Remova primeiro os espaços em branco no início e no fim. Preserve os zeros à esquerda. O campo pode ser omitido com credenciais `ACCOUNT`; se informado, deve corresponder ao número da conta vinculada. É obrigatório ao usar credenciais `USER` para criar uma assinatura de eventos de transações. Nas assinaturas de eventos de transações com credenciais `USER`, este campo é exigido atualmente na validação da requisição, mas não cria uma assinatura de eventos específica para a conta: a assinatura de eventos é identificada pelo `USER`, pela aplicação e pelo tipo de evento. Omita este campo no evento `5` com credenciais `USER` e no evento `6` com credenciais `PLATFORM`; um valor não vazio é rejeitado. <Badge color="blue" size="sm">Complementado · api-27-F02</Badge>
+</ParamField>
+
+## Exemplo de requisição cURL
+
+O exemplo usa credenciais de nível ACCOUNT. Preencha os parâmetros reais e gere a assinatura com base no body.json final.
+
+## Campos da resposta
+
+Os caminhos dos campos partem da raiz da resposta. `[]` indica um elemento de array. Os valores monetários usam strings decimais. Os enums são interpretados conforme cada campo. A estrutura abaixo representa os dados de uma resposta de sucesso. Um valor nulo ou 0, por si só, não indica a conclusão da operação.
+
+<ResponseField name="code" type="integer">
+Código de resultado de negócio; 200 indica sucesso. Os erros de negócio são retornados neste campo, que não equivale ao código de status HTTP.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Descrição do resultado de negócio; em caso de falha, analise esta descrição junto com o campo code para identificar a causa.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Objeto de dados da resposta de sucesso; pode ser null em respostas de erro.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Horário da resposta, em timestamp Unix UTC em milissegundos.
+</ResponseField>
+
+<ResponseField name="data.webhook_id" type="string">
+ID da assinatura de eventos.
+</ResponseField>
+
+<ResponseField name="data.event_type" type="integer">
+Tipo de evento da assinatura de eventos ou da linha do tempo. Valores do enum: 0 WEBHOOK_EVENT_TYPE_UNSPECIFIED; 1 WEBHOOK_EVENT_TYPE_PIX_IN; 2 WEBHOOK_EVENT_TYPE_PIX_OUT; 3 WEBHOOK_EVENT_TYPE_REFUND_IN; 4 WEBHOOK_EVENT_TYPE_REFUND_OUT; 5 WEBHOOK_EVENT_TYPE_VA_ACCOUNT_KYB; 6 WEBHOOK_EVENT_TYPE_MASTER_ACCOUNT_KYB.
+</ResponseField>
+
+<ResponseField name="data.callback_url" type="string">
+Endereço para receber callbacks da assinatura de eventos.
+</ResponseField>
+
+<ResponseField name="data.status" type="integer">
+Status atual da assinatura de eventos. Valores: `0` `BASE_STATUS_UNSPECIFIED`; `1` `BASE_STATUS_ACTIVE`; `2` `BASE_STATUS_INACTIVE`. Uma criação ou reativação bem-sucedida retorna `1` `BASE_STATUS_ACTIVE`. <Badge color="blue" size="sm">Complementado · api-27-F07</Badge>
+</ResponseField>
+
+<ResponseField name="data.created_at" type="integer">
+Data e hora de criação, em timestamp Unix UTC em milissegundos. Uma nova assinatura de eventos retornada com sucesso já foi criada. A reativação de uma assinatura de eventos existente preserva seu timestamp original de criação. Um valor `0` não significa que a criação está pendente. <Badge color="orange" size="sm">Corrigido · api-27-F08</Badge>
+</ResponseField>
+
+## Respostas
+
+Consulte os exemplos de resposta pelo `code` de negócio no JSON. Verifique o status HTTP e o `code` de negócio separadamente. Um corpo JSON malformado pode retornar HTTP `400` com um erro em texto, em vez da estrutura JSON da resposta; verifique o tipo de conteúdo da resposta antes de interpretar o JSON. <Badge color="blue" size="sm">Complementado · api-27-F13</Badge> Uma resposta HTTP 200 também pode retornar um erro de negócio.
+
+| `code` | Significado | Ação recomendada |
+| --- | --- | --- |
+| `200` | Requisição bem-sucedida | Leia data e avalie o resultado do processamento conforme o status de negócio deste endpoint. |
+| `400` | Falha na requisição ou validação | Problema nos parâmetros. Verifique e corrija os parâmetros da requisição. |
+| `500` | Erro do sistema | Registre a resposta e confirme primeiro o resultado de negócio. |
+
+Os exemplos ilustram a estrutura da resposta. Os valores de message e do status de negócio devem ser obtidos da resposta efetiva. Para outros erros de parâmetros, permissões e serviço, consulte [Catálogo de erros](/pt-br/api-reference/error-catalog). Neste endpoint, os principais codes de negócio incluem `4000` para `event_type`, `callback_url` ou `account_number` obrigatório com credenciais `USER` ausente; `4004003` para incompatibilidade entre credenciais, evento e escopo da conta; `4010` para uma credencial de assinatura inválida na assinatura de eventos; `4001013` para conflito com uma assinatura de eventos existente; e `501` quando o serviço de assinaturas de eventos está indisponível. <Badge color="blue" size="sm">Complementado · api-27-F12</Badge> Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados. <Badge color="orange" size="sm">Corrigido · api-27-F11</Badge>
+
+<Tip>
+Para testar este endpoint, envie o exemplo de requisição para a Base URL do Sandbox `https://ebanking-openapi-sandbox.pagsmile.com.br` com sua AK/SK de Sandbox. Assine cada requisição conforme descrito em [Ambientes e credenciais](/pt-br/environments-and-credentials#assinatura-de-requisições-à-api).
+</Tip>
+
+
+<Accordion title="Correções em relação ao documento original (11)" icon="clipboard-check">
+Esta página foi conferida com o código-fonte da Pagsmile Open API em 2026-11-10. Cada alteração abaixo está marcada na página com um selo que mostra o seu ID.
+
+| ID | Alteração | Local | Texto do documento original | Texto atualizado |
+| --- | --- | --- | --- | --- |
+| api-27-F01 | Complementado (ausente no original) | Request parameters | Tipos de evento de webhook: 1 PIX_IN; 2 PIX_OUT; 3 REFUND_IN; 4 REFUND_OUT. | Tipos de evento de webhook: 1 PIX_IN; 2 PIX_OUT; 3 REFUND_IN; 4 REFUND_OUT; 5 VA_ACCOUNT_KYB; 6 MASTER_ACCOUNT_KYB. As credenciais ACCOUNT e USER podem usar os valores 1–5. As credenciais PLATFORM podem usar apenas o valor 6. O valor 0 não é aceito na criação. |
+| api-27-F02 | Complementado (ausente no original) | Request parameters | Remova primeiro os espaços em branco no início e no fim. Preserve os zeros à esquerda. O campo pode ser omitido com credenciais ACCOUNT. Se informado, deve corresponder ao número da conta vinculada. É obrigatório ao usar credenciais USER para criar uma assinatura de eventos de transações. | Remova primeiro os espaços em branco no início e no fim. Preserve os zeros à esquerda. O campo pode ser omitido com credenciais ACCOUNT; se informado, deve corresponder ao número da conta vinculada. É obrigatório ao usar credenciais USER para criar uma assinatura de eventos de transações. Nas assinaturas de eventos de transações com credenciais USER, este campo é exigido atualmente na validação da requisição, mas não cria uma assinatura de eventos específica para a conta: a assinatura de eventos é identificada pelo USER, pela aplicação e pelo tipo de evento. Omita este campo no evento 5 com credenciais USER e no evento 6 com credenciais PLATFORM; um valor não vazio é rejeitado. |
+| api-27-F03 | Complementado (ausente no original) | Permissions and account ownership | A autorização depende da identidade titular da assinatura de eventos e do escopo. | A autorização depende da identidade titular da assinatura de eventos e do escopo. Neste endpoint, omita X-ISPB e X-Account-Number ao usar credenciais USER ou PLATFORM, inclusive cabeçalhos explicitamente vazios. Nas assinaturas de eventos de transações com credenciais USER, informe o account_number obrigatório no corpo JSON. |
+| api-27-F04 | Complementado (ausente no original) | Permissions and account ownership | As requisições devem seguir as orientações de Ambientes e credenciais. | As requisições devem seguir as orientações de Ambientes e credenciais. Com credenciais ACCOUNT, não é possível criar ou reativar uma assinatura de eventos enquanto a conta vinculada estiver encerrada ou em processo de encerramento. |
+| api-27-F05 | Complementado (ausente no original) | Request parameters | URL de callback do webhook | URL de callback do webhook. Os espaços em branco no início e no fim são removidos; o valor não pode ficar vazio após essa remoção. Use seu endpoint HTTPS real de callback. A criação não confirma que a URL é acessível. |
+| api-27-F06 | Complementado (ausente no original) | Behavior and handling | Configure a URL de callback para eventos de recebimento, pagamento e devolução. | Configure a URL de callback para eventos de recebimento, pagamento e devolução. Para a mesma identidade titular da assinatura de eventos, aplicação e tipo de evento, a criação de uma assinatura de eventos já ativa retorna o code de negócio 4001013. As assinaturas de eventos ACCOUNT são identificadas pelo ISPB e pelo número da conta vinculada; as assinaturas de eventos USER são identificadas pelo USER e não variam conforme account_number; as assinaturas de eventos PLATFORM são identificadas pelo tenant da plataforma. Com credenciais ACCOUNT e USER, criar uma assinatura de eventos já inativa a reativa e substitui sua URL de callback, preservando webhook_id e o created_at original. Com credenciais PLATFORM, a criação retorna 4001013 mesmo que a assinatura de eventos existente esteja inativa; atualize a assinatura de eventos existente. |
+| api-27-F07 | Complementado (ausente no original) | Response fields | Status de negócio atual, interpretado conforme o enum listado para este campo. Valores: 0 BASE_STATUS_UNSPECIFIED; 1 BASE_STATUS_ACTIVE; 2 BASE_STATUS_INACTIVE. | Status atual da assinatura de eventos. Valores: 0 BASE_STATUS_UNSPECIFIED; 1 BASE_STATUS_ACTIVE; 2 BASE_STATUS_INACTIVE. Uma criação ou reativação bem-sucedida retorna 1 BASE_STATUS_ACTIVE. |
+| api-27-F08 | Corrigido (não correspondia ao código) | Response fields | Data e hora de criação, em timestamp Unix UTC em milissegundos. Pode ser 0 se a criação não ocorreu ou se a data e hora não foram informadas. | Data e hora de criação, em timestamp Unix UTC em milissegundos. Uma nova assinatura de eventos retornada com sucesso já foi criada. A reativação de uma assinatura de eventos existente preserva seu timestamp original de criação. Um valor 0 não significa que a criação está pendente. |
+| api-27-F11 | Corrigido (não correspondia ao código) | Responses / Request succeeded | `{ "code": 200, "message": "success", "data": { "webhook_id": "example-webhook_id", "event_type": 1, "callback_url": "example-callback_url", "status": 0, "created_at": 0 }, "time": 1791792000000 }` | `{ "code": 200, "message": "success", "data": { "webhook_id": "example-webhook_id", "event_type": 1, "callback_url": "https://merchant.example.test/webhooks", "status": 1, "created_at": 1791792000000, "error": null, "result": null }, "time": 1791792000000 }` |
+| api-27-F12 | Complementado (ausente no original) | Responses | Para outros erros de parâmetros, permissões e serviço, consulte Catálogo de erros. | Para outros erros de parâmetros, permissões e serviço, consulte Catálogo de erros. Neste endpoint, os principais codes de negócio incluem 4000 para event_type, callback_url ou account_number obrigatório com credenciais USER ausente; 4004003 para incompatibilidade entre credenciais, evento e escopo da conta; 4010 para uma credencial de assinatura inválida na assinatura de eventos; 4001013 para conflito com uma assinatura de eventos existente; e 501 quando o serviço de assinaturas de eventos está indisponível. |
+| api-27-F13 | Complementado (ausente no original) | Responses | Verifique o status HTTP e o code de negócio separadamente. | Verifique o status HTTP e o code de negócio separadamente. Um corpo JSON malformado pode retornar HTTP 400 com um erro em texto, em vez da estrutura JSON da resposta; verifique o tipo de conteúdo da resposta antes de interpretar o JSON. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "event_type": 1,
+  "callback_url": "https://merchant.example.test/webhooks"
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/webhooks/create' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${ACCOUNT_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Requisição bem-sucedida
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "webhook_id": "example-webhook_id",
+    "event_type": 1,
+    "callback_url": "https://merchant.example.test/webhooks",
+    "status": 1,
+    "created_at": 1791792000000,
+    "error": null,
+    "result": null
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Falha na requisição ou validação
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 Erro do sistema
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

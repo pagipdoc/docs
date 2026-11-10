@@ -1,0 +1,1417 @@
+---
+title: "Criar conta de pagamento PA"
+description: "Crie uma conta de pagamento PA para pessoa física (CPF) ou pessoa jurídica (CNPJ)."
+api: "POST /v3/onboarding/managed_accounts/create"
+keywords: ["/v3/onboarding/managed_accounts/create"]
+---
+
+## Funcionamento e tratamento
+
+Crie uma conta de pagamento PA para pessoa física (CPF) ou pessoa jurídica (CNPJ). Defina como conta superior a MA à qual ela pertence ou uma VA vinculada a essa MA.
+
+## Permissões e titularidade da conta
+
+Use as credenciais USER do usuário titular da MA superior. Não inclua o header da conta bancária. O usuário titular deve ter a funcionalidade de contas gerenciadas habilitada e possuir exatamente uma MA válida com status ACTIVE. As requisições devem seguir as orientações de [Ambientes e credenciais](/pt-br/environments-and-credentials).
+
+Para PA, é obrigatório enviar linked_account em todas as modalidades de conformidade. A conta superior selecionada deve estar com status ACTIVE e atender aos requisitos de titularidade da conta. A tarifa configurada de abertura de conta é cobrada em BRL dessa conta superior direta após a criação da sessão de verificação e antes da aceitação da solicitação de criação da conta. Solicitantes com CPF usam a tarifa de KYC e solicitantes com CNPJ usam a tarifa de KYB. A conta superior deve ter saldo disponível suficiente. Se o resultado da cobrança for desconhecido, tente novamente com o mesmo `reference_id`; não crie uma nova solicitação apenas porque não recebeu resposta. <Badge color="blue" size="sm">Complementado · create-pa-F19</Badge>
+
+A conta superior selecionada deve estar com status ACTIVE e atender aos requisitos de titularidade da conta. A conta bancária vinculada à conta superior também deve estar ACTIVE e não pode ter encerramento em andamento. Quando a conta superior é uma VA, tanto ela quanto sua MA titular devem ter vínculos válidos com contas bancárias ativas. <Badge color="blue" size="sm">Complementado · create-pa-F22</Badge>
+
+## Parâmetros da requisição
+
+PA aceita as formas de envio de dados de conformidade abaixo. Selecione a forma de envio dos dados e o solicitante da abertura da conta para ver os parâmetros e exemplos.
+
+**Modalidade de onboarding da conta**
+
+- mode1: Link hospedado (cliente complementa os dados pelo link de análise)
+- mode2: Envio via API (enviar dados detalhados na requisição)
+
+**Solicitante da abertura da conta**
+
+- Pessoa jurídica (CNPJ)
+- Pessoa física (CPF)
+
+Os tipos de solicitante aceitos dependem da configuração habilitada. Os dados de referência do cliente são um complemento opcional no envio via API. A conta superior da PA não é uma modalidade de onboarding da conta e é sempre obrigatória.
+
+<ParamField body="reference_id" type="string" required>
+Não deve ficar vazio após a remoção dos espaços em branco no início e no fim. Deve ser gerado e salvo pelo integrador; o código não exige o formato UUID. Se precisar repetir a mesma solicitação de abertura de conta por motivos técnicos, mantenha o valor inalterado. Em uma nova tentativa, mantenha o usuário titular, `linked_account`, `model`, `compliance_mode`, o tipo de documento e CPF/CNPJ do solicitante, `trading_name` e `notification_email` inalterados. Reutilizar `reference_id` com dados incompatíveis pode causar falha; `reference_id` não é uma operação de atualização. <Badge color="blue" size="sm">Complementado · create-pa-F17</Badge>
+</ParamField>
+
+<ParamField body="model" type="integer" required>
+Fixo em 3 (PA)
+</ParamField>
+
+<ParamField body="compliance_mode" type="integer" required>
+mode1: Link hospedado; mode2: Envio via API: CPF/CNPJ
+</ParamField>
+
+<ParamField body="compliance_payload" type="object" required>
+Dados do solicitante da abertura da conta; consulte os campos básicos nesta tabela. No modo 2, os dados pessoais, os dados da empresa e os dados de referência do cliente ficam aninhados neste objeto.
+</ParamField>
+
+<ParamField body="compliance_payload.document_type" type="integer" required>
+↳ Para VA, o valor é fixo em `2` (pessoa jurídica, CNPJ); para PA, pode ser `1` (pessoa física, CPF) ou `2` (pessoa jurídica, CNPJ)
+</ParamField>
+
+<ParamField body="compliance_payload.tax_id" type="string" required>
+↳ CPF: 11 dígitos, expressão regular `^\d{11}$`. CNPJ: os primeiros 12 caracteres são letras ou dígitos e os 2 últimos são dígitos, expressão regular `^[0-9A-Z]{12}\d{2}$`; o código é convertido para maiúsculas. Os espaços em branco no início e no fim são removidos. Pontuação e espaços internos não são aceitos. Apenas o formato é validado aqui, o que não significa que a autenticidade do CPF ou CNPJ ou seus dígitos verificadores tenham sido validados
+</ParamField>
+
+<ParamField body="compliance_payload.legal_name" type="string" required>
+↳ Nome da pessoa física ou razão social da empresa; não deve ficar vazio após a remoção dos espaços em branco no início e no fim
+</ParamField>
+
+<ParamField body="trading_name" type="string">
+Nome fantasia usado publicamente
+</ParamField>
+
+<ParamField body="notification_email" type="string">
+E-mail para notificações; a camada da Open API não valida o formato do e-mail atualmente. Remova os espaços em branco no início e no fim antes do envio
+</ParamField>
+
+Os dados exigidos pela modalidade de onboarding da conta selecionada são exibidos abaixo. Os dados básicos do solicitante pertencem a compliance_payload. Na modalidade de link hospedado, return_url é um campo de nível superior do corpo da requisição.
+
+<Accordion title="mode1: Link hospedado · campo de nível superior: return_url" id="managed-hosted-pa">
+Envie os dados básicos do solicitante e a URL de retorno. Depois, complemente os dados pelo link de análise retornado. Não é necessário preencher novamente os dados detalhados da pessoa física ou da empresa na requisição.
+
+<ParamField body="return_url" type="string">
+**Obrigatório:** Obrigatório no modo 1. Não deve ficar vazio após a remoção dos espaços em branco no início e no fim. A camada da Open API não valida atualmente o formato da URL nem o protocolo HTTPS. A URL deve atender aos requisitos do serviço de análise de destino
+</ParamField>
+</Accordion>
+
+<Accordion title="mode2: Envio de dados pessoais via API (CPF) · compliance_payload.user_data" id="managed-personal-pa">
+Usado apenas para PA com pessoa física (CPF) na modalidade de envio via API. Na tabela, "Sim" indica um campo obrigatório. "Conforme os requisitos do modelo de análise" indica que o endpoint não exige o campo em todos os casos, mas a análise pode exigir seu envio. Use os formatos de data e imagem definidos pelo modelo.
+
+<ParamField body="compliance_payload.user_data" type="object">
+↳ **Obrigatório:** Obrigatório no modo 2 para CPF. Dados pessoais detalhados; os campos marcados como "Sim" abaixo não devem ficar vazios após a remoção dos espaços em branco no início e no fim. Forneça os demais campos conforme os requisitos do modelo de análise
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.name" type="object" required>
+Nome; inclui os subcampos obrigatórios abaixo
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.name.first_name" type="string" required>
+Primeiro nome; não deve ficar vazio após a remoção dos espaços em branco no início e no fim
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.name.middle_name" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Nome do meio
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.name.last_name" type="string" required>
+Sobrenome; não deve ficar vazio após a remoção dos espaços em branco no início e no fim
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.date_of_birth" type="string" required>
+Data de nascimento; não deve ficar vazia após a remoção dos espaços em branco no início e no fim. String; a Open API não valida atualmente o formato da data. Preencha conforme o modelo de verificação utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.identity" type="object" required>
+Dados do documento de identificação; incluem os subcampos obrigatórios abaixo
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.identity.country_code" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Código do país
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.identity.document_type" type="string" required>
+Tipo de documento; não deve ficar vazio após a remoção dos espaços em branco no início e no fim. Campo do tipo string; informe um tipo de documento aceito pelo modelo de verificação utilizado. Não substitua pelo enum inteiro de nível superior
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.identity.document_front" type="string" required>
+Dados da imagem da frente do documento; não devem ficar vazios após a remoção dos espaços em branco no início e no fim. Forneça o conteúdo da imagem conforme o modelo de verificação. Atualmente, o endpoint verifica apenas se o valor obrigatório não está vazio, sem exigir o formato de URL em todos os casos
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.identity.document_back" type="string" required>
+Dados da imagem do verso do documento; o valor não deve ficar vazio após a remoção dos espaços em branco no início e no fim. Forneça o conteúdo da imagem conforme o modelo de verificação. Atualmente, o endpoint verifica apenas se o valor obrigatório não está vazio, sem exigir um formato de URL em todos os casos
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.address" type="object">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Objeto de endereço
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.address.full_address" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Texto do endereço completo
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.address.address_street_1" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Primeira linha do endereço
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.address.address_street_2" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Segunda linha do endereço
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.address.address_city" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Cidade
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.address.address_state" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Estado/província
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.address.address_zip_code" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Código postal
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.address.address_country" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. País do endereço
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.selfie" type="string" required>
+Dados da imagem da selfie; o valor não deve ficar vazio após a remoção dos espaços em branco no início e no fim. Forneça o conteúdo da imagem conforme o modelo de verificação. Atualmente, o endpoint verifica apenas se o valor obrigatório não está vazio, sem exigir um formato de URL em todos os casos
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.address_proof_document" type="string" required>
+Dados da imagem do comprovante de endereço; o valor não deve ficar vazio após a remoção dos espaços em branco no início e no fim. Forneça o conteúdo da imagem conforme o modelo de verificação. Atualmente, o endpoint verifica apenas se o valor obrigatório não está vazio, sem exigir um formato de URL em todos os casos
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.additional_fields" type="object[]">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Item de dados adicionais; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.additional_fields[].key" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Nome da chave dos dados adicionais. Os espaços em branco no início e no fim são removidos. Um item com chave vazia não é enviado. As chaves não vazias são enviadas com os dados adicionais correspondentes. <Badge color="blue" size="sm">Complementado · create-pa-F13</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.additional_fields[].label" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Nome de exibição dos dados adicionais; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.additional_fields[].answer_type" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Tipo de resposta dos dados adicionais; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.additional_fields[].string_value" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Resposta de texto única; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.additional_fields[].string_values" type="string[]">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Múltiplas respostas de texto; array de strings. Não use uma única string com valores separados por vírgulas. Preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.additional_fields[].file" type="object">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Conteúdo do arquivo; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.additional_fields[].file.file" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Conteúdo do arquivo; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.additional_fields[].file.file_name" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Nome do arquivo; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.additional_fields[].file.content_type" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Tipo MIME do arquivo; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.additional_fields[].files" type="object[]">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Lista de arquivos; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.additional_fields[].files[].file" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Conteúdo do arquivo; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.additional_fields[].files[].file_name" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Nome do arquivo; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.additional_fields[].files[].content_type" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Tipo MIME do arquivo; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.additional_fields[].metadata" type="object">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Mapa de chaves e valores dos metadados dos dados adicionais; objeto JSON com chaves e valores do tipo string. Preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+</Accordion>
+
+<Accordion title="mode2: Enviar dados da empresa via API (CNPJ) · compliance_payload.business_data" id="managed-business-pa">
+Use apenas no modo de envio via API para este tipo de pessoa ou empresa. Na tabela, "Sim" indica um campo obrigatório. "Conforme os requisitos do modelo de análise" indica que o endpoint não exige o campo em todos os casos, mas a análise pode exigir seu envio. Use os formatos de data e imagem definidos pelo modelo utilizado.
+
+<ParamField body="compliance_payload.business_data" type="object">
+↳ **Obrigatório:** Obrigatório no modo 2 para CNPJ. Dados detalhados da empresa; o endpoint exige que o nome fantasia não esteja vazio. Forneça os demais campos conforme os requisitos do modelo de análise utilizado. Não considere a análise concluída apenas com base no nome fantasia. `entity_type`, `business_model`, `business_industries`, `platform_url` e `additional_fields` (incluindo todos os seus subcampos) são aceitos, mas não são enviados para a verificação da empresa por este endpoint. Não dependa desses campos para atender aos requisitos de verificação. <Badge color="blue" size="sm">Complementado · create-pa-F07</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.trading_name" type="string" required>
+Nome fantasia; não deve ficar vazio após a remoção dos espaços em branco no início e no fim
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.address" type="object">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Objeto de endereço
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.address.full_address" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Texto do endereço completo
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.address.address_street_1" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Primeira linha do endereço
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.address.address_street_2" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Segunda linha do endereço
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.address.address_city" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Cidade
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.address.address_state" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Estado/província
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.address.address_zip_code" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Código postal
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.address.address_country" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. País do endereço
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.ubo_list" type="object[]">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Beneficiários finais. `document_type` e `tax_id` são aceitos, mas não são enviados para a verificação da empresa. Um item também não é enviado quando `name`, `birth_date` e `address` estiverem todos vazios após a remoção dos espaços em branco. O percentual de participação, isoladamente, não torna o item apto para envio. <Badge color="blue" size="sm">Complementado · create-pa-F03</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.ubo_list[].name" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Nome
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.ubo_list[].document_type" type="integer">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Tipo de documento; 1 (pessoa física, CPF), 2 (pessoa jurídica, CNPJ); não implica validação da autenticidade do CPF/CNPJ
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.ubo_list[].tax_id" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. CPF/CNPJ da pessoa ou empresa
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.ubo_list[].ownership_percentage" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Percentual de participação societária; string JSON. Informe o percentual de participação como um valor numérico que possa ser interpretado e a quantidade de ações como um inteiro. O valor pode ser omitido se a conversão no serviço de destino falhar. Não deve ser considerado um percentual válido já enviado nem uma quantidade de ações válida já enviada
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.ubo_list[].birth_date" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Data de nascimento; string. A Open API ainda não valida o formato da data. Preencha conforme o modelo de verificação utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.ubo_list[].address" type="object">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Objeto de endereço
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.ubo_list[].address.full_address" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Texto do endereço completo
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.ubo_list[].address.address_street_1" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Primeira linha do endereço
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.ubo_list[].address.address_street_2" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Segunda linha do endereço
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.ubo_list[].address.address_city" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Cidade
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.ubo_list[].address.address_state" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Estado/província
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.ubo_list[].address.address_zip_code" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Código postal
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.ubo_list[].address.address_country" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. País do endereço
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.website" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Site da empresa
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.country_code" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Código do país
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.formation_date" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Data de constituição da empresa; string. A Open API ainda não valida o formato da data. Preencha conforme o modelo de verificação utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.phone_numbers" type="string[]">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Lista de números de telefone; array de strings. Não use uma única string com valores separados por vírgulas
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.email_addresses" type="string[]">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Lista de e-mails; array de strings. Não use uma única string com valores separados por vírgulas
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.state_code" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Código do estado/província
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_entity_id" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Identificador de registro da empresa
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers" type="object[]">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Administradores e pessoas relacionadas. `document_type`, `tax_id`, `identity` e todos os subcampos de `identity` são aceitos, mas não são enviados para a verificação da empresa. Um item não é enviado quando `first_name`, `middle_name`, `last_name`, `birth_date`, `email`, `phone_number` e `address` estiverem todos vazios após a remoção dos espaços em branco. Dados de participação, ações, papéis ou dados adicionais, isoladamente, não tornam o item apto para envio. <Badge color="blue" size="sm">Complementado · create-pa-F04</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].first_name" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Primeiro nome
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].middle_name" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Nome do meio
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].last_name" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Sobrenome
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].birth_date" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Data de nascimento; string. A Open API ainda não valida o formato da data. Preencha conforme o modelo de verificação utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].ownership_percentage" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Percentual de participação societária; string JSON. Informe o percentual de participação como um valor numérico que possa ser interpretado e a quantidade de ações como um inteiro. O valor pode ser omitido se a conversão no serviço de destino falhar. Não deve ser considerado um percentual válido já enviado nem uma quantidade de ações válida já enviada
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].shares_allocated" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Quantidade de ações atribuídas; string JSON. Informe o percentual de participação como um valor numérico que possa ser interpretado e a quantidade de ações como um inteiro. O valor pode ser omitido se a conversão no serviço de destino falhar. Não deve ser considerado um percentual válido já enviado nem uma quantidade de ações válida já enviada
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].roles" type="string[]">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Lista de papéis; array de strings. Não use uma única string com valores separados por vírgulas
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].email" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. E-mail
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].phone_number" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Número de telefone
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].address" type="object">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Objeto de endereço
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].address.full_address" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Texto do endereço completo
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].address.address_street_1" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Primeira linha do endereço
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].address.address_street_2" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Segunda linha do endereço
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].address.address_city" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Cidade
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].address.address_state" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Estado/província
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].address.address_zip_code" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Código postal
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].address.address_country" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. País do endereço
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].document_type" type="integer">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Tipo de documento; 1 (pessoa física, CPF), 2 (pessoa jurídica, CNPJ); não implica validação da autenticidade do CPF/CNPJ
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].tax_id" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. CPF/CNPJ da pessoa ou empresa
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].identity" type="object">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Dados do documento de identificação
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].identity.country_code" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Código do país
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].identity.document_type" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Tipo de documento; string. Informe um tipo de documento aceito pelo modelo de verificação utilizado. Não use um valor inteiro do enum de nível superior como substituto
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].identity.tax_id" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. CPF/CNPJ da pessoa ou empresa
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].identity.document_front" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Dados da imagem da frente do documento. Este campo opcional não é validado como não vazio e não é enviado para a verificação da empresa por este endpoint. Não dependa dele para fornecer o documento de identificação de um administrador. <Badge color="orange" size="sm">Corrigido · create-pa-F01</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].identity.document_back" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Dados da imagem da verso do documento. Este campo opcional não é validado como não vazio e não é enviado para a verificação da empresa por este endpoint. Não dependa dele para fornecer o documento de identificação de um administrador. <Badge color="orange" size="sm">Corrigido · create-pa-F02</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].additional_fields" type="object[]">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Item de dados adicionais; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].additional_fields[].key" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Nome da chave dos dados adicionais. Os espaços em branco no início e no fim são removidos. Um item com chave vazia não é enviado. Quando uma chave se repete, o último item substitui os anteriores. <Badge color="blue" size="sm">Complementado · create-pa-F14</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].additional_fields[].label" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Nome de exibição dos dados adicionais; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].additional_fields[].answer_type" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Tipo de resposta dos dados adicionais; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].additional_fields[].string_value" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Resposta de texto única; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].additional_fields[].string_values" type="string[]">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Múltiplas respostas de texto; array de strings. Não use uma única string com valores separados por vírgulas. Preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].additional_fields[].file" type="object">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Conteúdo do arquivo; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].additional_fields[].file.file" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Conteúdo do arquivo; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].additional_fields[].file.file_name" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Nome do arquivo; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].additional_fields[].file.content_type" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Tipo MIME do arquivo; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].additional_fields[].files" type="object[]">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Lista de arquivos; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].additional_fields[].files[].file" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Conteúdo do arquivo; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].additional_fields[].files[].file_name" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Nome do arquivo; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].additional_fields[].files[].content_type" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Tipo MIME do arquivo; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].additional_fields[].metadata" type="object">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Mapa de chaves e valores dos metadados dos dados adicionais; objeto JSON com chaves e valores do tipo string. Preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies" type="object[]">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Lista de empresas relacionadas. `relationship_type` e `reference_id` são aceitos, mas não são enviados para a verificação da empresa por este endpoint. Não dependa desses campos para descrever ou identificar o vínculo na solicitação de verificação. <Badge color="blue" size="sm">Complementado · create-pa-F05</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].name" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Nome
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].trading_name" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Nome fantasia
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].tax_identification_number" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Número de inscrição fiscal
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].website" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Site da empresa
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].formation_date" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Data de constituição da empresa; string. A Open API ainda não valida o formato da data. Preencha conforme o modelo de verificação utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].country_code" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Código do país
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].state_code" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Código do estado/província
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].business_entity_id" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Identificador de registro da empresa
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].addresses" type="object[]">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Lista de endereços
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].addresses[].full_address" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Texto do endereço completo
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].addresses[].address_street_1" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Primeira linha do endereço
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].addresses[].address_street_2" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Segunda linha do endereço
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].addresses[].address_city" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Cidade
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].addresses[].address_state" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Estado/província
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].addresses[].address_zip_code" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Código postal
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].addresses[].address_country" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. País do endereço
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].phone_numbers" type="string[]">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Lista de números de telefone; array de strings. Não use uma única string com valores separados por vírgulas
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].email_addresses" type="string[]">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Lista de e-mails; array de strings. Não use uma única string com valores separados por vírgulas
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].ownership_percentage" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Percentual de participação societária; string JSON. Informe o percentual de participação como um valor numérico que possa ser interpretado e a quantidade de ações como um inteiro. O valor pode ser omitido se a conversão no serviço de destino falhar. Não deve ser considerado um percentual válido já enviado nem uma quantidade de ações válida já enviada
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].shares_allocated" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Quantidade de ações atribuídas; string JSON. Informe o percentual de participação como um valor numérico que possa ser interpretado e a quantidade de ações como um inteiro. O valor pode ser omitido se a conversão no serviço de destino falhar. Não deve ser considerado um percentual válido já enviado nem uma quantidade de ações válida já enviada
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].relationship_type" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Tipo de vínculo entre empresas
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].roles" type="string[]">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Lista de papéis; array de strings. Não use uma única string com valores separados por vírgulas
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].reference_id" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Identificador do negócio associado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].additional_fields" type="object[]">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Item de dados adicionais; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].additional_fields[].key" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Nome da chave dos dados adicionais. Os espaços em branco no início e no fim são removidos. Um item com chave vazia não é enviado. Quando uma chave se repete, o último item substitui os anteriores. <Badge color="blue" size="sm">Complementado · create-pa-F15</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].additional_fields[].label" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Nome de exibição dos dados adicionais; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].additional_fields[].answer_type" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Tipo de resposta dos dados adicionais; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].additional_fields[].string_value" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Resposta de texto única; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].additional_fields[].string_values" type="string[]">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Múltiplas respostas de texto; array de strings. Não use uma única string com valores separados por vírgulas. Preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].additional_fields[].file" type="object">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Conteúdo do arquivo; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].additional_fields[].file.file" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Conteúdo do arquivo; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].additional_fields[].file.file_name" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Nome do arquivo; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].additional_fields[].file.content_type" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Tipo MIME do arquivo; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].additional_fields[].files" type="object[]">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Lista de arquivos; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].additional_fields[].files[].file" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Conteúdo do arquivo; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].additional_fields[].files[].file_name" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Nome do arquivo; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].additional_fields[].files[].content_type" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Tipo MIME do arquivo; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].additional_fields[].metadata" type="object">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Mapa de chaves e valores dos metadados dos dados adicionais; objeto JSON com chaves e valores do tipo string. Preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_documents" type="object[]">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Documentos da empresa
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_documents[].document_type" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Tipo de documento; string. Informe um tipo de documento aceito pelo modelo de verificação utilizado. Não use um valor inteiro do enum de nível superior como substituto
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_documents[].file" type="string">
+**Obrigatório:** Obrigatório ao enviar este item de arquivo. Conteúdo do documento da empresa em Base64 padrão; pode incluir o prefixo data:…;base64,. O tamanho após a decodificação deve ser de no máximo 50 MiB. Não informe a URL do arquivo
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_documents[].file_name" type="string">
+**Obrigatório:** Obrigatório ao enviar este item de arquivo. Nome do arquivo; não deve ficar vazio após a remoção dos espaços em branco no início e no fim
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_documents[].content_type" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Tipo MIME do arquivo; o mapeamento atual dos documentos da empresa não envia este campo. Ele não pode substituir o conteúdo nem o nome do arquivo
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_documents[].additional_fields" type="object[]">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Item de dados adicionais; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado. Este campo e todos os seus subcampos são aceitos na requisição, mas não são enviados para a verificação da empresa por este endpoint. Não dependa dele para atender aos requisitos de verificação. <Badge color="blue" size="sm">Complementado · create-pa-F06</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_documents[].additional_fields[].key" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Nome da chave dos dados de referência/adicionais; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado. Este campo e todos os seus subcampos são aceitos na requisição, mas não são enviados para a verificação da empresa por este endpoint. Não dependa dele para atender aos requisitos de verificação. <Badge color="blue" size="sm">Complementado · create-pa-F06</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_documents[].additional_fields[].label" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Nome de exibição dos dados adicionais; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado. Este campo e todos os seus subcampos são aceitos na requisição, mas não são enviados para a verificação da empresa por este endpoint. Não dependa dele para atender aos requisitos de verificação. <Badge color="blue" size="sm">Complementado · create-pa-F06</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_documents[].additional_fields[].answer_type" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Tipo de resposta dos dados adicionais; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado. Este campo e todos os seus subcampos são aceitos na requisição, mas não são enviados para a verificação da empresa por este endpoint. Não dependa dele para atender aos requisitos de verificação. <Badge color="blue" size="sm">Complementado · create-pa-F06</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_documents[].additional_fields[].string_value" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Resposta de texto única; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado. Este campo e todos os seus subcampos são aceitos na requisição, mas não são enviados para a verificação da empresa por este endpoint. Não dependa dele para atender aos requisitos de verificação. <Badge color="blue" size="sm">Complementado · create-pa-F06</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_documents[].additional_fields[].string_values" type="string[]">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Múltiplas respostas de texto; array de strings. Não use uma única string com valores separados por vírgulas. Preencha a estrutura conforme as regras para dados adicionais do modelo utilizado. Este campo e todos os seus subcampos são aceitos na requisição, mas não são enviados para a verificação da empresa por este endpoint. Não dependa dele para atender aos requisitos de verificação. <Badge color="blue" size="sm">Complementado · create-pa-F06</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_documents[].additional_fields[].file" type="object">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Conteúdo do arquivo; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado. Este campo e todos os seus subcampos são aceitos na requisição, mas não são enviados para a verificação da empresa por este endpoint. Não dependa dele para atender aos requisitos de verificação. <Badge color="blue" size="sm">Complementado · create-pa-F06</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_documents[].additional_fields[].file.file" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Conteúdo do arquivo; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado. Este campo e todos os seus subcampos são aceitos na requisição, mas não são enviados para a verificação da empresa por este endpoint. Não dependa dele para atender aos requisitos de verificação. <Badge color="blue" size="sm">Complementado · create-pa-F06</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_documents[].additional_fields[].file.file_name" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Nome do arquivo; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado. Este campo e todos os seus subcampos são aceitos na requisição, mas não são enviados para a verificação da empresa por este endpoint. Não dependa dele para atender aos requisitos de verificação. <Badge color="blue" size="sm">Complementado · create-pa-F06</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_documents[].additional_fields[].file.content_type" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Tipo MIME do arquivo; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado. Este campo e todos os seus subcampos são aceitos na requisição, mas não são enviados para a verificação da empresa por este endpoint. Não dependa dele para atender aos requisitos de verificação. <Badge color="blue" size="sm">Complementado · create-pa-F06</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_documents[].additional_fields[].files" type="object[]">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Lista de arquivos; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado. Este campo e todos os seus subcampos são aceitos na requisição, mas não são enviados para a verificação da empresa por este endpoint. Não dependa dele para atender aos requisitos de verificação. <Badge color="blue" size="sm">Complementado · create-pa-F06</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_documents[].additional_fields[].files[].file" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Conteúdo do arquivo; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado. Este campo e todos os seus subcampos são aceitos na requisição, mas não são enviados para a verificação da empresa por este endpoint. Não dependa dele para atender aos requisitos de verificação. <Badge color="blue" size="sm">Complementado · create-pa-F06</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_documents[].additional_fields[].files[].file_name" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Nome do arquivo; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado. Este campo e todos os seus subcampos são aceitos na requisição, mas não são enviados para a verificação da empresa por este endpoint. Não dependa dele para atender aos requisitos de verificação. <Badge color="blue" size="sm">Complementado · create-pa-F06</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_documents[].additional_fields[].files[].content_type" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Tipo MIME do arquivo; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado. Este campo e todos os seus subcampos são aceitos na requisição, mas não são enviados para a verificação da empresa por este endpoint. Não dependa dele para atender aos requisitos de verificação. <Badge color="blue" size="sm">Complementado · create-pa-F06</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_documents[].additional_fields[].metadata" type="object">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Mapa de chaves e valores dos metadados dos dados adicionais; objeto JSON com chaves e valores do tipo string. Preencha a estrutura conforme as regras para dados adicionais do modelo utilizado. Este campo e todos os seus subcampos são aceitos na requisição, mas não são enviados para a verificação da empresa por este endpoint. Não dependa dele para atender aos requisitos de verificação. <Badge color="blue" size="sm">Complementado · create-pa-F06</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.entity_type" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Tipo de entidade jurídica
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_model" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Modelo de negócio
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_industries" type="string[]">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Lista de setores de atuação da empresa; array de strings, não uma única string com valores separados por vírgulas
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.platform_url" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. URL da plataforma
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.additional_fields" type="object[]">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Item de dados adicionais; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.additional_fields[].key" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Nome da chave dos dados de referência/adicionais; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.additional_fields[].label" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Nome de exibição dos dados adicionais; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.additional_fields[].answer_type" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Tipo de resposta dos dados adicionais; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.additional_fields[].string_value" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Resposta de texto única; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.additional_fields[].string_values" type="string[]">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Múltiplas respostas de texto; array de strings. Não use uma única string com valores separados por vírgulas. Preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.additional_fields[].file" type="object">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Conteúdo do arquivo; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.additional_fields[].file.file" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Conteúdo do arquivo; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.additional_fields[].file.file_name" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Nome do arquivo; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.additional_fields[].file.content_type" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Tipo MIME do arquivo; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.additional_fields[].files" type="object[]">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Lista de arquivos; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.additional_fields[].files[].file" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Conteúdo do arquivo; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.additional_fields[].files[].file_name" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Nome do arquivo; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.additional_fields[].files[].content_type" type="string">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Tipo MIME do arquivo; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.additional_fields[].metadata" type="object">
+**Obrigatório:** Conforme os requisitos do modelo de análise. Mapa de chaves e valores dos metadados dos dados adicionais; objeto JSON com chaves e valores do tipo string. Preencha a estrutura conforme as regras para dados adicionais do modelo utilizado
+</ParamField>
+</Accordion>
+
+<Accordion title="mode2: Envio via API de dados de referência do cliente (opcional) · compliance_payload.client_reference_data" id="managed-reference-pa">
+Os dados podem ser fornecidos conforme o modelo configurado no modo de envio via API, tanto para pessoa física quanto para pessoa jurídica. Nos demais modos, não é permitido enviar um array não vazio.
+
+<ParamField body="compliance_payload.client_reference_data" type="object[]">
+↳ **Obrigatório:** Não, apenas no modo 2. Array de itens `{ "key": "…", "value": "…" }`. O serviço de destino mescla os itens por key. Não há garantia de que a ordem tenha significado para as regras de negócio. Nos outros modos, não deve ser enviado um array não vazio. O serviço de destino valida as chaves permitidas conforme o modelo de conformidade aplicável
+</ParamField>
+
+<ParamField body="compliance_payload.client_reference_data[].key" type="string">
+**Obrigatório:** Obrigatório ao enviar este item. Nome da chave dos dados de referência/adicionais; não deve ficar vazio após a remoção dos espaços em branco no início e no fim. Não deve estar duplicado nem ser uma chave reservada do sistema. Deve constar na lista de permissões do modelo selecionado. Chaves reservadas: `account_number`, `account_type`, `business_data_ref`, `business_profile_id`, `client_reference_id`, `legal_document_id`, `legal_document_type`, `legal_name`, `merchant_id`, `request_id`, `session_id`, `template_id`, `user_id`, `user_profile_id`. <Badge color="blue" size="sm">Complementado · create-pa-F16</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.client_reference_data[].value" type="string">
+**Obrigatório:** Obrigatório ao enviar este item. Valor dos dados de referência do cliente; não deve ficar vazio após a remoção dos espaços em branco no início e no fim
+</ParamField>
+</Accordion>
+
+<Accordion title="PA · Conta de origem (obrigatória em todos os modos) · Campo de nível superior: linked_account" id="managed-parent-pa">
+Envie este objeto somente ao criar uma PA. A conta superior pode ser a MA à qual a PA pertence, com status ACTIVE, ou uma VA elegível vinculada a essa MA, também com status ACTIVE. Não envie este objeto ao criar uma MOR ou VA. <Badge color="orange" size="sm">Corrigido · create-pa-F23</Badge>
+
+<ParamField body="linked_account" type="object">
+**Obrigatório:** Obrigatório para PA. `ispb` e `account_number` devem ser strings não vazias, com os zeros à esquerda preservados. A titularidade e o status da conta também devem ser validados. Não envie este objeto ao criar uma MOR ou VA
+</ParamField>
+
+<ParamField body="linked_account.ispb" type="string">
+↳ **Obrigatório:** Obrigatório para PA. Identificador da instituição participante da MA/VA superior; o valor não deve ficar vazio após a remoção dos espaços em branco no início e no fim. Preserve os zeros à esquerda. Use o valor real da conta superior. Este seletor não exige um comprimento definido nem valida o valor por expressão regular para aceitar apenas dígitos
+</ParamField>
+
+<ParamField body="linked_account.account_number" type="string">
+↳ **Obrigatório:** Obrigatório para PA. Número da conta da MA/VA superior; o valor não deve ficar vazio após a remoção dos espaços em branco no início e no fim. Preserve os zeros à esquerda. Deve ser fornecido junto com ispb. O destino deve ser a MA à qual a PA pertence, com status ACTIVE, ou uma VA elegível vinculada a essa MA, também com status ACTIVE
+</ParamField>
+</Accordion>
+
+## Exemplo de requisição cURL
+
+Os campos do exemplo correspondem à tabela de parâmetros da requisição para a modalidade selecionada nesta página. O exemplo inclui campos opcionais e campos exigidos pelo modelo de análise. Substitua os valores de exemplo conforme o modelo utilizado e remova os campos opcionais que não se aplicam. Depois, gere a assinatura com o conteúdo bruto da versão final de body.json. Os dados do exemplo não garantem aprovação na análise sem alterações.
+
+<Accordion title="cURL · Modalidade selecionada de onboarding da conta · Pessoa física (CPF)">
+</Accordion>
+
+<Accordion title="cURL · Modalidade selecionada de onboarding da conta · Pessoa jurídica (CNPJ)">
+</Accordion>
+
+<Accordion title="cURL · Modalidade selecionada de onboarding da conta · Pessoa física (CPF)">
+Os arrays opcionais usam um elemento para mostrar a estrutura; metadata usa pares de chave e valor de exemplo para mostrar o mapeamento. Preencha client_reference_data.key e additional_fields conforme a lista de permissões do modelo. Nas respostas adicionais, mantenha apenas o campo aplicável: string_value, string_values, file ou files. Substitua o conteúdo dos arquivos pelos documentos exigidos. Para documentos de pessoa jurídica, use Base64 no campo file.
+</Accordion>
+
+<Accordion title="cURL · Modalidade selecionada de onboarding da conta · Pessoa jurídica (CNPJ)">
+Os arrays opcionais usam um elemento para mostrar a estrutura; metadata usa pares de chave e valor de exemplo para mostrar o mapeamento. Preencha client_reference_data.key e additional_fields conforme a lista de permissões do modelo. Nas respostas adicionais, mantenha apenas o campo aplicável: string_value, string_values, file ou files. Substitua o conteúdo dos arquivos pelos documentos exigidos. Para documentos de pessoa jurídica, use Base64 no campo file.
+</Accordion>
+
+## Campos da resposta
+
+Os caminhos dos campos partem da raiz da resposta. `[]` indica um elemento de array. Os valores monetários usam strings decimais. Os enums são interpretados conforme cada campo. A estrutura abaixo representa os dados de uma resposta de sucesso. Um valor nulo ou 0, por si só, não indica a conclusão da operação.
+
+<ResponseField name="code" type="integer">
+Código de resultado de negócio; 200 indica sucesso. Os erros de negócio são retornados neste campo, que não equivale ao código de status HTTP.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Descrição do resultado de negócio; em caso de falha, analise esta descrição junto com o campo code para identificar a causa.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Objeto de dados da resposta de sucesso; pode ser null em respostas de erro.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Horário da resposta, em timestamp Unix UTC em milissegundos.
+</ResponseField>
+
+<ResponseField name="data.reference_id" type="string">
+ID de referência do recurso fornecido pelo solicitante ao criar a conta gerenciada.
+</ResponseField>
+
+<ResponseField name="data.model" type="integer">
+Modelo de conta gerenciada. Enum: 0 VA_ACCOUNT_MODEL_UNSPECIFIED; 1 VA_ACCOUNT_MODEL_MOR; 2 VA_ACCOUNT_MODEL_VA; 3 VA_ACCOUNT_MODEL_PA.
+</ResponseField>
+
+<ResponseField name="data.status" type="integer">
+Status de negócio atual, interpretado conforme os valores do enum listados neste campo. Enum: 0 MANAGED_ACCOUNT_STATUS_V3_UNSPECIFIED; 1 MANAGED_ACCOUNT_STATUS_V3_PENDING; 2 MANAGED_ACCOUNT_STATUS_V3_ACTIVE; 3 MANAGED_ACCOUNT_STATUS_V3_FROZEN; 4 MANAGED_ACCOUNT_STATUS_V3_CLOSED; 5 MANAGED_ACCOUNT_STATUS_V3_REJECTED; 6 MANAGED_ACCOUNT_STATUS_V3_EXPIRED; 7 MANAGED_ACCOUNT_STATUS_V3_PENDING_SUBMISSION. Uma nova PA na modalidade de link hospedado normalmente retorna `1` (`PENDING`), mesmo enquanto a análise de conformidade aguarda o envio dos dados. Este endpoint não converte atualmente esse estado de espera em `7` (`PENDING_SUBMISSION`). <Badge color="blue" size="sm">Complementado · create-pa-F18</Badge>
+</ResponseField>
+
+<ResponseField name="data.verification_url" type="string">
+Link de acesso à verificação de identidade; pode estar vazio quando a verificação externa não for necessária ou o link ainda não tiver sido gerado.
+</ResponseField>
+
+## Respostas
+
+Consulte os exemplos de resposta pelo `code` de negócio no JSON. Verifique o status HTTP e o code de negócio separadamente. Uma resposta HTTP 200 também pode retornar um erro de negócio.
+
+| `code` | Significado | Ação recomendada |
+| --- | --- | --- |
+| `200` | Requisição bem-sucedida<br />Apenas a estrutura é apresentada. Os campos e o status da abertura da conta são determinados pela resposta do servidor. | Leia data e avalie o resultado do processamento conforme o status de negócio deste endpoint. |
+| `400` | Falha na requisição ou validação | Problema nos parâmetros. Verifique e corrija os parâmetros da requisição. |
+| `500` | Erro do sistema | Registre a resposta e confirme primeiro o resultado de negócio. |
+
+Os exemplos ilustram a estrutura da resposta. Os valores de message e do status de negócio devem ser obtidos da resposta efetiva. Para outros erros de parâmetros, permissões e serviço, consulte [Catálogo de erros](/pt-br/api-reference/error-catalog). Em falhas da tarifa de abertura de conta: `4001999` indica saldo insuficiente—adicione fundos e tente novamente com o mesmo `reference_id`; `4001013` pode indicar que `reference_id` foi usado com dados incompatíveis—use um novo `reference_id` apenas para uma solicitação realmente diferente; `4004004` pode indicar que a configuração da tarifa não foi encontrada—contate o suporte; `400` pode indicar configuração inválida da tarifa—contate o suporte; `501` pode indicar indisponibilidade temporária da configuração ou resultado não confirmado da cobrança—tente novamente mais tarde com o mesmo `reference_id`. Leia `message` para distinguir esses casos. <Badge color="blue" size="sm">Complementado · create-pa-F20</Badge> Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados.
+
+## Exemplo de acesso ao Sandbox
+
+Considere a resposta real como referência para os dados da transação ou do recurso, o status do processamento e as informações de erro.
+
+`X-Client-ID` usa a AK informada. O timestamp, o nonce, o hash do corpo da requisição e a assinatura são gerados automaticamente. A SK é usada apenas para assinar localmente, não é enviada na requisição nem armazenada. A visualização não envia a requisição; o botão de acesso envia uma requisição real. Se o resultado for desconhecido, consulte antes de tentar novamente. Não há novas tentativas automáticas. O acesso pelo navegador deve atender aos requisitos de CORS, IP e credenciais do Sandbox.
+
+<Tip>
+Para testar este endpoint, envie o exemplo de requisição para a Base URL do Sandbox `https://ebanking-openapi-sandbox.pagsmile.com.br` com sua AK/SK de Sandbox. Assine cada requisição conforme descrito em [Ambientes e credenciais](/pt-br/environments-and-credentials#assinatura-de-requisições-à-api).
+</Tip>
+
+
+<Accordion title="Correções em relação ao documento original (17)" icon="clipboard-check">
+Esta página foi conferida com o código-fonte da Pagsmile Open API em 2026-11-10. Cada alteração abaixo está marcada na página com um selo que mostra o seu ID.
+
+| ID | Alteração | Local | Texto do documento original | Texto atualizado |
+| --- | --- | --- | --- | --- |
+| create-pa-F01 | Corrigido (não correspondia ao código) | Request parameters / mode2: CNPJ | Dados da imagem da frente do documento; forneça o conteúdo da imagem conforme o modelo de verificação. Atualmente, este endpoint verifica apenas se o campo obrigatório não está vazio. O formato de URL não é exigido para todos os modelos | Dados da imagem da frente do documento. Este campo opcional não é validado como não vazio e não é enviado para a verificação da empresa por este endpoint. Não dependa dele para fornecer o documento de identificação de um administrador. |
+| create-pa-F02 | Corrigido (não correspondia ao código) | Request parameters / mode2: CNPJ | Dados da imagem do verso do documento; forneça o conteúdo da imagem conforme o modelo de verificação. Atualmente, este endpoint verifica apenas se o campo obrigatório não está vazio. O formato de URL não é exigido para todos os modelos | Dados da imagem do verso do documento. Este campo opcional não é validado como não vazio e não é enviado para a verificação da empresa por este endpoint. Não dependa dele para fornecer o documento de identificação de um administrador. |
+| create-pa-F03 | Complementado (ausente no original) | Request parameters / mode2: CNPJ | Beneficiários finais | Beneficiários finais. document_type e tax_id são aceitos, mas não são enviados para a verificação da empresa. Um item também não é enviado quando name, birth_date e address estiverem todos vazios após a remoção dos espaços em branco. O percentual de participação, isoladamente, não torna o item apto para envio. |
+| create-pa-F04 | Complementado (ausente no original) | Request parameters / mode2: CNPJ | Administradores e pessoas relacionadas | Administradores e pessoas relacionadas. document_type, tax_id, identity e todos os subcampos de identity são aceitos, mas não são enviados para a verificação da empresa. Um item não é enviado quando first_name, middle_name, last_name, birth_date, email, phone_number e address estiverem todos vazios após a remoção dos espaços em branco. Dados de participação, ações, papéis ou dados adicionais, isoladamente, não tornam o item apto para envio. |
+| create-pa-F05 | Complementado (ausente no original) | Request parameters / mode2: CNPJ | Lista de empresas relacionadas | Lista de empresas relacionadas. relationship_type e reference_id são aceitos, mas não são enviados para a verificação da empresa por este endpoint. Não dependa desses campos para descrever ou identificar o vínculo na solicitação de verificação. |
+| create-pa-F06 | Complementado (ausente no original) | Request parameters / mode2: CNPJ | Item de dados adicionais; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado | Item de dados adicionais; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado. Este campo e todos os seus subcampos são aceitos na requisição, mas não são enviados para a verificação da empresa por este endpoint. Não dependa dele para atender aos requisitos de verificação. |
+| create-pa-F07 | Complementado (ausente no original) | Request parameters / mode2: CNPJ | Dados detalhados da empresa; o endpoint exige que o nome fantasia não esteja vazio. Forneça os demais campos conforme os requisitos do modelo de análise utilizado. Não considere a análise concluída apenas com base no nome fantasia | Dados detalhados da empresa; o endpoint exige que o nome fantasia não esteja vazio. Forneça os demais campos conforme os requisitos do modelo de análise utilizado. Não considere a análise concluída apenas com base no nome fantasia. entity_type, business_model, business_industries, platform_url e additional_fields (incluindo todos os seus subcampos) são aceitos, mas não são enviados para a verificação da empresa por este endpoint. Não dependa desses campos para atender aos requisitos de verificação. |
+| create-pa-F13 | Complementado (ausente no original) | Request parameters / additional information | Nome da chave dos dados de referência/adicionais; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado | Nome da chave dos dados adicionais. Os espaços em branco no início e no fim são removidos. Um item com chave vazia não é enviado. As chaves não vazias são enviadas com os dados adicionais correspondentes. |
+| create-pa-F14 | Complementado (ausente no original) | Request parameters / additional information | Nome da chave dos dados de referência/adicionais; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado | Nome da chave dos dados adicionais. Os espaços em branco no início e no fim são removidos. Um item com chave vazia não é enviado. Quando uma chave se repete, o último item substitui os anteriores. |
+| create-pa-F15 | Complementado (ausente no original) | Request parameters / additional information | Nome da chave dos dados de referência/adicionais; preencha a estrutura conforme as regras para dados adicionais do modelo utilizado | Nome da chave dos dados adicionais. Os espaços em branco no início e no fim são removidos. Um item com chave vazia não é enviado. Quando uma chave se repete, o último item substitui os anteriores. |
+| create-pa-F16 | Complementado (ausente no original) | Request parameters / client reference data | Nome da chave dos dados de referência/adicionais; não deve ficar vazio após a remoção dos espaços em branco no início e no fim. Não deve estar duplicado nem ser uma chave reservada do sistema. Deve constar na lista de permissões do modelo selecionado | Nome da chave dos dados de referência/adicionais; não deve ficar vazio após a remoção dos espaços em branco no início e no fim. Não deve estar duplicado nem ser uma chave reservada do sistema. Deve constar na lista de permissões do modelo selecionado. Chaves reservadas: `account_number`, `account_type`, `business_data_ref`, `business_profile_id`, `client_reference_id`, `legal_document_id`, `legal_document_type`, `legal_name`, `merchant_id`, `request_id`, `session_id`, `template_id`, `user_id`, `user_profile_id`. |
+| create-pa-F17 | Complementado (ausente no original) | Request parameters / idempotency | Não deve ficar vazio após a remoção dos espaços em branco no início e no fim. Deve ser gerado e salvo pelo integrador; o código não exige o formato UUID. Se precisar repetir a mesma solicitação de abertura de conta por motivos técnicos, mantenha o valor inalterado | Não deve ficar vazio após a remoção dos espaços em branco no início e no fim. Deve ser gerado e salvo pelo integrador; o código não exige o formato UUID. Se precisar repetir a mesma solicitação de abertura de conta por motivos técnicos, mantenha o valor inalterado. Em uma nova tentativa, mantenha o usuário titular, linked_account, model, compliance_mode, o tipo de documento e CPF/CNPJ do solicitante, trading_name e notification_email inalterados. Reutilizar reference_id com dados incompatíveis pode causar falha; reference_id não é uma operação de atualização. |
+| create-pa-F18 | Complementado (ausente no original) | Response fields | Status de negócio atual, interpretado conforme os valores do enum listados neste campo. Enum: 0 MANAGED_ACCOUNT_STATUS_V3_UNSPECIFIED; 1 MANAGED_ACCOUNT_STATUS_V3_PENDING; 2 MANAGED_ACCOUNT_STATUS_V3_ACTIVE; 3 MANAGED_ACCOUNT_STATUS_V3_FROZEN; 4 MANAGED_ACCOUNT_STATUS_V3_CLOSED; 5 MANAGED_ACCOUNT_STATUS_V3_REJECTED; 6 MANAGED_ACCOUNT_STATUS_V3_EXPIRED; 7 MANAGED_ACCOUNT_STATUS_V3_PENDING_SUBMISSION. | Status de negócio atual, interpretado conforme os valores do enum listados neste campo. Enum: 0 MANAGED_ACCOUNT_STATUS_V3_UNSPECIFIED; 1 MANAGED_ACCOUNT_STATUS_V3_PENDING; 2 MANAGED_ACCOUNT_STATUS_V3_ACTIVE; 3 MANAGED_ACCOUNT_STATUS_V3_FROZEN; 4 MANAGED_ACCOUNT_STATUS_V3_CLOSED; 5 MANAGED_ACCOUNT_STATUS_V3_REJECTED; 6 MANAGED_ACCOUNT_STATUS_V3_EXPIRED; 7 MANAGED_ACCOUNT_STATUS_V3_PENDING_SUBMISSION. Uma nova PA na modalidade de link hospedado normalmente retorna 1 (PENDING), mesmo enquanto a análise de conformidade aguarda o envio dos dados. Este endpoint não converte atualmente esse estado de espera em 7 (PENDING_SUBMISSION). |
+| create-pa-F19 | Complementado (ausente no original) | Permissions and account ownership / account opening fee | A conta superior selecionada deve estar com status ACTIVE e atender aos requisitos de titularidade da conta. | A conta superior selecionada deve estar com status ACTIVE e atender aos requisitos de titularidade da conta. A tarifa configurada de abertura de conta é cobrada em BRL dessa conta superior direta após a criação da sessão de verificação e antes da aceitação da solicitação de criação da conta. Solicitantes com CPF usam a tarifa de KYC e solicitantes com CNPJ usam a tarifa de KYB. A conta superior deve ter saldo disponível suficiente. Se o resultado da cobrança for desconhecido, tente novamente com o mesmo reference_id; não crie uma nova solicitação apenas porque não recebeu resposta. |
+| create-pa-F20 | Complementado (ausente no original) | Responses / account opening fee errors | Para outros erros de parâmetros, permissões e serviço, consulte Catálogo de erros. | Para outros erros de parâmetros, permissões e serviço, consulte Catálogo de erros. Em falhas da tarifa de abertura de conta: 4001999 indica saldo insuficiente—adicione fundos e tente novamente com o mesmo reference_id; 4001013 pode indicar que reference_id foi usado com dados incompatíveis—use um novo reference_id apenas para uma solicitação realmente diferente; 4004004 pode indicar que a configuração da tarifa não foi encontrada—contate o suporte; 400 pode indicar configuração inválida da tarifa—contate o suporte; 501 pode indicar indisponibilidade temporária da configuração ou resultado não confirmado da cobrança—tente novamente mais tarde com o mesmo reference_id. Leia message para distinguir esses casos. |
+| create-pa-F22 | Complementado (ausente no original) | Permissions and account ownership / parent availability | A conta superior selecionada deve estar com status ACTIVE e atender aos requisitos de titularidade da conta. | A conta superior selecionada deve estar com status ACTIVE e atender aos requisitos de titularidade da conta. A conta bancária vinculada à conta superior também deve estar ACTIVE e não pode ter encerramento em andamento. Quando a conta superior é uma VA, tanto ela quanto sua MA titular devem ter vínculos válidos com contas bancárias ativas. |
+| create-pa-F23 | Corrigido (não correspondia ao código) | PA parent-account collapsible heading | &lt;details: PA · conta superior (obrigatória em todos os modos) · `campo de nível superior: linked_account`&gt; | &lt;details: PA · Conta de origem (obrigatória em todos os modos) · `Campo de nível superior: linked_account`&gt; |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "reference_id": "pa-demo-001",
+  "model": 3,
+  "compliance_mode": 1,
+  "compliance_payload": {
+    "document_type": 1,
+    "tax_id": "00000000000",
+    "legal_name": "Demo Subject"
+  },
+  "return_url": "https://merchant.example.test/return",
+  "trading_name": "Demo Company",
+  "notification_email": "contact@example.test",
+  "linked_account": {
+    "ispb": "replace-with-parent-ispb",
+    "account_number": "replace-with-parent-account"
+  }
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/onboarding/managed_accounts/create' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${USER_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "reference_id": "pa-demo-001",
+  "model": 3,
+  "compliance_mode": 1,
+  "compliance_payload": {
+    "document_type": 2,
+    "tax_id": "00000000000000",
+    "legal_name": "Demo Company"
+  },
+  "return_url": "https://merchant.example.test/return",
+  "trading_name": "Demo Company",
+  "notification_email": "contact@example.test",
+  "linked_account": {
+    "ispb": "replace-with-parent-ispb",
+    "account_number": "replace-with-parent-account"
+  }
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/onboarding/managed_accounts/create' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${USER_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "reference_id": "pa-demo-001",
+  "model": 3,
+  "compliance_mode": 2,
+  "compliance_payload": {
+    "document_type": 1,
+    "tax_id": "00000000000",
+    "legal_name": "Demo Subject",
+    "user_data": {
+      "name": {
+        "first_name": "Demo",
+        "middle_name": "replace-with-middle-name",
+        "last_name": "Subject"
+      },
+      "date_of_birth": "1990-01-15",
+      "identity": {
+        "country_code": "BR",
+        "document_type": "replace-with-document-type",
+        "document_front": "replace-with-document-front",
+        "document_back": "replace-with-document-back"
+      },
+      "address": {
+        "full_address": "replace-with-full-address",
+        "address_street_1": "replace-with-address-street-1",
+        "address_street_2": "replace-with-address-street-2",
+        "address_city": "replace-with-address-city",
+        "address_state": "SP",
+        "address_zip_code": "replace-with-address-zip-code",
+        "address_country": "BR"
+      },
+      "selfie": "replace-with-selfie",
+      "address_proof_document": "replace-with-address-proof-document",
+      "additional_fields": [
+        {
+          "key": "replace-with-key",
+          "label": "replace-with-label",
+          "answer_type": "replace-with-answer-type",
+          "string_value": "replace-with-string-value",
+          "string_values": [
+            "replace-with-string-values"
+          ],
+          "file": {
+            "file": "cmVwbGFjZS13aXRoLWFjdHVhbC1maWxl",
+            "file_name": "document.pdf",
+            "content_type": "application/pdf"
+          },
+          "files": [
+            {
+              "file": "cmVwbGFjZS13aXRoLWFjdHVhbC1maWxl",
+              "file_name": "document.pdf",
+              "content_type": "application/pdf"
+            }
+          ],
+          "metadata": {
+            "example_key": "replace-with-value"
+          }
+        }
+      ]
+    },
+    "client_reference_data": [
+      {
+        "key": "replace-with-template-allowed-key",
+        "value": "replace-with-reference-value"
+      }
+    ]
+  },
+  "trading_name": "Demo Company",
+  "notification_email": "contact@example.test",
+  "linked_account": {
+    "ispb": "replace-with-parent-ispb",
+    "account_number": "replace-with-parent-account"
+  }
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/onboarding/managed_accounts/create' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${USER_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "reference_id": "pa-demo-001",
+  "model": 3,
+  "compliance_mode": 2,
+  "compliance_payload": {
+    "document_type": 2,
+    "tax_id": "00000000000000",
+    "legal_name": "Demo Company",
+    "business_data": {
+      "trading_name": "Demo Company",
+      "address": {
+        "full_address": "replace-with-full-address",
+        "address_street_1": "replace-with-address-street-1",
+        "address_street_2": "replace-with-address-street-2",
+        "address_city": "replace-with-address-city",
+        "address_state": "SP",
+        "address_zip_code": "replace-with-address-zip-code",
+        "address_country": "BR"
+      },
+      "ubo_list": [
+        {
+          "name": "Demo Subject",
+          "document_type": 1,
+          "tax_id": "00000000000",
+          "ownership_percentage": "25",
+          "birth_date": "1990-01-15",
+          "address": {
+            "full_address": "replace-with-full-address",
+            "address_street_1": "replace-with-address-street-1",
+            "address_street_2": "replace-with-address-street-2",
+            "address_city": "replace-with-address-city",
+            "address_state": "SP",
+            "address_zip_code": "replace-with-address-zip-code",
+            "address_country": "BR"
+          }
+        }
+      ],
+      "website": "https://company.example.test",
+      "country_code": "BR",
+      "formation_date": "2020-01-15",
+      "phone_numbers": [
+        "+5511999999999"
+      ],
+      "email_addresses": [
+        "contact@example.test"
+      ],
+      "state_code": "SP",
+      "business_entity_id": "replace-with-business-entity-id",
+      "officers": [
+        {
+          "first_name": "Demo",
+          "middle_name": "replace-with-middle-name",
+          "last_name": "Subject",
+          "birth_date": "1990-01-15",
+          "ownership_percentage": "25",
+          "shares_allocated": "100",
+          "roles": [
+            "replace-with-roles"
+          ],
+          "email": "contact@example.test",
+          "phone_number": "+5511999999999",
+          "address": {
+            "full_address": "replace-with-full-address",
+            "address_street_1": "replace-with-address-street-1",
+            "address_street_2": "replace-with-address-street-2",
+            "address_city": "replace-with-address-city",
+            "address_state": "SP",
+            "address_zip_code": "replace-with-address-zip-code",
+            "address_country": "BR"
+          },
+          "document_type": 1,
+          "tax_id": "00000000000",
+          "identity": {
+            "country_code": "BR",
+            "document_type": "replace-with-document-type",
+            "tax_id": "00000000000",
+            "document_front": "replace-with-document-front",
+            "document_back": "replace-with-document-back"
+          },
+          "additional_fields": [
+            {
+              "key": "replace-with-key",
+              "label": "replace-with-label",
+              "answer_type": "replace-with-answer-type",
+              "string_value": "replace-with-string-value",
+              "string_values": [
+                "replace-with-string-values"
+              ],
+              "file": {
+                "file": "cmVwbGFjZS13aXRoLWFjdHVhbC1maWxl",
+                "file_name": "document.pdf",
+                "content_type": "application/pdf"
+              },
+              "files": [
+                {
+                  "file": "cmVwbGFjZS13aXRoLWFjdHVhbC1maWxl",
+                  "file_name": "document.pdf",
+                  "content_type": "application/pdf"
+                }
+              ],
+              "metadata": {
+                "example_key": "replace-with-value"
+              }
+            }
+          ]
+        }
+      ],
+      "related_companies": [
+        {
+          "name": "Demo Subject",
+          "trading_name": "Demo Company",
+          "tax_identification_number": "00000000000000",
+          "website": "https://company.example.test",
+          "formation_date": "2020-01-15",
+          "country_code": "BR",
+          "state_code": "SP",
+          "business_entity_id": "replace-with-business-entity-id",
+          "addresses": [
+            {
+              "full_address": "replace-with-full-address",
+              "address_street_1": "replace-with-address-street-1",
+              "address_street_2": "replace-with-address-street-2",
+              "address_city": "replace-with-address-city",
+              "address_state": "SP",
+              "address_zip_code": "replace-with-address-zip-code",
+              "address_country": "BR"
+            }
+          ],
+          "phone_numbers": [
+            "+5511999999999"
+          ],
+          "email_addresses": [
+            "contact@example.test"
+          ],
+          "ownership_percentage": "25",
+          "shares_allocated": "100",
+          "relationship_type": "replace-with-relationship-type",
+          "roles": [
+            "replace-with-roles"
+          ],
+          "reference_id": "replace-with-reference-id",
+          "additional_fields": [
+            {
+              "key": "replace-with-key",
+              "label": "replace-with-label",
+              "answer_type": "replace-with-answer-type",
+              "string_value": "replace-with-string-value",
+              "string_values": [
+                "replace-with-string-values"
+              ],
+              "file": {
+                "file": "cmVwbGFjZS13aXRoLWFjdHVhbC1maWxl",
+                "file_name": "document.pdf",
+                "content_type": "application/pdf"
+              },
+              "files": [
+                {
+                  "file": "cmVwbGFjZS13aXRoLWFjdHVhbC1maWxl",
+                  "file_name": "document.pdf",
+                  "content_type": "application/pdf"
+                }
+              ],
+              "metadata": {
+                "example_key": "replace-with-value"
+              }
+            }
+          ]
+        }
+      ],
+      "business_documents": [
+        {
+          "document_type": "replace-with-document-type",
+          "file": "cmVwbGFjZS13aXRoLWFjdHVhbC1maWxl",
+          "file_name": "document.pdf",
+          "content_type": "application/pdf",
+          "additional_fields": [
+            {
+              "key": "replace-with-key",
+              "label": "replace-with-label",
+              "answer_type": "replace-with-answer-type",
+              "string_value": "replace-with-string-value",
+              "string_values": [
+                "replace-with-string-values"
+              ],
+              "file": {
+                "file": "cmVwbGFjZS13aXRoLWFjdHVhbC1maWxl",
+                "file_name": "document.pdf",
+                "content_type": "application/pdf"
+              },
+              "files": [
+                {
+                  "file": "cmVwbGFjZS13aXRoLWFjdHVhbC1maWxl",
+                  "file_name": "document.pdf",
+                  "content_type": "application/pdf"
+                }
+              ],
+              "metadata": {
+                "example_key": "replace-with-value"
+              }
+            }
+          ]
+        }
+      ],
+      "entity_type": "replace-with-entity-type",
+      "business_model": "replace-with-business-model",
+      "business_industries": [
+        "replace-with-business-industries"
+      ],
+      "platform_url": "https://platform.example.test",
+      "additional_fields": [
+        {
+          "key": "replace-with-key",
+          "label": "replace-with-label",
+          "answer_type": "replace-with-answer-type",
+          "string_value": "replace-with-string-value",
+          "string_values": [
+            "replace-with-string-values"
+          ],
+          "file": {
+            "file": "cmVwbGFjZS13aXRoLWFjdHVhbC1maWxl",
+            "file_name": "document.pdf",
+            "content_type": "application/pdf"
+          },
+          "files": [
+            {
+              "file": "cmVwbGFjZS13aXRoLWFjdHVhbC1maWxl",
+              "file_name": "document.pdf",
+              "content_type": "application/pdf"
+            }
+          ],
+          "metadata": {
+            "example_key": "replace-with-value"
+          }
+        }
+      ]
+    },
+    "client_reference_data": [
+      {
+        "key": "replace-with-template-allowed-key",
+        "value": "replace-with-reference-value"
+      }
+    ]
+  },
+  "trading_name": "Demo Company",
+  "notification_email": "contact@example.test",
+  "linked_account": {
+    "ispb": "replace-with-parent-ispb",
+    "account_number": "replace-with-parent-account"
+  }
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/onboarding/managed_accounts/create' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${USER_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Requisição bem-sucedida
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "reference_id": "pa-demo-001",
+    "model": 3,
+    "status": 1
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Falha na requisição ou validação
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 Erro do sistema
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

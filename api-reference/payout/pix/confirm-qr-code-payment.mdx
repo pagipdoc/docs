@@ -1,0 +1,252 @@
+---
+title: "Confirm QR code payment"
+description: "Confirm payment using the ref_id returned by QR code initialization. Use the same account and comply with the applicable amount conditions from initialization."
+api: "POST /v3/transfers/pix/qr-code-confirm"
+keywords: ["/v3/transfers/pix/qr-code-confirm"]
+---
+
+## Behavior and handling
+
+Confirm payment using the ref_id returned by QR code initialization. Use the same account and comply with the applicable amount conditions from initialization. The payer and payee cannot have both the same ISPB and the same bank account number; this is rejected with code `400` <Badge color="blue" size="sm">Added · api-11-F14</Badge> A successful confirmation accepts the payment for asynchronous processing and returns `data.txn_status = 5` (`TXN_STATUS_PROCESSING`), not proof of completed settlement. Save `data.txn_id` and query the original transaction until its outcome is confirmed. Insufficient funds, further risk checks, or bank-side rejection can still prevent completion after acceptance <Badge color="blue" size="sm">Added · api-11-F07</Badge>
+
+ref_id is valid for confirmation for 5 minutes. After it expires, repeat the initialization flow to verify the payment details again.
+
+If the request result is unknown, check the original transaction as described in [Error scenarios in the outgoing payment module](/api-reference/payout/overview). Do not resend the request directly.
+
+Confirmation is subject to the payer account's applicable transaction limits and risk controls. An exceeded payment limit can return code `4001998`; an AML rejection can return code `4003016`. Keep enough available funds for the amount and applicable payer fees. Balance blocking and further risk checks occur asynchronously, so an accepted request can still fail later. Check the original transaction outcome before retrying <Badge color="blue" size="sm">Added · api-11-F15</Badge>
+
+## Permissions and account ownership
+
+Use `ACCOUNT` credentials for their bound account, or `USER` credentials with both `X-ISPB` and `X-Account-Number` for an active account owned by that `USER` within its permitted account hierarchy. `ACCOUNT` credentials do not require these headers; if sent, both must be nonempty and match the bound account. `PLATFORM` credentials are not accepted. Initialization and confirmation must target the same payer ISPB and account number <Badge color="blue" size="sm">Added · api-11-F05</Badge> Requests must follow [Environments & Credentials](/environments-and-credentials). The associated user must have Open API access and be active. Confirmation is rejected if payout access is disabled or the payer bank account is blocked <Badge color="blue" size="sm">Added · api-11-F06</Badge>
+
+## Request parameters
+
+<ParamField body="ref_id" type="string" required>
+Pass `data.ref_id` unchanged from a successful Initialize QR code payment response. Use the same payer account and confirm within 5 minutes. Do not generate the reference yourself or use a Pix key initialization reference. After a payment is accepted for processing, the reference is consumed. A nonempty reference not found in the initialization cache returns code `4003012`. Investigate any previously submitted payment before initializing again <Badge color="blue" size="sm">Added · api-11-F04</Badge>
+</ParamField>
+
+<ParamField body="amount" type="string" required>
+Decimal amount string; the value must be greater than `0` and exactly representable with two decimal places (for example, `10.00`). Extra trailing zeros are accepted; `0`, negative numbers, and `10.555` are not accepted. For a QR Code with a positive amount and a non-editable dynamic amount, the confirmation amount must equal the initialized amount numerically. Equivalent values such as `10.0` and `10.00` match. This equality check does not apply when the QR Code has no positive amount or permits amount changes <Badge color="blue" size="sm">Added · api-11-F02</Badge>
+</ParamField>
+
+<ParamField body="currency" type="string">
+**Required:** No (not enforced at this layer). Currency; optional. This endpoint ignores the supplied currency value and always submits the payment in `BRL`. Omit this field or use `BRL`; another currency value does not convert the amount <Badge color="blue" size="sm">Added · api-11-F03</Badge>
+</ParamField>
+
+<ParamField body="memo" type="string">
+**Required:** No (not enforced at this layer). Transaction note
+</ParamField>
+
+<ParamField body="merchant_order_id" type="string" required>
+Merchant order ID; only English letters, digits, hyphens, and underscores are allowed. The first six characters must be a valid `YYMMDD` UTC date. The date must overlap the window within ±1 hour of the current UTC time. If the result is unknown, query the original operation first. Do not blindly resubmit with a new ID. Reserved order IDs are retained for duplicate detection for 48 hours. Detection uses the order ID alone, not the payer account or credentials; avoid reusing IDs across accounts. A duplicate returns code `4001013` rather than replaying the original success response <Badge color="blue" size="sm">Added · api-11-F13</Badge>
+</ParamField>
+
+## cURL request example
+
+The example uses ACCOUNT-level credentials. Enter the actual parameters and generate the signature from the final body.json. <Badge color="orange" size="sm">Corrected · api-11-F11</Badge>
+
+## Response fields
+
+Field paths start at the response root. `[]` indicates an array element. Amounts use decimal strings. Enum values are defined separately for each field. The structure below describes a success response. A null value or 0 alone does not indicate that processing is complete.
+
+<ResponseField name="code" type="integer">
+Business result code. A value of 200 indicates success. Business errors are returned in this field. It is not the HTTP status code.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Business result description. On failure, use this with code to determine the cause.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Data object in a successful response. Can be null in an error response.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Response time as a UTC Unix timestamp in milliseconds.
+</ResponseField>
+
+<ResponseField name="data.merchant_order_id" type="string">
+Caller's merchant order ID.
+</ResponseField>
+
+<ResponseField name="data.txn_id" type="string">
+Transaction ID.
+</ResponseField>
+
+<ResponseField name="data.settlement_id" type="string">
+  Settlement transaction ID. This confirmation response leaves it empty. Use Get payment details to obtain the actual settlement identifier <Badge color="blue" size="sm">Added · api-11-F08</Badge>
+</ResponseField>
+
+<ResponseField name="data.txn_status" type="integer">
+Transaction status. Enum: 0 TXN_STATUS_UNSPECIFIED; 1 TXN_STATUS_PENDING; 2 TXN_STATUS_COMPLETED; 3 TXN_STATUS_FAILED; 4 TXN_STATUS_CANCELLED; 5 TXN_STATUS_PROCESSING; 6 TXN_STATUS_REFUNDED; 7 TXN_STATUS_PARTIALLY_REFUNDED; 8 TXN_STATUS_DISPUTED.
+</ResponseField>
+
+<ResponseField name="data.payee" type="object">
+Payee details. This payment endpoint does not populate this field and returns null. Call Get payment details to retrieve the actual participant details.
+</ResponseField>
+
+<ResponseField name="data.payee.name" type="string">
+Name.
+</ResponseField>
+
+<ResponseField name="data.payee.document_id" type="string">
+Transaction participant's document number. It may be masked based on the merchant's configuration.
+</ResponseField>
+
+<ResponseField name="data.payee.document_type" type="integer">
+Document type. Enum: 0 DOCUMENT_TYPE_UNSPECIFIED; 1 DOCUMENT_TYPE_CPF; 2 DOCUMENT_TYPE_CNPJ.
+</ResponseField>
+
+<ResponseField name="data.payee.bank_account" type="string">
+Account number.
+</ResponseField>
+
+<ResponseField name="data.payee.bank_account_type" type="integer">
+Bank account type. Enum: 0 BANK_ACCOUNT_TYPE_UNSPECIFIED; 1 BANK_ACCOUNT_TYPE_CHECKING; 2 BANK_ACCOUNT_TYPE_SALARY; 3 BANK_ACCOUNT_TYPE_SAVINGS; 4 BANK_ACCOUNT_TYPE_PAYMENT; 5 BANK_ACCOUNT_TYPE_TRANSCTIONAL_PI; 7 BANK_ACCOUNT_TYPE_DEPOSIT; 6 BANK_ACCOUNT_TYPE_GUARANTEED.
+</ResponseField>
+
+<ResponseField name="data.payee.bank_branch" type="string">
+Bank branch code.
+</ResponseField>
+
+<ResponseField name="data.payee.bank_code" type="string">
+Bank ISPB.
+</ResponseField>
+
+<ResponseField name="data.payee.bank_name" type="string">
+Bank name.
+</ResponseField>
+
+<ResponseField name="data.payer" type="object">
+Payer details. This payment endpoint does not populate this field and returns null. Call Get payment details to retrieve the actual participant details.
+</ResponseField>
+
+<ResponseField name="data.payer.name" type="string">
+Name.
+</ResponseField>
+
+<ResponseField name="data.payer.document_id" type="string">
+Transaction participant's document number. It may be masked based on the merchant's configuration.
+</ResponseField>
+
+<ResponseField name="data.payer.document_type" type="integer">
+Document type. Enum: 0 DOCUMENT_TYPE_UNSPECIFIED; 1 DOCUMENT_TYPE_CPF; 2 DOCUMENT_TYPE_CNPJ.
+</ResponseField>
+
+<ResponseField name="data.payer.bank_account" type="string">
+Account number.
+</ResponseField>
+
+<ResponseField name="data.payer.bank_account_type" type="integer">
+Bank account type. Enum: 0 BANK_ACCOUNT_TYPE_UNSPECIFIED; 1 BANK_ACCOUNT_TYPE_CHECKING; 2 BANK_ACCOUNT_TYPE_SALARY; 3 BANK_ACCOUNT_TYPE_SAVINGS; 4 BANK_ACCOUNT_TYPE_PAYMENT; 5 BANK_ACCOUNT_TYPE_TRANSCTIONAL_PI; 7 BANK_ACCOUNT_TYPE_DEPOSIT; 6 BANK_ACCOUNT_TYPE_GUARANTEED.
+</ResponseField>
+
+<ResponseField name="data.payer.bank_branch" type="string">
+Bank branch code.
+</ResponseField>
+
+<ResponseField name="data.payer.bank_code" type="string">
+Bank ISPB.
+</ResponseField>
+
+<ResponseField name="data.payer.bank_name" type="string">
+Bank name.
+</ResponseField>
+
+## Responses
+
+View response examples by the business `code` in the JSON response. Check the HTTP status and business code separately. An HTTP 200 response can also return a business error. <Badge color="orange" size="sm">Corrected · api-11-F12</Badge>
+
+| `code` | Meaning | Recommended action |
+| --- | --- | --- |
+| `200` | Request succeeded | Read data and determine the result using the business status defined for this endpoint. |
+| `400` | Request or validation failed | Parameter issue. Check and correct the request parameters. Missing `ref_id`, `amount`, or `merchant_order_id` returns code `4000`. Invalid amount precision or merchant-order date format returns code `4002`. A merchant-order date outside the accepted UTC window or an incompatible fixed QR Code amount returns code `400`. A nonempty reference no longer available returns code `4003012`. A payment submission failure can return code `4003014`; investigate the original payment before retrying <Badge color="blue" size="sm">Added · api-11-F16</Badge> |
+| `500` | System error | Log the response and confirm the business result first. |
+
+The examples illustrate the response structure. Use the actual response for message and business status values. See [Error Catalog](/api-reference/error-catalog) for other parameter, permission, and service errors. This section does not imply that the endpoint returns only these three code values.
+
+<Tip>
+To try this endpoint, send the request example to the Sandbox base URL `https://ebanking-openapi-sandbox.pagsmile.com.br` with your Sandbox AK/SK. Sign every request as described in [Environments & Credentials](/environments-and-credentials#api-request-signing).
+</Tip>
+
+
+<Accordion title="Corrections to the source document (13)" icon="clipboard-check">
+This page was checked against the Pagsmile Open API source code on 2026-11-10. Each change below is marked in the page with a badge that shows its ID.
+
+| ID | Change | Location | Source document text | Updated text |
+| --- | --- | --- | --- | --- |
+| api-11-F02 | Added (missing in the source) | Request parameters; append to amount description | Decimal amount string; the value must be greater than 0 and have at most two decimal places (for example, 10.00); 0, negative numbers, and 10.555 are not accepted | Decimal amount string; the value must be greater than 0 and exactly representable with two decimal places (for example, 10.00). Extra trailing zeros are accepted; 0, negative numbers, and 10.555 are not accepted. For a QR Code with a positive amount and a non-editable dynamic amount, the confirmation amount must equal the initialized amount numerically. Equivalent values such as 10.0 and 10.00 match. This equality check does not apply when the QR Code has no positive amount or permits amount changes |
+| api-11-F03 | Added (missing in the source) | Request parameters | Currency; bank account payments are processed in BRL in this version | Currency; optional. This endpoint ignores the supplied currency value and always submits the payment in BRL. Omit this field or use BRL; another currency value does not convert the amount |
+| api-11-F04 | Added (missing in the source) | Request parameters | Short-lived initialization reference for a two-step payment | Pass data.ref_id unchanged from a successful Initialize QR code payment response. Use the same payer account and confirm within 5 minutes. Do not generate the reference yourself or use a Pix key initialization reference. After a payment is accepted for processing, the reference is consumed. A nonempty reference not found in the initialization cache returns code 4003012. Investigate any previously submitted payment before initializing again |
+| api-11-F05 | Added (missing in the source) | Permissions and account ownership | ACCOUNT, or USER with the target account header. | Use ACCOUNT credentials for their bound account, or USER credentials with both X-ISPB and X-Account-Number for an active account owned by that USER within its permitted account hierarchy. ACCOUNT credentials do not require these headers; if sent, both must be nonempty and match the bound account. PLATFORM credentials are not accepted. Initialization and confirmation must target the same payer ISPB and account number |
+| api-11-F06 | Added (missing in the source) | Permissions and account ownership | Requests must follow Environments & Credentials. | Requests must follow Environments & Credentials. The associated user must have Open API access and be active. Confirmation is rejected if payout access is disabled or the payer bank account is blocked |
+| api-11-F07 | Added (missing in the source) | Behavior and handling | Then query the transaction result. | A successful confirmation accepts the payment for asynchronous processing and returns data.txn_status = 5 (TXN_STATUS_PROCESSING), not proof of completed settlement. Save data.txn_id and query the original transaction until its outcome is confirmed. Insufficient funds, further risk checks, or bank-side rejection can still prevent completion after acceptance |
+| api-11-F08 | Added (missing in the source) | Response fields; new row after data.txn_id | — | `data.settlement_id` \| string \| No \| Settlement transaction ID. This confirmation response leaves it empty. Use Get payment details to obtain the actual settlement identifier |
+| api-11-F11 | Corrected (did not match the code) | cURL request example | `ORDER_ID="$(date +%y%m%d%H%M%S)$(openssl rand -hex 3 \| python3 -c 'import sys; print(str(int(sys.stdin.read().strip(),16)%1000000).zfill(6))')"` | `ORDER_ID="$(date -u +%y%m%d%H%M%S)$(openssl rand -hex 3 \| python3 -c 'import sys; print(str(int(sys.stdin.read().strip(),16)%1000000).zfill(6))')"` |
+| api-11-F12 | Corrected (did not match the code) | Responses; Request succeeded example | `{ "code": 200, "message": "success", "data": { "merchant_order_id": "example-merchant_order_id", "txn_id": "example-txn_id", "txn_status": 0, "payee": { "name": "example-name", "document_id": "example-document_id", "document_type": 0, "bank_account": "example-bank_account", "bank_account_type": 0, "bank_branch": "example-bank_branch", "bank_code": "example-bank_code", "bank_name": "example-bank_name" }, "payer": { "name": "example-name", "document_id": "example-document_id", "document_type": 0, "bank_account": "example-bank_account", "bank_account_type": 0, "bank_branch": "example-bank_branch", "bank_code": "example-bank_code", "bank_name": "example-bank_name" } }, "time": 1791792000000 }` | `{ "code": 200, "message": "success", "data": { "merchant_order_id": "261012-example-order", "txn_id": "example-txn_id", "txn_status": 5, "payee": null, "payer": null, "settlement_id": "", "error": null, "result": null }, "time": 1791792000000 }` |
+| api-11-F13 | Added (missing in the source) | Request parameters; append to merchant_order_id description | Merchant order ID; only English letters, digits, hyphens, and underscores are allowed. The first six characters must be a valid YYMMDD UTC date. The date must overlap the window within ±1 hour of the current UTC time. If the result is unknown, query the original operation first. Do not blindly resubmit with a new ID | Merchant order ID; only English letters, digits, hyphens, and underscores are allowed. The first six characters must be a valid YYMMDD UTC date. The date must overlap the window within ±1 hour of the current UTC time. If the result is unknown, query the original operation first. Do not blindly resubmit with a new ID. Reserved order IDs are retained for duplicate detection for 48 hours. Detection uses the order ID alone, not the payer account or credentials; avoid reusing IDs across accounts. A duplicate returns code 4001013 rather than replaying the original success response |
+| api-11-F14 | Added (missing in the source) | Behavior and handling | Use the same account and comply with the applicable amount conditions from initialization. | Use the same account and comply with the applicable amount conditions from initialization. The payer and payee cannot have both the same ISPB and the same bank account number; this is rejected with code 400 |
+| api-11-F15 | Added (missing in the source) | Behavior and handling; add Funding and payment checks paragraph | — | Confirmation is subject to the payer account's applicable transaction limits and risk controls. An exceeded payment limit can return code 4001998; an AML rejection can return code 4003016. Keep enough available funds for the amount and applicable payer fees. Balance blocking and further risk checks occur asynchronously, so an accepted request can still fail later. Check the original transaction outcome before retrying |
+| api-11-F16 | Added (missing in the source) | Responses; append to validation recommended action | Parameter issue. Check and correct the request parameters. | Parameter issue. Check and correct the request parameters. Missing ref_id, amount, or merchant_order_id returns code 4000. Invalid amount precision or merchant-order date format returns code 4002. A merchant-order date outside the accepted UTC window or an incompatible fixed QR Code amount returns code 400. A nonempty reference no longer available returns code 4003012. A payment submission failure can return code 4003014; investigate the original payment before retrying |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+ORDER_ID="$(date -u +%y%m%d%H%M%S)$(openssl rand -hex 3 | python3 -c 'import sys; print(str(int(sys.stdin.read().strip(),16)%1000000).zfill(6))')"
+cat > body.json <<JSON
+{
+  "ref_id": "replace-with-init-reference",
+  "merchant_order_id": "${ORDER_ID}",
+  "amount": "10.00"
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/transfers/pix/qr-code-confirm' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${ACCOUNT_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Request succeeded
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "merchant_order_id": "261012-example-order",
+    "txn_id": "example-txn_id",
+    "txn_status": 5,
+    "payee": null,
+    "payer": null,
+    "settlement_id": "",
+    "error": null,
+    "result": null
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Request or validation failed
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 System error
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

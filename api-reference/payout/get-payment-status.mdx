@@ -1,0 +1,134 @@
+---
+title: "Get payment status"
+description: "Query the current payment status to track processing progress for an initiated transaction."
+api: "POST /v3/transfers/status/check"
+keywords: ["/v3/transfers/status/check"]
+---
+
+## Behavior and handling
+
+Query the current payment status to track processing progress for an initiated transaction. This call can also advance processing of the existing payment. For Pix, it can check the bank status and update the payment result. For TED, it uses the recorded settlement result to complete local processing; it does not request a new bank status. For a pending internal transfer, it can resume processing and execute the existing transfer after the applicable funds, risk, and payment-window checks. If both the recorded and channel-reported Pix statuses remain `PROCESSING` and the recorded channel request time is more than two hours old, the payment can be marked `FAILED`. <Badge color="blue" size="sm">Added · api-14-F01</Badge> Use transaction details and account statement entries together to confirm the funds outcome.
+
+## Permissions and account ownership
+
+Use `ACCOUNT` credentials bound to the target account, or `USER` credentials with both `X-ISPB` and `X-Account-Number`. `PLATFORM` credentials are not accepted. With `ACCOUNT` credentials, omit both target headers or provide both with values matching the credential-bound account. With `USER` credentials, the target account must belong to the credential owner and have a valid active account hierarchy. Closed identities are not eligible for this status check. The target account must match either the payer or the payee of the specified transaction. <Badge color="blue" size="sm">Added · api-14-F02</Badge> Requests must follow [Environments & Credentials](/environments-and-credentials).
+
+## Request parameters
+
+<ParamField body="txn_id" type="string" required>
+Transaction ID from `data.txn_id` in the response to Pix key payment confirmation, QR code payment confirmation, Pix payment using bank account details, TED payment, or internal transfer
+</ParamField>
+
+<Info>
+**Parameter sources**
+
+For `txn_id`, you must use the transaction ID of an initiated payment. First call [Confirm Pix key payment](/api-reference/payout/pix/confirm-pix-key-payment), [Confirm QR code payment](/api-reference/payout/pix/confirm-qr-code-payment), [Pay with Pix using bank account details](/api-reference/payout/pix/pay-with-bank-account-details), [Initiate TED payment](/api-reference/payout/ted/initiate-ted-payment), or [Initiate internal transfer](/api-reference/payout/book-transfer/initiate-internal-transfer). Then copy `data.txn_id` from the successful response.
+</Info>
+
+## cURL request example
+
+The example uses ACCOUNT-level credentials. Enter the actual parameters and generate the signature from the final body.json.
+
+## Response fields
+
+Field paths start at the response root. `[]` indicates an array element. Amounts use decimal strings. Enum values are defined separately for each field. The structure below describes a success response. A null value or 0 alone does not indicate that processing is complete.
+
+<ResponseField name="code" type="integer">
+Business result code. A value of 200 indicates success. Business errors are returned in this field. It is not the HTTP status code.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Business result description. On failure, use this with code to determine the cause.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Data object in a successful response. Can be null in an error response.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Response time as a UTC Unix timestamp in milliseconds.
+</ResponseField>
+
+<ResponseField name="data.txn_status" type="integer">
+Transaction status. Shared enum: `0` `TXN_STATUS_UNSPECIFIED`; `1` `TXN_STATUS_PENDING`; `2` `TXN_STATUS_COMPLETED`; `3` `TXN_STATUS_FAILED`; `4` `TXN_STATUS_CANCELLED`; `5` `TXN_STATUS_PROCESSING`; `6` `TXN_STATUS_REFUNDED`; `7` `TXN_STATUS_PARTIALLY_REFUNDED`; `8` `TXN_STATUS_DISPUTED`. This endpoint currently maps `PENDING`, `COMPLETED`, `FAILED`, `CANCELLED`, and `PROCESSING` to values 1–5; other recorded status values map to `0`. It does not currently return values 6–8. Do not use this status check alone to determine whether a refund or dispute occurred. <Badge color="blue" size="sm">Added · api-14-F05</Badge>
+</ResponseField>
+
+## Responses
+
+View response examples by the business `code` in the JSON response. Check the HTTP status and business code separately. An HTTP 200 response can also return a business error.
+
+| `code` | Meaning | Recommended action |
+| --- | --- | --- |
+| `200` | Request succeeded | Read data and determine the result using the business status defined for this endpoint. A successful request does not guarantee that the bank status was refreshed or that processing advanced. If a status refresh or processing update fails but the transaction can still be read, the response can contain the latest recorded status with `code=200`. Continue tracking `PENDING` or `PROCESSING` transactions, and confirm the funds outcome with payment details and statement entries. <Badge color="blue" size="sm">Added · api-14-F07</Badge> |
+| `400` | Request or validation failed | Parameter issue. Check and correct the request parameters. |
+| `500` | System error | Log the response and confirm the business result first. |
+
+The examples illustrate the response structure. Use the actual response for message and business status values. See [Error Catalog](/api-reference/error-catalog) for other parameter, permission, and service errors. This section does not imply that the endpoint returns only these three code values. For this endpoint, an omitted or empty `txn_id` returns `code=4000`. A transaction that cannot be found returns `code=4003003`, and an account that is neither the payer nor the payee returns `code=4004101`. Transaction status retrieval failures can return `code=4003014`; a temporary communication failure while checking payment status returns `code=501`. Authentication and account-target errors can return other codes from the [Error Catalog](/api-reference/error-catalog). <Badge color="blue" size="sm">Added · api-14-F06</Badge>
+
+<Tip>
+To try this endpoint, send the request example to the Sandbox base URL `https://ebanking-openapi-sandbox.pagsmile.com.br` with your Sandbox AK/SK. Sign every request as described in [Environments & Credentials](/environments-and-credentials#api-request-signing).
+</Tip>
+
+
+<Accordion title="Corrections to the source document (5)" icon="clipboard-check">
+This page was checked against the Pagsmile Open API source code on 2026-11-10. Each change below is marked in the page with a badge that shows its ID.
+
+| ID | Change | Location | Source document text | Updated text |
+| --- | --- | --- | --- | --- |
+| api-14-F01 | Added (missing in the source) | Behavior and handling | Query the current payment status to track processing progress for an initiated transaction. | Query the current payment status to track processing progress for an initiated transaction. This call can also advance processing of the existing payment. For Pix, it can check the bank status and update the payment result. For TED, it uses the recorded settlement result to complete local processing; it does not request a new bank status. For a pending internal transfer, it can resume processing and execute the existing transfer after the applicable funds, risk, and payment-window checks. If both the recorded and channel-reported Pix statuses remain PROCESSING and the recorded channel request time is more than two hours old, the payment can be marked FAILED. |
+| api-14-F02 | Added (missing in the source) | Permissions and account ownership | ACCOUNT, or USER with the target account header. | Use ACCOUNT credentials bound to the target account, or USER credentials with both `X-ISPB` and `X-Account-Number`. PLATFORM credentials are not accepted. With ACCOUNT credentials, omit both target headers or provide both with values matching the credential-bound account. With USER credentials, the target account must belong to the credential owner and have a valid active account hierarchy. Closed identities are not eligible for this status check. The target account must match either the payer or the payee of the specified transaction. |
+| api-14-F05 | Added (missing in the source) | Response fields | Transaction status. Enum: 0 TXN_STATUS_UNSPECIFIED; 1 TXN_STATUS_PENDING; 2 TXN_STATUS_COMPLETED; 3 TXN_STATUS_FAILED; 4 TXN_STATUS_CANCELLED; 5 TXN_STATUS_PROCESSING; 6 TXN_STATUS_REFUNDED; 7 TXN_STATUS_PARTIALLY_REFUNDED; 8 TXN_STATUS_DISPUTED. | Transaction status. Shared enum: 0 TXN_STATUS_UNSPECIFIED; 1 TXN_STATUS_PENDING; 2 TXN_STATUS_COMPLETED; 3 TXN_STATUS_FAILED; 4 TXN_STATUS_CANCELLED; 5 TXN_STATUS_PROCESSING; 6 TXN_STATUS_REFUNDED; 7 TXN_STATUS_PARTIALLY_REFUNDED; 8 TXN_STATUS_DISPUTED. This endpoint currently maps PENDING, COMPLETED, FAILED, CANCELLED, and PROCESSING to values 1–5; other recorded status values map to 0. It does not currently return values 6–8. Do not use this status check alone to determine whether a refund or dispute occurred. |
+| api-14-F06 | Added (missing in the source) | Responses: append endpoint-specific errors to the final explanatory paragraph | This section does not imply that the endpoint returns only these three code values. | This section does not imply that the endpoint returns only these three code values. For this endpoint, an omitted or empty `txn_id` returns `code=4000`. A transaction that cannot be found returns `code=4003003`, and an account that is neither the payer nor the payee returns `code=4004101`. Transaction status retrieval failures can return `code=4003014`; a temporary communication failure while checking payment status returns `code=501`. Authentication and account-target errors can return other codes from the Error Catalog. |
+| api-14-F07 | Added (missing in the source) | Responses: Request succeeded / Recommended action | Read data and determine the result using the business status defined for this endpoint. | Read data and determine the result using the business status defined for this endpoint. A successful request does not guarantee that the bank status was refreshed or that processing advanced. If a status refresh or processing update fails but the transaction can still be read, the response can contain the latest recorded status with `code=200`. Continue tracking PENDING or PROCESSING transactions, and confirm the funds outcome with payment details and statement entries. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "txn_id": "replace-with-transaction-id"
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/transfers/status/check' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${ACCOUNT_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Request succeeded
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "txn_status": 0
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Request or validation failed
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 System error
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

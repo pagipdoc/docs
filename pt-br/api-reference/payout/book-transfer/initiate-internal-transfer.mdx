@@ -1,0 +1,296 @@
+---
+title: "Iniciar transferência interna"
+description: "Inicie uma transferência interna dentro do escopo permitido. Confira a conta-alvo e o valor. Salve o ID da transação e consulte o resultado."
+api: "POST /v3/transfers/internal"
+keywords: ["/v3/transfers/internal"]
+---
+
+## Funcionamento e tratamento
+
+Inicie uma transferência interna entre contas diferentes e elegíveis na mesma instituição. Uma submissão bem-sucedida aceita a transferência para processamento assíncrono e retorna `txn_status` `5` (`TXN_STATUS_PROCESSING`); isso não significa que os recursos já foram transferidos. Consulte a transação original para confirmar seu status final. <Badge color="blue" size="sm">Complementado · api-16-F12</Badge> Confira a conta do pagador, a conta do recebedor e o valor. O pagador deve estar habilitado para enviar pagamentos. O recebedor deve ter uma conta interna existente e ativa, habilitada para receber pagamentos e sem encerramento em andamento; o ISPB, o número da conta, a agência, o tipo de conta e os dados do documento do titular devem corresponder à requisição. <Badge color="blue" size="sm">Complementado · api-16-F17</Badge> As tarifas aplicáveis ao pagador e ao recebedor são verificadas antes de a transferência ser aceita. O valor da transferência deve ser maior que a tarifa total do recebedor, para que o valor creditado após essa tarifa seja maior que zero. Salve o ID da transação e consulte o resultado. <Badge color="blue" size="sm">Complementado · api-16-F22</Badge>
+
+Se o resultado da requisição for desconhecido, verifique a transação original conforme [Cenários de erro do módulo de pagamentos](/pt-br/api-reference/payout/overview). Não reenvie a requisição diretamente.
+
+## Permissões e titularidade da conta
+
+Use credenciais `ACCOUNT` para a conta vinculada do pagador, ou credenciais `USER` com `X-ISPB` e `X-Account-Number` para selecionar uma conta do pagador autorizada para esse `USER`. Os headers da conta-alvo selecionam a conta do pagador, não a do recebedor. Os dois headers de conta-alvo do `USER` devem estar presentes e preenchidos. Credenciais `PLATFORM` não são aceitas. Se as credenciais `ACCOUNT` incluírem headers de conta-alvo, ambos devem estar presentes e corresponder à conta vinculada do pagador; eles não podem selecionar outra conta. <Badge color="blue" size="sm">Complementado · api-16-F11</Badge> As requisições devem seguir as orientações de [Ambientes e credenciais](/pt-br/environments-and-credentials).
+
+## Parâmetros da requisição
+
+<ParamField body="payee" type="object" required>
+Identificação e dados bancários do recebedor
+</ParamField>
+
+<ParamField body="payee.name" type="string" required>
+↳ Nome do recebedor
+</ParamField>
+
+<ParamField body="payee.document_id" type="string" required>
+↳ Número do documento do recebedor, compatível com o tipo de documento e com a conta que receberá o pagamento
+</ParamField>
+
+<ParamField body="payee.document_type" type="integer" required>
+↳ **Obrigatório:** Sim. <Badge color="orange" size="sm">Corrigido · api-16-F01</Badge> Obrigatório. Valores aceitos: `1 CPF`; `2 CNPJ`. O valor deve corresponder ao tipo de documento do titular da conta do recebedor. `0 UNSPECIFIED` e outros valores não são aceitos. <Badge color="orange" size="sm">Corrigido · api-16-F02</Badge>
+</ParamField>
+
+<ParamField body="payee.bank_account" type="string" required>
+↳ Número da conta do recebedor. Preserve os zeros à esquerda. Use apenas dígitos, sem espaços em branco. Deve identificar uma conta interna existente do recebedor e ser diferente da conta do pagador. <Badge color="blue" size="sm">Complementado · api-16-F05</Badge>
+</ParamField>
+
+<ParamField body="payee.bank_account_type" type="integer" required>
+↳ **Obrigatório:** Sim. <Badge color="orange" size="sm">Corrigido · api-16-F03</Badge> Obrigatório. Valores aceitos: `1 CHECKING`; `2 SALARY`; `3 SAVINGS`; `4 PAYMENT`. O valor deve corresponder à conta real do recebedor. `0 UNSPECIFIED`, `5 TRANSCTIONAL_PI`, `6 GUARANTEED`, `7 DEPOSIT` e outros valores não são aceitos nesta requisição. <Badge color="orange" size="sm">Corrigido · api-16-F04</Badge>
+</ParamField>
+
+<ParamField body="payee.bank_branch" type="string" required>
+↳ Código da agência do recebedor. Preserve os zeros à esquerda. Use apenas dígitos. Valores com menos de quatro caracteres são preenchidos à esquerda com zeros na conferência da conta, e o código resultante deve corresponder à agência da conta real do recebedor. <Badge color="blue" size="sm">Complementado · api-16-F06</Badge>
+</ParamField>
+
+<ParamField body="payee.bank_code" type="string" required>
+↳ ISPB do banco do recebedor em formato de string. Preserve os zeros à esquerda. A Open API remove todos os espaços em branco, converte as letras para maiúsculas e preenche à esquerda com zeros os valores com menos de 8 caracteres. Após a normalização, o valor deve conter exatamente 8 letras maiúsculas ou dígitos; transferências internas aceitam apenas dígitos. Informe um ISPB real e válido de 8 dígitos, igual ao ISPB da conta do pagador. Transferências para outra instituição não são permitidas. <Badge color="blue" size="sm">Complementado · api-16-F07</Badge>
+</ParamField>
+
+<ParamField body="payee.bank_name" type="string">
+↳ **Obrigatório:** Não (ignorado). <Badge color="orange" size="sm">Corrigido · api-16-F08</Badge> Nome do banco opcional. Este endpoint aceita o campo, mas ignora seu valor nas transferências internas. <Badge color="orange" size="sm">Corrigido · api-16-F09</Badge>
+</ParamField>
+
+<ParamField body="amount" type="string" required>
+String com o valor decimal; o valor deve ser maior que `0` e ter no máximo duas casas decimais efetivas (por exemplo, `10.00`). Zeros adicionais à direita não aumentam a precisão, portanto `10.000` é aceito; não são aceitos `0`, números negativos ou `10.555`. <Badge color="orange" size="sm">Corrigido · api-16-F20</Badge> As transferências internas também estão sujeitas aos limites de transação e de período configurados para o pagador, considerando os tipos de documento do pagador e do recebedor. A rejeição por limite retorna o `code` de negócio `4001998`. Não há um limite numérico universal de transferência especificado nesta página. <Badge color="blue" size="sm">Complementado · api-16-F18</Badge>
+</ParamField>
+
+<ParamField body="currency" type="string">
+**Obrigatório:** Não (não obrigatório nesta camada). Moeda; nesta versão, os pagamentos por conta bancária são processados em BRL
+</ParamField>
+
+<ParamField body="memo" type="string">
+**Obrigatório:** Não (não obrigatório nesta camada). Observação da transação
+</ParamField>
+
+<ParamField body="merchant_order_id" type="string" required>
+ID do pedido do comerciante; permite apenas letras do alfabeto inglês, números, hífens e sublinhados. Use pelo menos seis caracteres, começando com uma data UTC válida no formato `YYMMDD` cujo dia tenha interseção com a janela UTC atual de ±1 hora. Use um ID único entre as operações do mesmo ambiente, não apenas para uma conta do pagador. Os IDs aceitos ficam reservados por até 48 horas; uma duplicidade é rejeitada com o `code` de negócio `4001013` e não reproduz a resposta de sucesso original. Se o resultado for desconhecido, consulte primeiro a operação original. Não reenvie com outro ID sem essa verificação. <Badge color="blue" size="sm">Complementado · api-16-F16</Badge>
+</ParamField>
+
+## Exemplo de requisição cURL
+
+O exemplo usa credenciais de nível ACCOUNT. Preencha os parâmetros reais e gere a assinatura com base no body.json final. <Badge color="orange" size="sm">Corrigido · api-16-F15</Badge>
+
+O número da conta e o documento do exemplo servem apenas para demonstrar a estrutura. É obrigatório substituí-los pelos dados de um recebedor real do Sandbox.
+
+## Campos da resposta
+
+Os caminhos dos campos partem da raiz da resposta. `[]` indica um elemento de array. Os valores monetários usam strings decimais. Os enums são interpretados conforme cada campo. A estrutura abaixo representa os dados de uma resposta de sucesso. Um valor nulo ou 0, por si só, não indica a conclusão da operação.
+
+<ResponseField name="code" type="integer">
+Código de resultado de negócio; 200 indica sucesso. Os erros de negócio são retornados neste campo, que não equivale ao código de status HTTP.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Descrição do resultado de negócio; em caso de falha, analise esta descrição junto com o campo code para identificar a causa.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Objeto de dados da resposta de sucesso; pode ser null em respostas de erro.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Horário da resposta, em timestamp Unix UTC em milissegundos.
+</ResponseField>
+
+<ResponseField name="data.merchant_order_id" type="string">
+ID do pedido do comerciante informado pelo integrador.
+</ResponseField>
+
+<ResponseField name="data.txn_id" type="string">
+ID da transação.
+</ResponseField>
+
+<ResponseField name="data.txn_status" type="integer">
+Status da transação. Enum: 0 TXN_STATUS_UNSPECIFIED; 1 TXN_STATUS_PENDING; 2 TXN_STATUS_COMPLETED; 3 TXN_STATUS_FAILED; 4 TXN_STATUS_CANCELLED; 5 TXN_STATUS_PROCESSING; 6 TXN_STATUS_REFUNDED; 7 TXN_STATUS_PARTIALLY_REFUNDED; 8 TXN_STATUS_DISPUTED.
+</ResponseField>
+
+<ResponseField name="data.payee" type="object">
+Dados do recebedor. O endpoint de pagamento atual não preenche este campo e retorna null. Chame Consultar detalhes do pagamento para obter os dados reais dos participantes.
+</ResponseField>
+
+<ResponseField name="data.payee.name" type="string">
+Nome.
+</ResponseField>
+
+<ResponseField name="data.payee.document_id" type="string">
+Número do documento do participante da transação, que pode ser mascarado conforme a configuração do comerciante.
+</ResponseField>
+
+<ResponseField name="data.payee.document_type" type="integer">
+Tipo de documento. Enum: 0 DOCUMENT_TYPE_UNSPECIFIED; 1 DOCUMENT_TYPE_CPF; 2 DOCUMENT_TYPE_CNPJ.
+</ResponseField>
+
+<ResponseField name="data.payee.bank_account" type="string">
+Número da conta.
+</ResponseField>
+
+<ResponseField name="data.payee.bank_account_type" type="integer">
+Tipo de conta bancária. Enum: 0 BANK_ACCOUNT_TYPE_UNSPECIFIED; 1 BANK_ACCOUNT_TYPE_CHECKING; 2 BANK_ACCOUNT_TYPE_SALARY; 3 BANK_ACCOUNT_TYPE_SAVINGS; 4 BANK_ACCOUNT_TYPE_PAYMENT; 5 BANK_ACCOUNT_TYPE_TRANSCTIONAL_PI; 7 BANK_ACCOUNT_TYPE_DEPOSIT; 6 BANK_ACCOUNT_TYPE_GUARANTEED.
+</ResponseField>
+
+<ResponseField name="data.payee.bank_branch" type="string">
+Código da agência bancária.
+</ResponseField>
+
+<ResponseField name="data.payee.bank_code" type="string">
+ISPB do banco.
+</ResponseField>
+
+<ResponseField name="data.payee.bank_name" type="string">
+Nome do banco.
+</ResponseField>
+
+<ResponseField name="data.payer" type="object">
+Dados do pagador. O endpoint de pagamento atual não preenche este campo e retorna null. Chame Consultar detalhes do pagamento para obter os dados reais dos participantes.
+</ResponseField>
+
+<ResponseField name="data.payer.name" type="string">
+Nome.
+</ResponseField>
+
+<ResponseField name="data.payer.document_id" type="string">
+Número do documento do participante da transação, que pode ser mascarado conforme a configuração do comerciante.
+</ResponseField>
+
+<ResponseField name="data.payer.document_type" type="integer">
+Tipo de documento. Enum: 0 DOCUMENT_TYPE_UNSPECIFIED; 1 DOCUMENT_TYPE_CPF; 2 DOCUMENT_TYPE_CNPJ.
+</ResponseField>
+
+<ResponseField name="data.payer.bank_account" type="string">
+Número da conta.
+</ResponseField>
+
+<ResponseField name="data.payer.bank_account_type" type="integer">
+Tipo de conta bancária. Enum: 0 BANK_ACCOUNT_TYPE_UNSPECIFIED; 1 BANK_ACCOUNT_TYPE_CHECKING; 2 BANK_ACCOUNT_TYPE_SALARY; 3 BANK_ACCOUNT_TYPE_SAVINGS; 4 BANK_ACCOUNT_TYPE_PAYMENT; 5 BANK_ACCOUNT_TYPE_TRANSCTIONAL_PI; 7 BANK_ACCOUNT_TYPE_DEPOSIT; 6 BANK_ACCOUNT_TYPE_GUARANTEED.
+</ResponseField>
+
+<ResponseField name="data.payer.bank_branch" type="string">
+Código da agência bancária.
+</ResponseField>
+
+<ResponseField name="data.payer.bank_code" type="string">
+ISPB do banco.
+</ResponseField>
+
+<ResponseField name="data.payer.bank_name" type="string">
+Nome do banco.
+</ResponseField>
+
+<ResponseField name="data.error" type="object">
+Retorna `null` na resposta de sucesso deste endpoint. As falhas de negócio são retornadas nos campos `code` e `message` da raiz, com `data` `null`. <Badge color="blue" size="sm">Complementado · api-16-F13</Badge>
+</ResponseField>
+
+## Respostas
+
+Consulte os exemplos de resposta pelo `code` de negócio no JSON. Verifique o status HTTP e o code de negócio separadamente. Uma resposta HTTP 200 também pode retornar um erro de negócio. <Badge color="orange" size="sm">Corrigido · api-16-F14</Badge>
+
+| `code` | Significado | Ação recomendada |
+| --- | --- | --- |
+| `200` | Requisição bem-sucedida | Leia data e avalie o resultado do processamento conforme o status de negócio deste endpoint. |
+| `400` | Falha na requisição ou validação | Problema nos parâmetros. Verifique e corrija os parâmetros da requisição. |
+| `500` | Erro do sistema | Registre a resposta e confirme primeiro o resultado de negócio. |
+
+Os exemplos ilustram a estrutura da resposta. Os valores de message e do status de negócio devem ser obtidos da resposta efetiva. Para outros erros de parâmetros, permissões e serviço, consulte [Catálogo de erros](/pt-br/api-reference/error-catalog). Esta seção não indica que o endpoint retorna apenas os três valores de `code` apresentados. Outros erros incluem `4000` para um campo obrigatório, `4002` para formato inválido do valor ou do ISPB normalizado, `4001` para ISPB do recebedor diferente do ISPB do pagador, `4001013` para `merchant_order_id` duplicado, `4001998` para rejeição por limite de pagamento configurado e `4003014` quando não é possível confirmar o processamento do pagamento ou a verificação da conta. Falhas nas validações de conta, documento, tipo de conta e ID do pedido podem retornar `400` com uma mensagem específica. Se o processamento puder ter começado, investigue a transação original antes de reenviar. <Badge color="blue" size="sm">Complementado · api-16-F19</Badge>
+
+<Tip>
+Para testar este endpoint, envie o exemplo de requisição para a Base URL do Sandbox `https://ebanking-openapi-sandbox.pagsmile.com.br` com sua AK/SK de Sandbox. Assine cada requisição conforme descrito em [Ambientes e credenciais](/pt-br/environments-and-credentials#assinatura-de-requisições-à-api).
+</Tip>
+
+
+<Accordion title="Correções em relação ao documento original (20)" icon="clipboard-check">
+Esta página foi conferida com o código-fonte da Pagsmile Open API em 2026-11-10. Cada alteração abaixo está marcada na página com um selo que mostra o seu ID.
+
+| ID | Alteração | Local | Texto do documento original | Texto atualizado |
+| --- | --- | --- | --- | --- |
+| api-16-F01 | Corrigido (não correspondia ao código) | Request parameters | Conforme as condições do objeto pai | Sim |
+| api-16-F02 | Corrigido (não correspondia ao código) | Request parameters | Preencha com os dados reais da operação. A validade depende das validações do servidor e dos sistemas subsequentes. Valores: 0 UNSPECIFIED; 1 CPF; 2 CNPJ | Obrigatório. Valores aceitos: 1 CPF; 2 CNPJ. O valor deve corresponder ao tipo de documento do titular da conta do recebedor. 0 UNSPECIFIED e outros valores não são aceitos. |
+| api-16-F03 | Corrigido (não correspondia ao código) | Request parameters | Conforme as condições do objeto pai | Sim |
+| api-16-F04 | Corrigido (não correspondia ao código) | Request parameters | Preencha com os dados reais da operação. A validade depende das validações do servidor e dos sistemas subsequentes. Valores: 0 UNSPECIFIED; 1 CHECKING; 2 SALARY; 3 SAVINGS; 4 PAYMENT; 5 TRANSCTIONAL_PI | Obrigatório. Valores aceitos: 1 CHECKING; 2 SALARY; 3 SAVINGS; 4 PAYMENT. O valor deve corresponder à conta real do recebedor. 0 UNSPECIFIED, 5 TRANSCTIONAL_PI, 6 GUARANTEED, 7 DEPOSIT e outros valores não são aceitos nesta requisição. |
+| api-16-F05 | Complementado (ausente no original) | Request parameters | Número da conta do recebedor. Preserve os zeros à esquerda | Número da conta do recebedor. Preserve os zeros à esquerda. Use apenas dígitos, sem espaços em branco. Deve identificar uma conta interna existente do recebedor e ser diferente da conta do pagador. |
+| api-16-F06 | Complementado (ausente no original) | Request parameters | Código da agência do recebedor. Preserve os zeros à esquerda | Código da agência do recebedor. Preserve os zeros à esquerda. Use apenas dígitos. Valores com menos de quatro caracteres são preenchidos à esquerda com zeros na conferência da conta, e o código resultante deve corresponder à agência da conta real do recebedor. |
+| api-16-F07 | Complementado (ausente no original) | Request parameters | ISPB do banco do recebedor em formato de string. Preserve os zeros à esquerda. A Open API remove todos os espaços em branco, converte as letras para maiúsculas e preenche à esquerda com zeros os valores com menos de 8 caracteres. Após a normalização, o valor deve conter exatamente 8 letras maiúsculas ou dígitos. O serviço de transações atual aceita apenas dígitos. Informe um ISPB real e válido de 8 dígitos | ISPB do banco do recebedor em formato de string. Preserve os zeros à esquerda. A Open API remove todos os espaços em branco, converte as letras para maiúsculas e preenche à esquerda com zeros os valores com menos de 8 caracteres. Após a normalização, o valor deve conter exatamente 8 letras maiúsculas ou dígitos; transferências internas aceitam apenas dígitos. Informe um ISPB real e válido de 8 dígitos, igual ao ISPB da conta do pagador. Transferências para outra instituição não são permitidas. |
+| api-16-F08 | Corrigido (não correspondia ao código) | Request parameters | Conforme as condições do objeto pai | Não (ignorado) |
+| api-16-F09 | Corrigido (não correspondia ao código) | Request parameters | Preencha com os dados reais do negócio; a validade depende das validações no servidor e nos sistemas subsequentes | Nome do banco opcional. Este endpoint aceita o campo, mas ignora seu valor nas transferências internas. |
+| api-16-F11 | Complementado (ausente no original) | Permissions and account ownership | ACCOUNT, ou USER com o header da conta-alvo. | Use credenciais ACCOUNT para a conta vinculada do pagador, ou credenciais USER com X-ISPB e X-Account-Number para selecionar uma conta do pagador autorizada para esse USER. Os headers da conta-alvo selecionam a conta do pagador, não a do recebedor. Os dois headers de conta-alvo do USER devem estar presentes e preenchidos. Credenciais PLATFORM não são aceitas. Se as credenciais ACCOUNT incluírem headers de conta-alvo, ambos devem estar presentes e corresponder à conta vinculada do pagador; eles não podem selecionar outra conta. |
+| api-16-F12 | Complementado (ausente no original) | Behavior and handling | Inicie uma transferência interna dentro do escopo permitido. | Inicie uma transferência interna entre contas diferentes e elegíveis na mesma instituição. Uma submissão bem-sucedida aceita a transferência para processamento assíncrono e retorna txn_status 5 (TXN_STATUS_PROCESSING); isso não significa que os recursos já foram transferidos. Consulte a transação original para confirmar seu status final. |
+| api-16-F13 | Complementado (ausente no original) | Response fields | — | `data.error` \| object ou null \| — \| Retorna null na resposta de sucesso deste endpoint. As falhas de negócio são retornadas nos campos code e message da raiz, com data null. |
+| api-16-F14 | Corrigido (não correspondia ao código) | Responses / Request succeeded | `{ "code": 200, "message": "success", "data": { "merchant_order_id": "example-merchant_order_id", "txn_id": "example-txn_id", "txn_status": 0, "payee": { "name": "example-name", "document_id": "example-document_id", "document_type": 0, "bank_account": "example-bank_account", "bank_account_type": 0, "bank_branch": "example-bank_branch", "bank_code": "example-bank_code", "bank_name": "example-bank_name" }, "payer": { "name": "example-name", "document_id": "example-document_id", "document_type": 0, "bank_account": "example-bank_account", "bank_account_type": 0, "bank_branch": "example-bank_branch", "bank_code": "example-bank_code", "bank_name": "example-bank_name" } }, "time": 1791792000000 }` | `{ "code": 200, "message": "success", "data": { "merchant_order_id": "261012-internal-001", "txn_id": "example-txn_id", "txn_status": 5, "payee": null, "payer": null, "error": null }, "time": 1791792000000 }` |
+| api-16-F15 | Corrigido (não correspondia ao código) | cURL request example | `ORDER_ID="$(date +%y%m%d%H%M%S)$(openssl rand -hex 3 \| python3 -c 'import sys; print(str(int(sys.stdin.read().strip(),16)%1000000).zfill(6))')"` | `ORDER_ID="$(date -u +%y%m%d%H%M%S)$(openssl rand -hex 3 \| python3 -c 'import sys; print(str(int(sys.stdin.read().strip(),16)%1000000).zfill(6))')"` |
+| api-16-F16 | Complementado (ausente no original) | Request parameters | ID do pedido do comerciante; permite apenas letras do alfabeto inglês, números, hífens e sublinhados. Os primeiros seis caracteres devem formar uma data UTC válida no formato YYMMDD. A data deve ter interseção com a janela de ±1 hora em relação ao horário UTC atual. Se o resultado for desconhecido, consulte primeiro a operação original. Não reenvie com outro ID sem essa verificação | ID do pedido do comerciante; permite apenas letras do alfabeto inglês, números, hífens e sublinhados. Use pelo menos seis caracteres, começando com uma data UTC válida no formato YYMMDD cujo dia tenha interseção com a janela UTC atual de ±1 hora. Use um ID único entre as operações do mesmo ambiente, não apenas para uma conta do pagador. Os IDs aceitos ficam reservados por até 48 horas; uma duplicidade é rejeitada com o code de negócio 4001013 e não reproduz a resposta de sucesso original. Se o resultado for desconhecido, consulte primeiro a operação original. Não reenvie com outro ID sem essa verificação. |
+| api-16-F17 | Complementado (ausente no original) | Behavior and handling | Confira a conta-alvo e o valor. | Confira a conta do pagador, a conta do recebedor e o valor. O pagador deve estar habilitado para enviar pagamentos. O recebedor deve ter uma conta interna existente e ativa, habilitada para receber pagamentos e sem encerramento em andamento; o ISPB, o número da conta, a agência, o tipo de conta e os dados do documento do titular devem corresponder à requisição. |
+| api-16-F18 | Complementado (ausente no original) | Request parameters | String com o valor decimal; o valor deve ser maior que 0 e ter no máximo duas casas decimais (por exemplo, 10.00). Não são aceitos 0, números negativos ou 10.555 | String com o valor decimal; o valor deve ser maior que 0 e ter no máximo duas casas decimais efetivas (por exemplo, 10.00). Zeros adicionais à direita não aumentam a precisão, portanto 10.000 é aceito; não são aceitos 0, números negativos ou 10.555. As transferências internas também estão sujeitas aos limites de transação e de período configurados para o pagador, considerando os tipos de documento do pagador e do recebedor. A rejeição por limite retorna o code de negócio 4001998. Não há um limite numérico universal de transferência especificado nesta página. |
+| api-16-F19 | Complementado (ausente no original) | Responses | Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados. | Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados. Outros erros incluem 4000 para um campo obrigatório, 4002 para formato inválido do valor ou do ISPB normalizado, 4001 para ISPB do recebedor diferente do ISPB do pagador, 4001013 para merchant_order_id duplicado, 4001998 para rejeição por limite de pagamento configurado e 4003014 quando não é possível confirmar o processamento do pagamento ou a verificação da conta. Falhas nas validações de conta, documento, tipo de conta e ID do pedido podem retornar 400 com uma mensagem específica. Se o processamento puder ter começado, investigue a transação original antes de reenviar. |
+| api-16-F20 | Corrigido (não correspondia ao código) | Request parameters | String com o valor decimal; o valor deve ser maior que 0 e ter no máximo duas casas decimais (por exemplo, 10.00). Não são aceitos 0, números negativos ou 10.555 | String com o valor decimal; o valor deve ser maior que 0 e ter no máximo duas casas decimais efetivas (por exemplo, 10.00). Zeros adicionais à direita não aumentam a precisão, portanto 10.000 é aceito; não são aceitos 0, números negativos ou 10.555. |
+| api-16-F22 | Complementado (ausente no original) | Behavior and handling | Salve o ID da transação e consulte o resultado. | As tarifas aplicáveis ao pagador e ao recebedor são verificadas antes de a transferência ser aceita. O valor da transferência deve ser maior que a tarifa total do recebedor, para que o valor creditado após essa tarifa seja maior que zero. Salve o ID da transação e consulte o resultado. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+ORDER_ID="$(date -u +%y%m%d%H%M%S)$(openssl rand -hex 3 | python3 -c 'import sys; print(str(int(sys.stdin.read().strip(),16)%1000000).zfill(6))')"
+cat > body.json <<JSON
+{
+  "payee": {
+    "bank_code": "00000000",
+    "bank_account": "00000001",
+    "bank_branch": "0001",
+    "document_id": "00000000000",
+    "name": "Demo Receiver",
+    "document_type": 1,
+    "bank_account_type": 1
+  },
+  "amount": "10.00",
+  "currency": "BRL",
+  "merchant_order_id": "${ORDER_ID}"
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/transfers/internal' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${ACCOUNT_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Requisição bem-sucedida
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "merchant_order_id": "261012-internal-001",
+    "txn_id": "example-txn_id",
+    "txn_status": 5,
+    "payee": null,
+    "payer": null,
+    "error": null
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Falha na requisição ou validação
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 Erro do sistema
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

@@ -1,0 +1,357 @@
+---
+title: "Consultar saldo da conta"
+description: "Use credenciais de nível ACCOUNT para consultar os dados, o saldo, o valor bloqueado e as configurações da própria conta vinculada às credenciais."
+api: "POST /v3/bank_account"
+keywords: ["/v3/bank_account"]
+---
+
+## Funcionamento e tratamento
+
+Use credenciais de nível ACCOUNT para consultar os dados, o saldo, o valor bloqueado e as configurações da própria conta vinculada às credenciais.
+
+Se a consulta do snapshot do saldo falhar, o campo code no nível externo ainda poderá ser 200, e os valores monetários terão 0 como fallback. A resposta atual não contém indicador de fallback. Uma única resposta não permite distinguir um saldo realmente zerado de um valor de fallback. Consulte novamente e confira os detalhes das transações e os lançamentos do extrato da conta. Se os resultados continuarem divergentes, guarde os dados da conta, o horário da consulta e a resposta com dados sensíveis mascarados e entre em contato com o suporte de integração para verificação.
+
+## Permissões e titularidade da conta
+
+Use a AK/SK de nível ACCOUNT da conta. Por padrão, a consulta usa a conta vinculada às credenciais, sem necessidade de informar headers de conta. Se forem informados, `X-ISPB` e `X-Account-Number` devem ser preenchidos juntos e corresponder à conta vinculada.
+
+O corpo da requisição é `{}`. A seleção da conta não é enviada pelo campo `account_number` no corpo da requisição. Para a assinatura da requisição, consulte [Ambientes e credenciais](/pt-br/environments-and-credentials).
+
+## Parâmetros da requisição
+
+<ParamField header="X-Client-ID" type="string">
+AK de nível ACCOUNT
+</ParamField>
+
+<ParamField body="Sem campos de negócio" type="string">
+`{}`
+</ParamField>
+
+## Exemplo de requisição cURL
+
+Use o par AK/SK real de nível ACCOUNT para gerar o timestamp, o nonce, o hash SHA-256 do corpo e a assinatura antes de enviar a requisição. A SK não deve ser incluída na requisição.
+
+## Campos da resposta
+
+Os caminhos dos campos partem da raiz da resposta. `[]` indica um elemento de array. Os valores monetários usam strings decimais. Os enums são interpretados conforme cada campo. A estrutura abaixo representa os dados de uma resposta de sucesso. Um valor nulo ou 0, por si só, não indica a conclusão da operação.
+
+<ResponseField name="code" type="integer">
+Código de resultado de negócio; 200 indica sucesso. Os erros de negócio são retornados neste campo, que não equivale ao código de status HTTP.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Descrição do resultado de negócio; em caso de falha, analise esta descrição junto com o campo code para identificar a causa.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Objeto de dados da resposta de sucesso; pode ser null em respostas de erro.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Horário da resposta, em timestamp Unix UTC em milissegundos.
+</ResponseField>
+
+<ResponseField name="data.account_number" type="string">
+Número da conta.
+</ResponseField>
+
+<ResponseField name="data.ispb" type="string">
+Código ISPB do banco.
+</ResponseField>
+
+<ResponseField name="data.balance" type="string">
+Saldo da conta, como string decimal.
+</ResponseField>
+
+<ResponseField name="data.frozen_amount" type="string">
+Saldo bloqueado, como string decimal.
+</ResponseField>
+
+<ResponseField name="data.available_amount" type="string">
+Saldo disponível, como string decimal.
+</ResponseField>
+
+<ResponseField name="data.currency" type="string">
+Moeda. O valor padrão é `BRL` quando o snapshot do saldo não informa a moeda ou quando a consulta do snapshot falha. <Badge color="blue" size="sm">Complementado · api-23-F01</Badge>
+</ResponseField>
+
+<ResponseField name="data.med_frozen_amount" type="string">
+Valor bloqueado para operações MED, como string decimal. Este valor pode ter `"0"` como fallback se os dados de MED estiverem indisponíveis, mesmo quando os demais valores do saldo estiverem disponíveis. O valor é limitado a `frozen_amount`. <Badge color="blue" size="sm">Complementado · api-23-F02</Badge>
+</ResponseField>
+
+<ResponseField name="data.other_frozen_amount" type="string">
+Valor bloqueado para outras operações, como string decimal. Calculado como `frozen_amount` menos `med_frozen_amount`, com valor mínimo de `"0"`. Se os dados de MED estiverem indisponíveis, este valor pode incluir recursos efetivamente bloqueados para MED. <Badge color="blue" size="sm">Complementado · api-23-F03</Badge>
+</ResponseField>
+
+<ResponseField name="data.pix_keys" type="array">
+Lista de chaves Pix válidas da conta. Atualmente, são retornadas apenas chaves com status `ACTIVE` da primeira página, com até 99 chaves obtidas. A lista pode estar vazia se houver falha na obtenção dos dados. Esta requisição não oferece controles de paginação. <Badge color="blue" size="sm">Complementado · api-23-F09</Badge>
+</ResponseField>
+
+<ResponseField name="data.pix_keys[].pix_key" type="string">
+Valor da chave Pix.
+</ResponseField>
+
+<ResponseField name="data.pix_keys[].pix_key_type" type="integer">
+Tipo de chave Pix. Enum: 0 PIX_KEY_TYPE_UNSPECIFIED; 1 PIX_KEY_TYPE_CPF; 2 PIX_KEY_TYPE_CNPJ; 3 PIX_KEY_TYPE_EMAIL; 4 PIX_KEY_TYPE_PHONE; 5 PIX_KEY_TYPE_EVP.
+</ResponseField>
+
+<ResponseField name="data.pix_keys[].status" type="integer">
+Status de negócio atual, interpretado conforme os valores do enum deste campo. Enum: 0 PIX_KEY_STATUS_UNSPECIFIED; 1 PIX_KEY_STATUS_ACTIVE; 2 PIX_KEY_STATUS_INACTIVE; 3 PIX_KEY_STATUS_BLOCKED; 4 PIX_KEY_STATUS_DELETED.
+</ResponseField>
+
+<ResponseField name="data.pix_keys[].created_at" type="integer">
+Data e hora de criação, em timestamp Unix UTC em milissegundos. Pode ser 0 se a criação não ocorreu ou se a data e hora não foram informadas.
+</ResponseField>
+
+<ResponseField name="data.limit_config" type="object">
+Configuração de limites da conta. Pode ser `null` quando não há configuração de limites disponível ou quando a obtenção dos dados falha. Os objetos `transfer`, `withdraw`, `daytime` e `nighttime` também podem ser `null` quando a configuração correspondente estiver indisponível. Valores de CPF/CNPJ não preenchidos são strings vazias, não limites iguais a zero. <Badge color="blue" size="sm">Complementado · api-23-F04</Badge>
+</ResponseField>
+
+<ResponseField name="data.limit_config.transfer" type="object">
+Configuração de limites de transferência.
+</ResponseField>
+
+<ResponseField name="data.limit_config.transfer.daytime" type="object">
+Configuração do limite diurno.
+</ResponseField>
+
+<ResponseField name="data.limit_config.transfer.daytime.cpf" type="string">
+Limite para titular com CPF, como string decimal.
+</ResponseField>
+
+<ResponseField name="data.limit_config.transfer.daytime.cnpj" type="string">
+Limite para titular com CNPJ, como string decimal.
+</ResponseField>
+
+<ResponseField name="data.limit_config.transfer.nighttime" type="object">
+Configuração do limite noturno.
+</ResponseField>
+
+<ResponseField name="data.limit_config.transfer.nighttime.cpf" type="string">
+Limite para titular com CPF, como string decimal.
+</ResponseField>
+
+<ResponseField name="data.limit_config.transfer.nighttime.cnpj" type="string">
+Limite para titular com CNPJ, como string decimal.
+</ResponseField>
+
+<ResponseField name="data.limit_config.transfer.nighttime.nighttime_period" type="string">
+Período em que o limite noturno se aplica. Pode ser uma string vazia; esta resposta atualmente não fornece um período noturno utilizável. <Badge color="blue" size="sm">Complementado · api-23-F07</Badge>
+</ResponseField>
+
+<ResponseField name="data.limit_config.withdraw" type="object">
+Configuração de limites de saque.
+</ResponseField>
+
+<ResponseField name="data.limit_config.withdraw.daytime" type="object">
+Configuração do limite diurno.
+</ResponseField>
+
+<ResponseField name="data.limit_config.withdraw.daytime.cpf" type="string">
+Campo reservado para o limite de saque de titular com CPF. Atualmente, retorna uma string vazia quando a configuração de saque diurno está presente. <Badge color="orange" size="sm">Corrigido · api-23-F05</Badge>
+</ResponseField>
+
+<ResponseField name="data.limit_config.withdraw.daytime.cnpj" type="string">
+Limite para titular com CNPJ, como string decimal.
+</ResponseField>
+
+<ResponseField name="data.limit_config.withdraw.nighttime" type="object">
+Configuração do limite noturno.
+</ResponseField>
+
+<ResponseField name="data.limit_config.withdraw.nighttime.cpf" type="string">
+Campo reservado para o limite de saque de titular com CPF. Atualmente, retorna uma string vazia quando a configuração de saque noturno está presente. <Badge color="orange" size="sm">Corrigido · api-23-F06</Badge>
+</ResponseField>
+
+<ResponseField name="data.limit_config.withdraw.nighttime.cnpj" type="string">
+Limite para titular com CNPJ, como string decimal.
+</ResponseField>
+
+<ResponseField name="data.limit_config.withdraw.nighttime.nighttime_period" type="string">
+Período em que o limite noturno se aplica. Pode ser uma string vazia; esta resposta atualmente não fornece um período noturno utilizável. <Badge color="blue" size="sm">Complementado · api-23-F08</Badge>
+</ResponseField>
+
+<ResponseField name="data.webhooks" type="array">
+Lista de assinaturas de eventos. Pode estar vazia se houver falha na obtenção dos dados.
+</ResponseField>
+
+<ResponseField name="data.webhooks[].webhook_id" type="string">
+ID da assinatura de eventos.
+</ResponseField>
+
+<ResponseField name="data.webhooks[].event_type" type="string">
+Na assinatura de eventos, o nome do evento é uma string. No endpoint de criação, event_type usa um enum numérico.
+</ResponseField>
+
+<ResponseField name="data.webhooks[].callback_url" type="string">
+Endereço para receber callbacks da assinatura de eventos.
+</ResponseField>
+
+<ResponseField name="data.webhooks[].status" type="integer">
+Status de negócio atual, interpretado conforme o enum listado para este campo. Valores: 0 BASE_STATUS_UNSPECIFIED; 1 BASE_STATUS_ACTIVE; 2 BASE_STATUS_INACTIVE.
+</ResponseField>
+
+<ResponseField name="data.webhooks[].created_at" type="integer">
+Data e hora de criação, em timestamp Unix UTC em milissegundos. Pode ser 0 se a criação não ocorreu ou se a data e hora não foram informadas.
+</ResponseField>
+
+<ResponseField name="data.webhooks[].updated_at" type="integer">
+Data e hora da última atualização, em timestamp Unix UTC em milissegundos. Pode ser 0 se não houve atualização ou se a data e hora não foram informadas.
+</ResponseField>
+
+<ResponseField name="data.webhooks[].account_number" type="string">
+Número da conta. O mapeamento atual da consulta de assinaturas de eventos não preenche este campo de compatibilidade, que pode estar vazio. O ID disponível da assinatura de eventos está em webhook_id.
+</ResponseField>
+
+<ResponseField name="data.webhooks[].subscription_id" type="string">
+ID estável da assinatura de eventos. O mapeamento atual da consulta de assinaturas de eventos não preenche este campo de compatibilidade, que pode estar vazio. O ID disponível da assinatura de eventos está em webhook_id.
+</ResponseField>
+
+<ResponseField name="data.webhooks[].suspend_reason" type="string">
+Motivo da suspensão da assinatura de eventos. O mapeamento atual da consulta de assinaturas de eventos não preenche este campo de compatibilidade, que pode estar vazio. O ID disponível da assinatura de eventos está em webhook_id.
+</ResponseField>
+
+<ResponseField name="data.fee_configs" type="array">
+Lista de configurações de tarifas aplicáveis a transações e a operações não transacionais. Pode ser `null` se a obtenção dos dados falhar ou se não houver dados de configuração disponíveis. Um array vazio indica que nenhuma configuração foi retornada. <Badge color="blue" size="sm">Complementado · api-23-F11</Badge>
+</ResponseField>
+
+<ResponseField name="data.fee_configs[].fee_config_id" type="string">
+ID da configuração de tarifas.
+</ResponseField>
+
+<ResponseField name="data.fee_configs[].name" type="string">
+Nome.
+</ResponseField>
+
+<ResponseField name="data.fee_configs[].payment_method" type="string">
+Forma de pagamento.
+</ResponseField>
+
+<ResponseField name="data.fee_configs[].flow_direction" type="string">
+Direção dos recursos.
+</ResponseField>
+
+<ResponseField name="data.fee_configs[].transaction_type" type="string">
+Categoria da transação.
+</ResponseField>
+
+<ResponseField name="data.fee_configs[].charge_type" type="string">
+Método de cálculo das tarifas.
+</ResponseField>
+
+<ResponseField name="data.fee_configs[].charge_weight" type="string">
+Peso no cálculo das tarifas.
+</ResponseField>
+
+<ResponseField name="data.fee_configs[].min_amount" type="string">
+Valor mínimo ao qual se aplica a configuração de tarifas.
+</ResponseField>
+
+<ResponseField name="data.fee_configs[].max_amount" type="string">
+Valor máximo ao qual se aplica a configuração de tarifas.
+</ResponseField>
+
+<ResponseField name="data.fee_configs[].fee_scenario_code" type="string">
+Código do cenário de aplicação das tarifas.
+</ResponseField>
+
+<ResponseField name="data.fee_configs[].fee_kind" type="string">
+Categoria das tarifas.
+</ResponseField>
+
+## Respostas
+
+Consulte os exemplos de resposta pelo `code` de negócio no JSON. JSON malformado é rejeitado com HTTP 400 e um erro em texto simples, em vez deste envelope JSON. Uma falha do sistema tratada também pode retornar HTTP 500 com uma resposta em texto simples. <Badge color="blue" size="sm">Complementado · api-23-F17</Badge> Verifique o status HTTP e o code de negócio separadamente. Uma resposta HTTP 200 também pode retornar um erro de negócio.
+
+| `code` | Significado | Ação recomendada |
+| --- | --- | --- |
+| `200` | Requisição bem-sucedida<br />O exemplo a seguir ilustra a estrutura. Os números de conta, valores e horários são demonstrativos. Listas vazias indicam que o exemplo não apresenta configurações específicas. As duas consultas retornam a mesma estrutura. `account_number` e `ispb` identificam a conta consultada. | Verifique os campos externos `code` e `message` e leia `data` como um snapshot da conta. Este endpoint não possui um campo de status de processamento da consulta. Um `code` igual a `200` não descarta os valores de fallback descritos acima. <Badge color="orange" size="sm">Corrigido · api-23-F16</Badge> |
+| `400` | Falha na requisição ou validação | Problema nos parâmetros. Verifique e corrija os parâmetros da requisição. |
+| `500` | Erro do sistema | Registre a resposta e confirme primeiro o resultado de negócio. |
+
+Os exemplos ilustram a estrutura da resposta. Os valores de message e do status de negócio devem ser obtidos da resposta efetiva. Para outros erros de parâmetros, permissões e serviço, consulte [Catálogo de erros](/pt-br/api-reference/error-catalog). Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados. <Badge color="orange" size="sm">Corrigido · api-23-F15</Badge>
+
+<Tip>
+Para testar este endpoint, envie o exemplo de requisição para a Base URL do Sandbox `https://ebanking-openapi-sandbox.pagsmile.com.br` com sua AK/SK de Sandbox. Assine cada requisição conforme descrito em [Ambientes e credenciais](/pt-br/environments-and-credentials#assinatura-de-requisições-à-api).
+</Tip>
+
+
+<Accordion title="Correções em relação ao documento original (13)" icon="clipboard-check">
+Esta página foi conferida com o código-fonte da Pagsmile Open API em 2026-11-10. Cada alteração abaixo está marcada na página com um selo que mostra o seu ID.
+
+| ID | Alteração | Local | Texto do documento original | Texto atualizado |
+| --- | --- | --- | --- | --- |
+| api-23-F01 | Complementado (ausente no original) | Response fields | Moeda. | Moeda. O valor padrão é BRL quando o snapshot do saldo não informa a moeda ou quando a consulta do snapshot falha. |
+| api-23-F02 | Complementado (ausente no original) | Response fields | Valor bloqueado para operações MED, como string decimal. | Valor bloqueado para operações MED, como string decimal. Este valor pode ter "0" como fallback se os dados de MED estiverem indisponíveis, mesmo quando os demais valores do saldo estiverem disponíveis. O valor é limitado a frozen_amount. |
+| api-23-F03 | Complementado (ausente no original) | Response fields | Valor bloqueado para outras operações, como string decimal. | Valor bloqueado para outras operações, como string decimal. Calculado como frozen_amount menos med_frozen_amount, com valor mínimo de "0". Se os dados de MED estiverem indisponíveis, este valor pode incluir recursos efetivamente bloqueados para MED. |
+| api-23-F04 | Complementado (ausente no original) | Response fields | Configuração de limites da conta. | Configuração de limites da conta. Pode ser null quando não há configuração de limites disponível ou quando a obtenção dos dados falha. Os objetos transfer, withdraw, daytime e nighttime também podem ser null quando a configuração correspondente estiver indisponível. Valores de CPF/CNPJ não preenchidos são strings vazias, não limites iguais a zero. |
+| api-23-F05 | Corrigido (não correspondia ao código) | Response fields | Limite para titular com CPF, como string decimal. | Campo reservado para o limite de saque de titular com CPF. Atualmente, retorna uma string vazia quando a configuração de saque diurno está presente. |
+| api-23-F06 | Corrigido (não correspondia ao código) | Response fields | Limite para titular com CPF, como string decimal. | Campo reservado para o limite de saque de titular com CPF. Atualmente, retorna uma string vazia quando a configuração de saque noturno está presente. |
+| api-23-F07 | Complementado (ausente no original) | Response fields | Período em que o limite noturno se aplica. | Período em que o limite noturno se aplica. Pode ser uma string vazia; esta resposta atualmente não fornece um período noturno utilizável. |
+| api-23-F08 | Complementado (ausente no original) | Response fields | Período em que o limite noturno se aplica. | Período em que o limite noturno se aplica. Pode ser uma string vazia; esta resposta atualmente não fornece um período noturno utilizável. |
+| api-23-F09 | Complementado (ausente no original) | Response fields | Lista de chaves Pix válidas da conta. Atualmente, são retornadas apenas chaves com status ACTIVE. A lista pode estar vazia se houver falha na obtenção dos dados. | Lista de chaves Pix válidas da conta. Atualmente, são retornadas apenas chaves com status ACTIVE da primeira página, com até 99 chaves obtidas. A lista pode estar vazia se houver falha na obtenção dos dados. Esta requisição não oferece controles de paginação. |
+| api-23-F11 | Complementado (ausente no original) | Response fields | Lista de configurações de tarifas aplicáveis. | Lista de configurações de tarifas aplicáveis a transações e a operações não transacionais. Pode ser null se a obtenção dos dados falhar ou se não houver dados de configuração disponíveis. Um array vazio indica que nenhuma configuração foi retornada. |
+| api-23-F15 | Corrigido (não correspondia ao código) | Responses / Request succeeded | "limit_config": \{ "transfer": \{\}, "withdraw": \{\} \} | "limit_config": null |
+| api-23-F16 | Corrigido (não correspondia ao código) | Responses / Recommended action | Leia data e avalie o resultado do processamento conforme o status de negócio deste endpoint. | Verifique os campos externos code e message e leia data como um snapshot da conta. Este endpoint não possui um campo de status de processamento da consulta. Um code igual a 200 não descarta os valores de fallback descritos acima. |
+| api-23-F17 | Complementado (ausente no original) | Responses | Consulte os exemplos de resposta pelo `code` de negócio no JSON. | Consulte os exemplos de resposta pelo `code` de negócio no JSON. JSON malformado é rejeitado com HTTP 400 e um erro em texto simples, em vez deste envelope JSON. Uma falha do sistema tratada também pode retornar HTTP 500 com uma resposta em texto simples. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+cat > body.json <<'JSON'
+{}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/bank_account' \
+  --header "Content-Type: application/json" \
+  --header "X-Client-ID: ${ACCOUNT_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Requisição bem-sucedida
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "account_number": "00012345",
+    "ispb": "12345678",
+    "balance": "1000.00",
+    "frozen_amount": "100.00",
+    "available_amount": "900.00",
+    "currency": "BRL",
+    "med_frozen_amount": "60.00",
+    "other_frozen_amount": "40.00",
+    "pix_keys": [],
+    "limit_config": null,
+    "webhooks": [],
+    "fee_configs": []
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Falha na requisição ou validação
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 Erro do sistema
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

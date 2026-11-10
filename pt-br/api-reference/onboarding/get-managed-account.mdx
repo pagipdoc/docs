@@ -1,0 +1,252 @@
+---
+title: "Consultar detalhes da conta gerenciada"
+description: "Consulte os detalhes da conta gerenciada para acompanhar a abertura de conta, a conformidade e os dados da conta bancária."
+api: "POST /v3/onboarding/managed_accounts/detail"
+keywords: ["/v3/onboarding/managed_accounts/detail"]
+---
+
+## Funcionamento e tratamento
+
+Consulte os detalhes da conta gerenciada para acompanhar a abertura de conta, a conformidade e os dados da conta bancária. O aceite da solicitação de abertura de conta não significa que a conta já esteja apta a transacionar.
+
+### Acompanhar abertura de conta e status de conformidade
+
+| Status da conta | Significado e ação |
+| --- | --- |
+| PENDING | Abertura de conta em processamento. Continue consultando |
+| PENDING_SUBMISSION | Este endpoint não retorna `PENDING_SUBMISSION` como status da conta. A espera pelo envio de dados é indicada por `compliance_status=2` (`COMPLIANCE_STATUS_V3_PENDING_SUBMISSION`). Conclua o fluxo de envio dos dados. <Badge color="orange" size="sm">Corrigido · api-37-F03</Badge> |
+| ACTIVE | Conta ativada. Confirme os dados da conta bancária e as permissões para transacionar |
+| FROZEN | Conta bloqueada. Processe as operações conforme as restrições desse status |
+| CLOSED | Conta encerrada. Não a utilize para novas movimentações de recursos |
+| REJECTED | Abertura de conta rejeitada. Consulte o motivo e siga o fluxo de análise |
+| EXPIRED | Fluxo de abertura de conta expirado. Reinicie o processo conforme o fluxo aplicável |
+
+O status de conformidade e o status da conta são retornados separadamente. O fluxo de conformidade pode estar em PENDING, PENDING_SUBMISSION, REVIEWING, APPROVED, FORCE_APPROVED, REJECTED, EXPIRED, CREATION_FAILED ou ERROR. Registre ambos os status e `updated_at`. Esta resposta não inclui um horário de atualização separado para o status de conformidade; `activated_at` indica o horário da aprovação de conformidade. <Badge color="orange" size="sm">Corrigido · api-37-F04</Badge>
+
+## Permissões e titularidade da conta
+
+Use credenciais `USER` sem os headers `X-ISPB` e `X-Account-Number`, inclusive headers vazios. A conta gerenciada deve pertencer ao usuário associado às credenciais. O usuário deve ter exatamente uma MA válida com status `ACTIVE` e conta bancária ativa. MOR e VA devem pertencer diretamente a essa MA. Uma PA deve pertencer diretamente a essa MA ou a uma VA com status `ACTIVE` vinculada a essa MA e com conta bancária ativa. As requisições devem seguir as orientações de [Ambientes e credenciais](/pt-br/environments-and-credentials). <Badge color="blue" size="sm">Complementado · api-37-F01</Badge>
+
+## Parâmetros da requisição
+
+<ParamField body="reference_id" type="string">
+**Obrigatório:** Informe apenas uma das duas opções. Informe um `reference_id` não vazio ou o objeto `account` completo, nunca ambos. Os espaços em branco no início e no fim de `reference_id`, `account.ispb` e `account.account_number` são removidos antes da validação e da consulta. Valores compostos apenas por espaços em branco são considerados vazios. Não é exigido o formato UUID para `reference_id`. <Badge color="blue" size="sm">Complementado · api-37-F02</Badge>
+</ParamField>
+
+<ParamField body="account" type="object">
+**Obrigatório:** Informe apenas uma das duas opções. Informe este objeto ou reference_id, nunca ambos. Os campos ispb e account_number do objeto não devem estar vazios
+</ParamField>
+
+<ParamField body="account.ispb" type="string">
+↳ **Obrigatório:** Obrigatório quando account for informado. String não vazia. O identificador da instituição participante e o número da conta devem ser informados juntos, preservando os zeros à esquerda
+</ParamField>
+
+<ParamField body="account.account_number" type="string">
+↳ **Obrigatório:** Obrigatório quando account for informado. String não vazia. O identificador da instituição participante e o número da conta devem ser informados juntos, preservando os zeros à esquerda
+</ParamField>
+
+## Exemplo de requisição cURL
+
+O exemplo usa credenciais de nível USER. Preencha os parâmetros reais e gere a assinatura com base no body.json final.
+
+## Campos da resposta
+
+Os caminhos dos campos partem da raiz da resposta. `[]` indica um elemento de array. Os valores monetários usam strings decimais. Os enums são interpretados conforme cada campo. A estrutura abaixo representa os dados de uma resposta de sucesso. Um valor nulo ou 0, por si só, não indica a conclusão da operação.
+
+<ResponseField name="code" type="integer">
+Código de resultado de negócio; 200 indica sucesso. Os erros de negócio são retornados neste campo, que não equivale ao código de status HTTP.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Descrição do resultado de negócio; em caso de falha, analise esta descrição junto com o campo code para identificar a causa.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Objeto de dados da resposta de sucesso; pode ser null em respostas de erro.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Horário da resposta, em timestamp Unix UTC em milissegundos.
+</ResponseField>
+
+<ResponseField name="data.managed_account" type="object">
+Dados da conta gerenciada.
+</ResponseField>
+
+<ResponseField name="data.managed_account.reference_id" type="string">
+ID de referência do recurso fornecido pelo solicitante ao criar a conta gerenciada.
+</ResponseField>
+
+<ResponseField name="data.managed_account.account_holder_document" type="string">
+Número do CPF/CNPJ do titular legal da conta.
+</ResponseField>
+
+<ResponseField name="data.managed_account.account_holder_name" type="string">
+Nome do titular legal da conta, obtido do nome legal nos dados de conformidade. Fica vazio quando não há dados.
+</ResponseField>
+
+<ResponseField name="data.managed_account.document_type" type="string">
+String do tipo de documento: `CPF` ou `CNPJ`. Fica vazia quando não há sessão de conformidade ou quando o tipo de documento é não especificado ou não suportado. <Badge color="blue" size="sm">Complementado · api-37-F06</Badge>
+</ResponseField>
+
+<ResponseField name="data.managed_account.model" type="integer">
+Modelo de conta gerenciada. Enum: 0 VA_ACCOUNT_MODEL_UNSPECIFIED; 1 VA_ACCOUNT_MODEL_MOR; 2 VA_ACCOUNT_MODEL_VA; 3 VA_ACCOUNT_MODEL_PA.
+</ResponseField>
+
+<ResponseField name="data.managed_account.status" type="integer">
+Status de negócio atual, interpretado conforme os valores do enum listados neste campo. Enum: 0 MANAGED_ACCOUNT_STATUS_V3_UNSPECIFIED; 1 MANAGED_ACCOUNT_STATUS_V3_PENDING; 2 MANAGED_ACCOUNT_STATUS_V3_ACTIVE; 3 MANAGED_ACCOUNT_STATUS_V3_FROZEN; 4 MANAGED_ACCOUNT_STATUS_V3_CLOSED; 5 MANAGED_ACCOUNT_STATUS_V3_REJECTED; 6 MANAGED_ACCOUNT_STATUS_V3_EXPIRED; 7 MANAGED_ACCOUNT_STATUS_V3_PENDING_SUBMISSION.
+</ResponseField>
+
+<ResponseField name="data.managed_account.compliance_status" type="integer">
+Status de conformidade KYC/KYB. Enum: 0 COMPLIANCE_STATUS_V3_UNSPECIFIED; 1 COMPLIANCE_STATUS_V3_PENDING; 2 COMPLIANCE_STATUS_V3_PENDING_SUBMISSION; 3 COMPLIANCE_STATUS_V3_APPROVED; 4 COMPLIANCE_STATUS_V3_REJECTED; 5 COMPLIANCE_STATUS_V3_EXPIRED; 6 COMPLIANCE_STATUS_V3_CREATION_FAILED; 7 COMPLIANCE_STATUS_V3_REVIEWING; 8 COMPLIANCE_STATUS_V3_ERROR; 9 COMPLIANCE_STATUS_V3_FORCE_APPROVED.
+</ResponseField>
+
+<ResponseField name="data.managed_account.compliance_session_id" type="string">
+ID do processo de conformidade vinculado.
+</ResponseField>
+
+<ResponseField name="data.managed_account.trading_name" type="string">
+Nome fantasia.
+</ResponseField>
+
+<ResponseField name="data.managed_account.notification_email" type="string">
+E-mail para notificações da conta.
+</ResponseField>
+
+<ResponseField name="data.managed_account.created_at" type="integer">
+Data e hora de criação, em timestamp Unix UTC em milissegundos. Pode ser 0 se a criação não ocorreu ou se a data e hora não foram informadas.
+</ResponseField>
+
+<ResponseField name="data.managed_account.updated_at" type="integer">
+Data e hora da última atualização, em timestamp Unix UTC em milissegundos. Pode ser 0 se não houve atualização ou se a data e hora não foram informadas.
+</ResponseField>
+
+<ResponseField name="data.managed_account.activated_at" type="integer">
+Data e hora da aprovação de conformidade da conta. É 0 enquanto não houver aprovação. Timestamp Unix UTC em milissegundos, que pode ser 0 se o evento não ocorreu ou se a data e hora não foram informadas.
+</ResponseField>
+
+<ResponseField name="data.managed_account.account" type="object">
+Dados da conta bancária do próprio recurso. Podem estar vazios se a conta ainda não foi aberta.
+</ResponseField>
+
+<ResponseField name="data.managed_account.account.ispb" type="string">
+Código ISPB do banco.
+</ResponseField>
+
+<ResponseField name="data.managed_account.account.account_number" type="string">
+Número da conta.
+</ResponseField>
+
+<ResponseField name="data.managed_account.linked_account" type="object">
+Dados da conta superior direta da PA. Vazio para MOR/VA. <Badge color="orange" size="sm">Corrigido · api-37-F10</Badge>
+</ResponseField>
+
+<ResponseField name="data.managed_account.linked_account.ispb" type="string">
+Código ISPB do banco.
+</ResponseField>
+
+<ResponseField name="data.managed_account.linked_account.account_number" type="string">
+Número da conta.
+</ResponseField>
+
+## Respostas
+
+Consulte os exemplos de resposta pelo `code` de negócio no JSON. Verifique o status HTTP e o code de negócio separadamente. Uma resposta HTTP 200 também pode retornar um erro de negócio. <Badge color="orange" size="sm">Corrigido · api-37-F08</Badge>
+
+| `code` | Significado | Ação recomendada |
+| --- | --- | --- |
+| `200` | Requisição bem-sucedida | Leia data e avalie o resultado do processamento conforme o status de negócio deste endpoint. |
+| `400` | Falha na requisição ou validação | Problema nos parâmetros. Verifique e corrija os parâmetros da requisição. |
+| `500` | Erro do sistema | Registre a resposta e confirme primeiro o resultado de negócio. |
+
+Os exemplos ilustram a estrutura da resposta. Os valores de `message` e do status de negócio devem ser obtidos da resposta efetiva. Para outros erros de parâmetros, permissões e serviço, consulte [Catálogo de erros](/pt-br/api-reference/error-catalog). Esta seção não indica que o endpoint retorna apenas os três valores de `code` apresentados. Neste endpoint, o `code` `400` indica um seletor inválido ou dados bancários incompletos. O `code` `4004004` indica que a conta gerenciada não foi encontrada ou que os dados bancários não correspondem a uma conta gerenciada. O `code` `4004003` indica uma falha de permissão relacionada à titularidade ou à conta superior ativa. <Badge color="blue" size="sm">Complementado · api-37-F09</Badge>
+
+<Tip>
+Para testar este endpoint, envie o exemplo de requisição para a Base URL do Sandbox `https://ebanking-openapi-sandbox.pagsmile.com.br` com sua AK/SK de Sandbox. Assine cada requisição conforme descrito em [Ambientes e credenciais](/pt-br/environments-and-credentials#assinatura-de-requisições-à-api).
+</Tip>
+
+
+<Accordion title="Correções em relação ao documento original (8)" icon="clipboard-check">
+Esta página foi conferida com o código-fonte da Pagsmile Open API em 2026-11-10. Cada alteração abaixo está marcada na página com um selo que mostra o seu ID.
+
+| ID | Alteração | Local | Texto do documento original | Texto atualizado |
+| --- | --- | --- | --- | --- |
+| api-37-F01 | Complementado (ausente no original) | Permissions and account ownership | USER, sem header de conta. As requisições devem seguir as orientações de Ambientes e credenciais. | Use credenciais USER sem os headers X-ISPB e X-Account-Number, inclusive headers vazios. A conta gerenciada deve pertencer ao usuário associado às credenciais. O usuário deve ter exatamente uma MA válida com status ACTIVE e conta bancária ativa. MOR e VA devem pertencer diretamente a essa MA. Uma PA deve pertencer diretamente a essa MA ou a uma VA com status ACTIVE vinculada a essa MA e com conta bancária ativa. As requisições devem seguir as orientações de Ambientes e credenciais. |
+| api-37-F02 | Complementado (ausente no original) | Request parameters | Informe este campo ou o objeto account completo, nunca ambos | Informe um reference_id não vazio ou o objeto account completo, nunca ambos. Os espaços em branco no início e no fim de reference_id, account.ispb e account.account_number são removidos antes da validação e da consulta. Valores compostos apenas por espaços em branco são considerados vazios. Não é exigido o formato UUID para reference_id. |
+| api-37-F03 | Corrigido (não correspondia ao código) | Behavior and handling / Track account opening and compliance status | Aguardando envio de dados. Conclua o fluxo de envio dos dados | Este endpoint não retorna PENDING_SUBMISSION como status da conta. A espera pelo envio de dados é indicada por compliance_status=2 (COMPLIANCE_STATUS_V3_PENDING_SUBMISSION). Conclua o fluxo de envio dos dados. |
+| api-37-F04 | Corrigido (não correspondia ao código) | Behavior and handling | Ambos os status e seus horários de atualização devem ser registrados. | Registre ambos os status e updated_at. Esta resposta não inclui um horário de atualização separado para o status de conformidade; activated_at indica o horário da aprovação de conformidade. |
+| api-37-F06 | Complementado (ausente no original) | Response fields | String do tipo de documento: CPF ou CNPJ. | String do tipo de documento: CPF ou CNPJ. Fica vazia quando não há sessão de conformidade ou quando o tipo de documento é não especificado ou não suportado. |
+| api-37-F08 | Corrigido (não correspondia ao código) | Responses / Request succeeded | `{ "code": 200, "message": "success", "data": { "managed_account": { "reference_id": "example-reference_id", "account_holder_document": "example-account_holder_document", "account_holder_name": "example-account_holder_name", "document_type": "example-document_type", "model": 0, "status": 0, "compliance_status": 0, "compliance_session_id": "example-compliance_session_id", "trading_name": "example-trading_name", "notification_email": "example-notification_email", "created_at": 0, "updated_at": 0, "activated_at": 0, "account": {}, "linked_account": {} } }, "time": 1791792000000 }` | `{ "code": 200, "message": "success", "data": { "managed_account": { "reference_id": "example-reference_id", "account_holder_document": "", "account_holder_name": "", "document_type": "", "model": 2, "status": 1, "compliance_status": 0, "compliance_session_id": "", "trading_name": "Sandbox Demo", "notification_email": "sandbox@example.test", "created_at": 0, "updated_at": 0, "activated_at": 0, "account": {}, "linked_account": {} } }, "time": 1791792000000 }` |
+| api-37-F09 | Complementado (ausente no original) | Responses | Os exemplos ilustram a estrutura da resposta. Os valores de message e do status de negócio devem ser obtidos da resposta efetiva. Para outros erros de parâmetros, permissões e serviço, consulte Catálogo de erros. Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados. | Os exemplos ilustram a estrutura da resposta. Os valores de message e do status de negócio devem ser obtidos da resposta efetiva. Para outros erros de parâmetros, permissões e serviço, consulte Catálogo de erros. Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados. Neste endpoint, o code 400 indica um seletor inválido ou dados bancários incompletos. O code 4004004 indica que a conta gerenciada não foi encontrada ou que os dados bancários não correspondem a uma conta gerenciada. O code 4004003 indica uma falha de permissão relacionada à titularidade ou à conta superior ativa. |
+| api-37-F10 | Corrigido (não correspondia ao código) | Campos da resposta | Dados da conta-pai direta da PA. Vazio para MOR/VA. | Dados da conta superior direta da PA. Vazio para MOR/VA. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "account": {
+    "ispb": "37753531",
+    "account_number": "37"
+  }
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/onboarding/managed_accounts/detail' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${USER_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Requisição bem-sucedida
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "managed_account": {
+      "reference_id": "example-reference_id",
+      "account_holder_document": "",
+      "account_holder_name": "",
+      "document_type": "",
+      "model": 2,
+      "status": 1,
+      "compliance_status": 0,
+      "compliance_session_id": "",
+      "trading_name": "Sandbox Demo",
+      "notification_email": "sandbox@example.test",
+      "created_at": 0,
+      "updated_at": 0,
+      "activated_at": 0,
+      "account": {},
+      "linked_account": {}
+    }
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Falha na requisição ou validação
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 Erro do sistema
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

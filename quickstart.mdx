@@ -1,47 +1,472 @@
 ---
-title: "Quickstart"
-description: "Begin with a guide on the fastest path to a successful outcome"
+title: "Quick Start"
+description: "Choose Onboarding or Merchant based on your integration entry point. After review and account activation are complete, configure API access."
 ---
 
-Describe how someone begins using your product. What is the first thing they need to do? Are there any prerequisites?
+## User registration
 
-A quickstart should take someone from zero to using your product. They'll get a quick win and a sense of what they can accomplish.
+Choose Onboarding or Merchant based on your integration entry point. After review and account activation are complete, configure API access.
 
-## Prerequisites
+- **Choose registration entry point**
+   - Onboarding registration: Business information and related-person verification → Review → Activate account
+   - Merchant registration: Create a sign-in user → Submit for account verification → Review
+- **Prepare API integration**
+   - After registering and activating your account, follow "Enable API access" below to complete the configuration
+   - [Configure the environment, IP allowlist, and signature](/environments-and-credentials)
+   - [Choose an account model](/account-models). If you need a managed account, use the [Onboarding API](/api-reference/onboarding/overview) to open it and confirm that it is ready
 
-Before you begin, you must have:
-
-- Requirement one (for example, Node.js 18+, a free account, an API key)
-- Requirement two (for example, a compatible device, a compatible browser, a compatible operating system)
-
-## Get started
+<Accordion title="Onboarding registration · View registration steps">
+[Go to registration](https://banking-onboarding.pagsmile.com.br/onboarding)
 
 <Steps>
-  <Step title="Install">
-    Describe how to install your product or sign up.
+<Step title="Prepare information before starting">
+Make sure you have a mobile number and an email address that can receive verification codes. Submit the following information and documents as required by the application form. Use the file formats specified on the review page.
 
-    ```bash
-    npm install your-package
-    ```
-  </Step>
-  <Step title="Configure">
-    Describe any setup or configuration needed before first use.
+| Business information | Related persons' identity verification data |
+| --- | --- |
+| Full company name, CNPJ | Personal information and contact details |
+| Business phone number, email address, and business address | Identity document that meets verification requirements |
+| Articles of association (Contrato Social) and business registration information | Device suitable for selfie verification |
+| Business activities, website, incorporation date, and estimated monthly processing volume | Residential address and proof of address |
+| Supporting documents, ownership structure, and related persons' details | Entry point and required information for verifying your own identity |
 
-    ```bash
-    your-cli init
-    ```
-  </Step>
-  <Step title="Run it">
-    Show the first thing a user does to see it working.
+Business verification (KYB) and related persons' identity verification are separate parts of the business account opening process. You must complete both as required by the application.
+</Step>
 
-    ```bash
-    your-cli start
-    ```
-  </Step>
+<Step title="Register a business account">
+- Open the Onboarding account opening portal and enter your mobile number, including the country code. Read the consent information and give the required consent, then click **Send Verification Code**. Enter the six-digit verification code from the text message.
+- Enter the full company name, CNPJ, and email address. Check the information, complete the required confirmations, and click **Continue**.
+- Click **Start KYB Verification**, then select **Start Verification**. On the AIPrise verification page, select a language and click **Get Started**.
+
+<Accordion title="Mobile registration · View screenshots">
+<Frame caption="Enter your mobile number">
+<img src="/images/quickstart/enter-your-mobile-number.webp" alt="Enter your mobile number" />
+</Frame>
+
+<Frame caption="Confirm consent and send a verification code">
+<img src="/images/quickstart/confirm-consent-and-send-a-verification-code.webp" alt="Confirm consent and send a verification code" />
+</Frame>
+
+<Frame caption="Verify the SMS verification code">
+<img src="/images/quickstart/verify-the-sms-verification-code.webp" alt="Verify the SMS verification code" />
+</Frame>
+</Accordion>
+
+<Accordion title="Business information registration · View screenshots">
+<Frame caption="Enter business information">
+<img src="/images/quickstart/enter-business-information.webp" alt="Enter business information" />
+</Frame>
+
+<Frame caption="Confirm business information">
+<img src="/images/quickstart/confirm-business-information.webp" alt="Confirm business information" />
+</Frame>
+</Accordion>
+
+<Accordion title="Start business verification · View screenshots">
+<Frame caption="Start KYB verification">
+<img src="/images/quickstart/start-kyb-verification.webp" alt="Start KYB verification" />
+</Frame>
+
+<Frame caption="Open language selection">
+<img src="/images/quickstart/open-language-selection.webp" alt="Open language selection" />
+</Frame>
+
+<Frame caption="Select the verification language">
+<img src="/images/quickstart/select-the-verification-language.webp" alt="Select the verification language" />
+</Frame>
+
+<Frame caption="Start business verification">
+<img src="/images/quickstart/start-business-verification.webp" alt="Start business verification" />
+</Frame>
+</Accordion>
+</Step>
+
+<Step title="Complete business verification">
+Complete the following seven sections in order. You must also review automatically extracted information. Entering business information manually does not waive the requirement to submit documents later.
+
+| Section | Actions and information |
+| --- | --- |
+| Business information | Upload the articles of association to automatically fill out the form, or select Enter manually; fill in any missing required information |
+| Business contact details | Enter the business phone number and email address |
+| Business address | Enter the country, street, state, city, and postal code |
+| Business operations and finances | Enter the entity type, business model, industry, business description, website, estimated monthly processing volume, and date of incorporation |
+| Business documents | Upload the documents required by the form, such as a bank account opening letter or bank statement, proof of business address, and a company structure chart |
+| Ownership structure and legal representative | Use **Add Related Person** to add related persons. Enter their roles, names, dates of birth, ownership interests, and contact details. After saving, click **Verify Now** to complete identity verification |
+| Corporate shareholders | If there are corporate shareholders, use **Add Related Company** to add their details. Review the entire application and click **Submit** |
+
+<Note>
+Saving a related person's details does not mean their identity verification is complete. Submitting an individual for identity verification does not mean you have submitted the full business application.
+</Note>
+
+<Accordion title="Business information · View screenshots">
+<Frame caption="Upload the articles of association">
+<img src="/images/quickstart/upload-the-articles-of-association.webp" alt="Upload the articles of association" />
+</Frame>
+
+<Frame caption="Enter business information manually">
+<img src="/images/quickstart/enter-business-information-manually.webp" alt="Enter business information manually" />
+</Frame>
+
+<Frame caption="Review business information">
+<img src="/images/quickstart/review-business-information.webp" alt="Review business information" />
+</Frame>
+</Accordion>
+
+<Accordion title="Contact details and address · View screenshots">
+<Frame caption="Enter business contact details">
+<img src="/images/quickstart/enter-business-contact-details.webp" alt="Enter business contact details" />
+</Frame>
+
+<Frame caption="Enter the business address">
+<img src="/images/quickstart/enter-the-business-address.webp" alt="Enter the business address" />
+</Frame>
+</Accordion>
+
+<Accordion title="Business operations and finances · View screenshots">
+<Frame caption="Select the entity type">
+<img src="/images/quickstart/select-the-entity-type.webp" alt="Select the entity type" />
+</Frame>
+
+<Frame caption="Select a business model">
+<img src="/images/quickstart/select-a-business-model.webp" alt="Select a business model" />
+</Frame>
+
+<Frame caption="Select an industry">
+<img src="/images/quickstart/select-an-industry.webp" alt="Select an industry" />
+</Frame>
+
+<Frame caption="Enter business and financial details">
+<img src="/images/quickstart/enter-business-and-financial-details.webp" alt="Enter business and financial details" />
+</Frame>
+</Accordion>
+
+<Accordion title="Business documents · View screenshots">
+<Frame caption="Upload business documents">
+<img src="/images/quickstart/upload-business-documents.webp" alt="Upload business documents" />
+</Frame>
+</Accordion>
+
+<Accordion title="Ownership structure and related persons · View screenshots">
+<Frame caption="Add related persons">
+<img src="/images/quickstart/add-related-persons.webp" alt="Add related persons" />
+</Frame>
+
+<Frame caption="Enter related persons' details">
+<img src="/images/quickstart/enter-related-persons-details.webp" alt="Enter related persons' details" />
+</Frame>
+
+<Frame caption="Related person identity verification prompt">
+<img src="/images/quickstart/related-person-identity-verification-prompt.webp" alt="Related person identity verification prompt" />
+</Frame>
+
+<Frame caption="Open related person identity verification">
+<img src="/images/quickstart/open-related-person-identity-verification.webp" alt="Open related person identity verification" />
+</Frame>
+</Accordion>
+
+<Accordion title="Corporate shareholders and application submission · View screenshots">
+<Frame caption="Enter corporate shareholder details and submit the application">
+<img src="/images/quickstart/enter-corporate-shareholder-details-and-submit-the.webp" alt="Enter corporate shareholder details and submit the application" />
+</Frame>
+
+<Frame caption="Business application submission confirmation">
+<img src="/images/quickstart/business-application-submission-confirmation.webp" alt="Business application submission confirmation" />
+</Frame>
+</Accordion>
+</Step>
+
+<Step title="Complete representative identity verification">
+Select **Verify Now** for the related person, then select **Get Started** and **I am ready**. Follow the prompts to complete the following:
+
+- Personal information.
+- Document issuing country and document type. Take or upload photos of the front and back of the required identity document.
+- Selfie verification.
+- Residential address.
+- Upload a proof of address document and submit for verification.
+
+Make sure the images are clear and the information is complete. Follow the lighting and framing requirements on the page when taking the selfie. After submitting, return to the business application and complete the remaining sections.
+
+<Accordion title="Verification preparation and personal information · View screenshots">
+<Frame caption="Start identity verification">
+<img src="/images/quickstart/start-identity-verification.webp" alt="Start identity verification" />
+</Frame>
+
+<Frame caption="Review identity verification preparation steps">
+<img src="/images/quickstart/review-identity-verification-preparation-steps.webp" alt="Review identity verification preparation steps" />
+</Frame>
+
+<Frame caption="Enter personal information">
+<img src="/images/quickstart/enter-personal-information.webp" alt="Enter personal information" />
+</Frame>
+</Accordion>
+
+<Accordion title="Identity document · View screenshots">
+<Frame caption="Select a document type">
+<img src="/images/quickstart/select-a-document-type.webp" alt="Select a document type" />
+</Frame>
+
+<Frame caption="Upload the front of your document">
+<img src="/images/quickstart/upload-the-front-of-your-document.webp" alt="Upload the front of your document" />
+</Frame>
+
+<Frame caption="Check the document photo">
+<img src="/images/quickstart/check-the-document-photo.webp" alt="Check the document photo" />
+</Frame>
+
+<Frame caption="Upload the back of your document">
+<img src="/images/quickstart/upload-the-back-of-your-document.webp" alt="Upload the back of your document" />
+</Frame>
+</Accordion>
+
+<Accordion title="Selfie, address, and submission · View screenshots">
+<Frame caption="Complete selfie verification">
+<img src="/images/quickstart/complete-selfie-verification.webp" alt="Complete selfie verification" />
+</Frame>
+
+<Frame caption="Enter your residential address">
+<img src="/images/quickstart/enter-your-residential-address.webp" alt="Enter your residential address" />
+</Frame>
+
+<Frame caption="Upload proof of address">
+<img src="/images/quickstart/upload-proof-of-address.webp" alt="Upload proof of address" />
+</Frame>
+
+<Frame caption="Submit for identity verification">
+<img src="/images/quickstart/submit-for-identity-verification.webp" alt="Submit for identity verification" />
+</Frame>
+</Accordion>
+</Step>
+
+<Step title="Resume an existing application">
+In the verification process, select **Resume Existing Session**. Enter the email address you used to create the verification session and click **Send OTP**. Enter the email verification code and click **Verify OTP**. View the status and complete any unfinished tasks.
+
+The email verification code is valid for **10 minutes**. If you do not receive it, check your spam folder. This code is different from the SMS verification code used during registration.
+
+<Accordion title="Resume session and view status · View screenshots">
+<Frame caption="Resume an existing verification session">
+<img src="/images/quickstart/resume-an-existing-verification-session.webp" alt="Resume an existing verification session" />
+</Frame>
+
+<Frame caption="Enter the session email address">
+<img src="/images/quickstart/enter-the-session-email-address.webp" alt="Enter the session email address" />
+</Frame>
+
+<Frame caption="Verify the email verification code">
+<img src="/images/quickstart/verify-the-email-verification-code.webp" alt="Verify the email verification code" />
+</Frame>
+
+<Frame caption="View the person's verification status">
+<img src="/images/quickstart/view-the-persons-verification-status.webp" alt="View the person's verification status" />
+</Frame>
+</Accordion>
+
+<Accordion title="Update related persons' details · View screenshots">
+<Frame caption="Edit the person's details">
+<img src="/images/quickstart/edit-the-persons-details.webp" alt="Edit the person's details" />
+</Frame>
+
+<Frame caption="Reverify the person's details">
+<img src="/images/quickstart/reverify-the-persons-details.webp" alt="Reverify the person's details" />
+</Frame>
+
+<Frame caption="Manage related persons">
+<img src="/images/quickstart/manage-related-persons.webp" alt="Manage related persons" />
+</Frame>
+</Accordion>
+</Step>
+
+<Step title="Review and account activation">
+- After you submit the complete business application, its status changes to **Under review**. Check your email for review updates and requests for additional information. Successful registration or submission does not mean the application is approved.
+- After approval, the status shows **Application Approved**, and an approval notification and account activation email are sent.
+- Click **Activate My Account** in the activation email. Complete the required activation fields. If you do not already have a login user for the selected person's CPF, set and confirm a password. If that CPF already has a login user, use the existing password and provide the MFA code requested during activation. <Badge color="blue" size="sm">Added · module-2-F13</Badge> Follow the prompts to sign in to Banking.
+
+<Accordion title="Review and activation · View screenshots">
+<Frame caption="View review status">
+<img src="/images/quickstart/view-review-status.webp" alt="View review status" />
+</Frame>
+
+<Frame caption="Approval message">
+<img src="/images/quickstart/approval-message.webp" alt="Approval message" />
+</Frame>
+
+<Frame caption="Account activation email">
+<img src="/images/quickstart/account-activation-email.webp" alt="Account activation email" />
+</Frame>
+
+<Frame caption="Set login credentials and activate your account">
+<img src="/images/quickstart/set-login-credentials-and-activate-your-account.webp" alt="Set login credentials and activate your account" />
+</Frame>
+</Accordion>
+</Step>
+</Steps>
+</Accordion>
+
+<Accordion title="Merchant registration · View registration steps">
+[Go to registration](https://banking.pagsmile.com.br/login)
+
+<Steps>
+<Step title="Prepare information">
+| Purpose | Information to prepare |
+| --- | --- |
+| Register a sign-in user | CPF/CNPJ, a mobile number that can receive SMS messages, and a login password |
+| Business account verification | Legal business name, CNPJ, an email address that can receive verification codes, business registration certificate, registered address, and CEP (postal code) |
+</Step>
+
+<Step title="Register a sign-in user">
+- On the sign-in page, select **Create Account**. Select the document type and enter the document ID.
+- Select your phone's country code and enter your mobile number. Click **Send Code** and enter the SMS verification code.
+- Set and confirm your password, then click **Submit**. The form requires 8–200 characters, including at least one digit, one lowercase letter, one uppercase letter, and one of these special characters: `!@#$%&*()`. <Badge color="blue" size="sm">Added · module-2-F06</Badge> Return to the sign-in page and sign in.
+
+<Frame caption="Create a sign-in user">
+<img src="/images/quickstart/create-a-sign-in-user.png" alt="Create a sign-in user" />
+</Frame>
+</Step>
+
+<Step title="Sign in and complete MFA">
+Return to the sign-in page and select CPF or Phone Number. Enter your CPF or phone number and password, then click **Log In**. If the **Verification Code** page appears, enter the current Google Authenticator code and click **Verify**.
+
+<Frame caption="Sign in with your CPF or mobile number and password">
+<img src="/images/quickstart/sign-in-with-your-cpf-or-mobile-number-and-passwor.png" alt="Sign in with your CPF or mobile number and password" />
+</Frame>
+
+<Frame caption="Follow the on-screen instructions to complete Google MFA">
+<img src="/images/quickstart/follow-the-on-screen-instructions-to-complete-goog.png" alt="Follow the on-screen instructions to complete Google MFA" />
+</Frame>
+</Step>
+
+<Step title="Submit account verification information">
+After signing in, go to **Account Verification**. For a business account, submit the information below. For a personal account, follow the verification information requirements shown on the page.
+
+- Check the account type and document ID, then enter the legal business name.
+- Enter your email address, click **Send Code**, and enter the email verification code.
+- Upload the **Registration certificate** (business registration certificate).
+- Enter the **Address** (registered address) and **CEP** (postal code), then click **Submit**. The form requires an address of up to 200 characters and an eight-digit CEP without punctuation. <Badge color="blue" size="sm">Added · module-2-F10</Badge>
+
+<Frame caption="Submit business account verification information">
+<img src="/images/quickstart/submit-business-account-verification-information.png" alt="Submit business account verification information" />
+</Frame>
+</Step>
+
+<Step title="Complete review">
+Wait for the review in the Admin portal. Once approved, sign in to the [Banking platform](https://banking.pagsmile.com.br/login).
+</Step>
+</Steps>
+</Accordion>
+
+## Enable API access
+
+After registration, review, and account activation are complete, sign in to the Banking platform. Configure MFA, API credentials, the IP allowlist, and webhooks.
+
+<Accordion title="Enable API access · View setup steps">
+<Steps>
+<Step title="Sign in to the Banking platform">
+Go to the [Banking platform](https://banking.pagsmile.com.br/login) and sign in with your phone number or CPF and password. Follow the on-screen instructions to complete sign-in MFA verification.
+</Step>
+
+<Step title="Set up account MFA">
+Go to **Settings → Security** and click **Set Up Account MFA** in the **Payment MFA** section. <Badge color="orange" size="sm">Corrected · module-2-F02</Badge> Follow the on-screen instructions to link and verify account MFA to securely confirm payments and other operations.
+
+<Frame caption="Account MFA setup in Settings">
+<img src="/images/quickstart/account-mfa-setup-in-settings.png" alt="Account MFA setup in Settings" />
+</Frame>
+</Step>
+
+<Step title="Enable Open API">
+Go to **API Keys** and turn on the **Open API** toggle in the **Bank Account Level Credentials** section. <Badge color="orange" size="sm">Corrected · module-2-F01</Badge> The Open API toggle is available to the account owner for a CNPJ account. Set up account MFA first. In the **Enable Open API** dialog, enter your Google Authenticator code and click **Enable**. <Badge color="blue" size="sm">Added · module-2-F03</Badge>
+
+<Frame caption="Enter your Google Authenticator code to enable Open API">
+<img src="/images/quickstart/enter-your-google-authenticator-code-to-enable-ope.png" alt="Enter your Google Authenticator code to enable Open API" />
+</Frame>
+</Step>
+
+<Step title="Get API key">
+Go to **API Keys** (page title: **API Keys and Webhooks**) and confirm the selected bank account in the **Bank Account Level Credentials** section. This section is separate from **USER LEVEL CREDENTIALS (OPENVA & ONBOARDING)**. <Badge color="blue" size="sm">Added · module-2-F04</Badge> Click **Enable Access Key**, enter your Google Authenticator code, and click **Confirm**.
+
+<Frame caption="Confirm the current bank account and enable Access Key">
+<img src="/images/quickstart/confirm-the-current-bank-account-and-enable-access.png" alt="Confirm the current bank account and enable Access Key" />
+</Frame>
+</Step>
+
+<Step title="Save credentials">
+In the **New API Keys** dialog, copy and securely save your **Access Key (AK)** and **Secret Key (SK)**. The full credentials are displayed only once. After saving them, select **I have saved my keys** and click **Close**.
+
+<Frame caption="Save API credentials, full keys masked">
+<img src="/images/quickstart/save-api-credentials-full-keys-masked.png" alt="Save API credentials, full keys masked" />
+</Frame>
+</Step>
+
+<Step title="Configure IP allowlist">
+Click the edit icon in the **Allow List** column of the credentials list. Enter the outbound server IP address used to send API requests, enter your Google Authenticator code, and click **Submit**.
+
+<Frame caption="Edit Allow List and submit the verification code">
+<img src="/images/quickstart/edit-allow-list-and-submit-the-verification-code.png" alt="Edit Allow List and submit the verification code" />
+</Frame>
+</Step>
+
+<Step title="Configure webhook">
+Click **API Keys** in the left menu, then click **Add Webhook** in the **Webhooks** section.
+
+- **App ID:** Select the application.
+- **Event Type:** Select PAYMENT IN (incoming payment), PAYMENT OUT (outgoing payment), REFUND IN (incoming refund), or REFUND OUT (outgoing refund) as needed.
+- **Callback URL:** Enter an accessible HTTPS callback URL.
+- **Content Type:** Select `application/json` and click **Confirm** to save.
+
+<Frame caption="Add a webhook: select an application, event, and callback URL">
+<img src="/images/quickstart/add-a-webhook-select-an-application-event-and-call.png" alt="Add a webhook: select an application, event, and callback URL" />
+</Frame>
+
+Add each required event separately and verify the configuration in the list. For callback receipt and delivery rules, see [Webhooks](/api-reference/webhooks/overview). For signature verification rules, see [Environments & Credentials](/environments-and-credentials).
+</Step>
+
+<Step title="Get USER-level credentials">
+To get USER-level credentials, contact Pagsmile to enable PSP functionality and confirm how to obtain the credentials and which permissions are available.
+</Step>
+
+<Step title="Configure USER-level credentials and webhook">
+After PSP is enabled, click **API Keys** in the left menu and go to the **USER LEVEL CREDENTIALS (OPENVA & ONBOARDING)** section:
+
+- Click **Enable Access Key** to get USER-level credentials. Securely save your AK/SK and configure the IP allowlist.
+- Under **Webhooks** in this section, click **Add Webhook** and configure USER-level events and callback URLs as needed. Available events are `PAYMENT IN`, `PAYMENT OUT`, `REFUND IN`, `REFUND OUT`, `VA ACCOUNT KYB`, `MED PROCESSING`, `INFRACTION PROCESSING`, and `ACCOUNT STATUS UPDATE`. <Badge color="blue" size="sm">Added · module-2-F11</Badge>
+
+<Frame caption="Entry point for USER-level credentials and webhook configuration">
+<img src="/images/quickstart/entry-point-for-user-level-credentials-and-webhook.png" alt="Entry point for USER-level credentials and webhook configuration" />
+</Frame>
+</Step>
 </Steps>
 
-<Tip>
-  Give people a way to get help. This could be a link to a support page, a chat with a customer support agent, or a forum for your product.
+When finished, configure the environment and request signing as described in [Environments & Credentials](/environments-and-credentials). You can then start integrating API payments.
+</Accordion>
 
-  Example: Need help? Reach out to us at [support@yourcompany.com](mailto:support@yourcompany.com).
-</Tip>
+## Payment integration
+
+The following shows typical integration flows for core operations. Click an endpoint name to view request parameters and examples.
+
+- **Enable Pix**
+   - [Create Pix key](/api-reference/pix-keys/create-pix-key) → [Get bank account and active Pix keys](/api-reference/accounts/get-account-balance); creating a key does not enable the Pix service.
+- **Incoming payments: create order → generate QR code → confirm credit to the account**
+   - [Generate dynamic QR code](/api-reference/payin/generate-dynamic-qr-code) → Display to customer → Customer pays
+   - [Incoming payment callbacks](/api-reference/webhooks/transaction-callbacks)/[Get transaction details](/api-reference/payin/get-transaction-details) → Confirm final result → Update order
+- **Outgoing payments: Initialize → Confirm → Get result**
+   - [Initialize Pix key payment](/api-reference/payout/pix/initialize-pix-key-payment) → [Confirm Pix key payment](/api-reference/payout/pix/confirm-pix-key-payment) → [Outgoing payment callbacks](/api-reference/webhooks/transaction-callbacks)/[Get payment status](/api-reference/payout/get-payment-status) → Update payment record.
+   - Confirm using the returned `ref_id` and the same account context. If initialization included an amount, the confirmation amount must match. For other payment methods, see [PayOut](/api-reference/payout/overview). Call the endpoints in the specified order. <Badge color="blue" size="sm">Added · module-2-F14</Badge>
+- **Refunds: link original incoming payment → initiate refund → confirm result**
+   - Verify original incoming payment and refund conditions → [Initiate Pix refund](/api-reference/refunds/initiate-pix-refund)
+   - [Refund callbacks](/api-reference/webhooks/transaction-callbacks)/[Get refund details](/api-reference/refunds/get-refund-details) → Update refund record
+- **MED: Link original transaction → Create case → Track outcome**
+   - [Get account statement](/api-reference/accounts/get-account-statement) → Verify original Pix transaction and case eligibility → [Create MED case](/api-reference/med/create-med-case)
+
+<Accordion title="Corrections to the source document (9)" icon="clipboard-check">
+This page was checked against the Pagsmile Open API source code on 2026-11-10. Each change below is marked in the page with a badge that shows its ID.
+
+| ID | Change | Location | Source document text | Updated text |
+| --- | --- | --- | --- | --- |
+| module-2-F01 | Corrected (did not match the code) | Enable API access / Enable Open API | In **Settings → Security**, turn on the **Open Api** toggle. | Go to **API Keys** and turn on the **Open API** toggle in the **Bank Account Level Credentials** section. |
+| module-2-F02 | Corrected (did not match the code) | Enable API access / Set up account MFA | Go to **Settings → Security → Account MFA** and click **Set Up Account MFA**. | Go to **Settings → Security** and click **Set Up Account MFA** in the **Payment MFA** section. |
+| module-2-F03 | Added (missing in the source) | Enable API access / Enable Open API | In the **Enable Open API** dialog, enter your Google Authenticator code and click **Enable**. | The Open API toggle is available to the account owner for a CNPJ account. Set up account MFA first. In the **Enable Open API** dialog, enter your Google Authenticator code and click **Enable**. |
+| module-2-F04 | Added (missing in the source) | Enable API access / Get API key | Go to **API Keys** (page title: **API Keys and Webhooks**) and confirm the selected bank account. | Go to **API Keys** (page title: **API Keys and Webhooks**) and confirm the selected bank account in the **Bank Account Level Credentials** section. This section is separate from **USER LEVEL CREDENTIALS (OPENVA & ONBOARDING)**. |
+| module-2-F06 | Added (missing in the source) | Merchant registration / Register a sign-in user | Set and confirm your password, then click **Submit**. | Set and confirm your password, then click **Submit**. The form requires 8–200 characters, including at least one digit, one lowercase letter, one uppercase letter, and one of these special characters: `!@#$%&*()`. |
+| module-2-F10 | Added (missing in the source) | Merchant registration / Submit account verification information | Enter the **Address** (registered address) and **CEP** (postal code), then click **Submit**. | Enter the **Address** (registered address) and **CEP** (postal code), then click **Submit**. The form requires an address of up to 200 characters and an eight-digit CEP without punctuation. |
+| module-2-F11 | Added (missing in the source) | Enable API access / Configure USER-level credentials and webhook | Under **Webhooks** in this section, click **Add Webhook** and configure USER-level events and callback URLs as needed. | Under **Webhooks** in this section, click **Add Webhook** and configure USER-level events and callback URLs as needed. Available events are PAYMENT IN, PAYMENT OUT, REFUND IN, REFUND OUT, VA ACCOUNT KYB, MED PROCESSING, INFRACTION PROCESSING, and ACCOUNT STATUS UPDATE. |
+| module-2-F13 | Added (missing in the source) | Onboarding registration / Review and account activation | On the **Set Your Login Credentials** page, complete the required fields, set and confirm your password, and click **Activate Account**. | Complete the required activation fields. If you do not already have a login user for the selected person's CPF, set and confirm a password. If that CPF already has a login user, use the existing password and provide the MFA code requested during activation. |
+| module-2-F14 | Added (missing in the source) | Payment integration / Outgoing payments | **Outgoing payments: Preview → Confirm → Get result**Initialize Pix key payment → Confirm Pix key paymentOutgoing payment callbacks/Get payment status → Update payment recordFor other payment methods, see PayOut. Call the endpoints in the specified order. | **Outgoing payments: Initialize → Confirm → Get result**Initialize Pix key payment → Confirm Pix key payment → Outgoing payment callbacks/Get payment status → Update payment record. Confirm using the returned `ref_id` and the same account context. If initialization included an amount, the confirmation amount must match. For other payment methods, see PayOut. Call the endpoints in the specified order. |
+</Accordion>

@@ -1,0 +1,236 @@
+---
+title: "Get account closure progress"
+description: "This read-only query retrieves an existing closure operation. It does not execute or retry closure and does not require MFA revalidation."
+api: "POST /v3/bank_account/close/query"
+keywords: ["/v3/bank_account/close/query"]
+---
+
+## Behavior and handling
+
+This read-only query retrieves an existing closure operation. It does not execute or retry closure and does not require MFA revalidation. Use the account_number and operation_id from the original operation. After the account is closed, you can still query the original closure operation with authorized shared USER credentials.
+
+For shared USER queries, the target account and the accounts required by its ownership hierarchy must be `ACTIVE` or `CLOSED`, and their identities must remain authorized for the same USER owner. `INACTIVE` and `BLOCKED` account states do not pass this historical-query authorization check. <Badge color="blue" size="sm">Added · bank-account-close-query-F11</Badge>
+
+Evaluate the operation status and bank account status separately. The page queries only when you manually click "Access Sandbox". It does not poll.
+
+## Permissions and account ownership
+
+Use v3 AK/SK signature authentication. We recommend using shared USER credentials from the owning Master and specifying the target account through `X-ISPB` and `X-Account-Number`. Account-level credentials can only operate on their authorized account. This endpoint does not support PLATFORM credentials. The account_number in the request must match the authentication context. The authentication context determines the ISPB; do not send it separately in the request JSON.
+
+This endpoint supports MOR, VA, and PA managed accounts. New merchant closure requests do not support `MA_MOR` master accounts, but this read-only endpoint can retrieve an existing closure operation for an authorized master account. <Badge color="orange" size="sm">Corrected · bank-account-close-query-F01</Badge> The account must be ACTIVE when a merchant initiates a new closure request. After account closure, do not rely on revoked account credentials. You must use authorized shared USER credentials to query the original operation.
+
+## Request parameters
+
+<ParamField body="account_number" type="string" required>
+Target account number, 1 to 32 digits. Preserve leading zeros. Must match the target account number in the authentication context and fall within the scope of the currently authorized Master.
+</ParamField>
+
+<ParamField body="operation_id" type="string" required>
+Non-empty, up to 64 bytes, from `data.operation.operation_id` in a successful response from [Close account](/api-reference/accounts/close-account/close-account) (`/v3/bank_account/close`); must match the target account.
+</ParamField>
+
+## cURL request example
+
+The example uses shared USER credentials. The account number in the request JSON must match the target account header. Generate the signature from the final body.json. <Badge color="orange" size="sm">Corrected · bank-account-close-query-F02</Badge>
+
+## Response fields
+
+Field paths start at the response root. `[]` indicates an array element. Amounts use decimal strings. Enum values are defined separately for each field. The structure below describes a success response. A null value or 0 alone does not indicate that processing is complete.
+
+<ResponseField name="code" type="integer">
+Business result code. A value of 200 indicates success. Business errors are returned in this field. It is not the HTTP status code.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Business result description. On failure, use this with code to determine the cause.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Data object in a successful response. Can be null in an error response.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Response time as a UTC Unix timestamp in milliseconds.
+</ResponseField>
+
+<ResponseField name="data.operation" type="object">
+Account closure operation and actual progress.
+</ResponseField>
+
+<ResponseField name="data.operation.operation_id" type="string">
+Account closure operation ID. Used to query the same operation later.
+</ResponseField>
+
+<ResponseField name="data.operation.ispb" type="string">
+Bank ISPB code.
+</ResponseField>
+
+<ResponseField name="data.operation.account_number" type="string">
+Account number.
+</ResponseField>
+
+<ResponseField name="data.operation.account_status" type="integer">
+Bank account status. Enum: 0 BANK_ACCOUNT_STATUS_UNSPECIFIED; 1 BANK_ACCOUNT_STATUS_ACTIVE; 2 BANK_ACCOUNT_STATUS_INACTIVE; 3 BANK_ACCOUNT_STATUS_BLOCKED; 4 BANK_ACCOUNT_STATUS_CLOSED.
+</ResponseField>
+
+<ResponseField name="data.operation.status" type="integer">
+Current business status, interpreted using the enum values listed for this field. Enum: 0 ACCOUNT_CLOSURE_STATUS_UNSPECIFIED; 1 ACCOUNT_CLOSURE_STATUS_CHECKING; 2 ACCOUNT_CLOSURE_STATUS_WAITING; 3 ACCOUNT_CLOSURE_STATUS_DELETING_KEYS; 4 ACCOUNT_CLOSURE_STATUS_CLOSED; 5 ACCOUNT_CLOSURE_STATUS_COMPLETED; 6 ACCOUNT_CLOSURE_STATUS_REJECTED.
+</ResponseField>
+
+<ResponseField name="data.operation.current_step" type="string">
+Current processing step, not a progress percentage.
+</ResponseField>
+
+<ResponseField name="data.operation.reasons" type="array">
+List of reasons for a failed check, waiting, or an exception. An empty list alone does not mean the process is complete.
+</ResponseField>
+
+<ResponseField name="data.operation.reasons[].code" type="string">
+Stable reason code. Common values include `NON_ZERO_BALANCE`, `FROZEN_BALANCE`, `ACTIVE_PIX_KEYS`, `OPEN_CHILD_ACCOUNTS`, `OPEN_MED_CASE`, `PENDING_PAYMENT`, `PENDING_REFUND`, and `UNPAID_BILL`. The actual response is authoritative. Additional values include `OPEN_INFRACTION`, `PENDING_MED_REFUND`, `PENDING_CHILD_CREATION`, `PENDING_BILLING`, `BILLING_RESULT_UNKNOWN`, `PENDING_DISPUTE`, `MED_QUERY_UNAVAILABLE`, `USER_QUERY_UNAVAILABLE`, `TRANSACTION_QUERY_UNAVAILABLE`, `BALANCE_QUERY_UNAVAILABLE`, `PIX_KEYS_QUERY_UNAVAILABLE`, `ACCOUNT_TYPE_NOT_SUPPORTED`, `ACCOUNT_INVALID_STATUS`, `CLOSURE_SOURCE_INVALID`, `DEPENDENCY_UNAVAILABLE`, `CLEANUP_STATE_INVALID`, `CLEANUP_FAILED`, `ELIGIBILITY_RESULT_INVALID`, `ELIGIBILITY_AFTER_KEY_DELETION`, `PIX_KEY_RESULT_UNKNOWN`. <Badge color="blue" size="sm">Added · bank-account-close-query-F07</Badge>
+</ResponseField>
+
+<ResponseField name="data.operation.reasons[].message" type="string">
+Reason description.
+</ResponseField>
+
+<ResponseField name="data.operation.reasons[].step" type="string">
+Processing step that produced this reason.
+</ResponseField>
+
+<ResponseField name="data.operation.reasons[].kind" type="integer">
+Account closure reason category. Enum: 0 ACCOUNT_CLOSURE_ISSUE_KIND_UNSPECIFIED; 1 ACCOUNT_CLOSURE_ISSUE_KIND_WAITING; 2 ACCOUNT_CLOSURE_ISSUE_KIND_BLOCKING; 3 ACCOUNT_CLOSURE_ISSUE_KIND_RETRYABLE; 4 ACCOUNT_CLOSURE_ISSUE_KIND_MANUAL.
+</ResponseField>
+
+<ResponseField name="data.operation.reasons[].count" type="integer">
+Associated-record count when provided. Some checks use this as an indicator rather than a record total: balance issues use `1`, while reasons without a count use `0`. A value of `0` does not mean the check passed. <Badge color="orange" size="sm">Corrected · bank-account-close-query-F04</Badge>
+</ResponseField>
+
+<ResponseField name="data.operation.reasons[].references" type="array or null">
+Associated business record IDs, when provided. Currently no IDs are populated and this field is `null`. Do not rely on it to enumerate the records associated with a reason. <Badge color="orange" size="sm">Corrected · bank-account-close-query-F05</Badge> <Badge color="orange" size="sm">Corrected · bank-account-close-query-F06</Badge>
+</ResponseField>
+
+<ResponseField name="data.operation.updated_at" type="integer">
+Last update time in UTC Unix milliseconds. Can be 0 if no update has occurred or the time is not provided.
+</ResponseField>
+
+<ResponseField name="data.operation.checked_at" type="integer">
+Time of the most recent check, in UTC Unix milliseconds. The value can be 0 if the check has not occurred or the time is not provided.
+</ResponseField>
+
+<ResponseField name="data.operation.next_action" type="integer">
+Recommended next action. Enum: `0` `ACCOUNT_CLOSURE_NEXT_ACTION_UNSPECIFIED`; `1` `ACCOUNT_CLOSURE_NEXT_ACTION_WAIT_SYSTEM`; `2` `ACCOUNT_CLOSURE_NEXT_ACTION_RESOLVE_AND_REAPPLY`; `3` `ACCOUNT_CLOSURE_NEXT_ACTION_CONTACT_OPERATIONS`; `4` `ACCOUNT_CLOSURE_NEXT_ACTION_NONE`. Normally returns `WAIT_SYSTEM` while processing, `RESOLVE_AND_REAPPLY` for `REJECTED`, and `NONE` for `COMPLETED`. A `MANUAL` reason takes precedence and returns `CONTACT_OPERATIONS`. <Badge color="blue" size="sm">Added · bank-account-close-query-F09</Badge>
+</ResponseField>
+
+<ResponseField name="data.operation.next_retry_at" type="integer">
+Next processing time scheduled by the server. 0 means no processing is scheduled. It does not mean completion and does not trigger a page retry. Expressed in UTC Unix milliseconds. Can be 0 if processing has not occurred or the time is not provided.
+</ResponseField>
+
+<ResponseField name="data.operation.closed_at" type="integer">
+Bank account closure time. 0 if closure has not occurred. Expressed in UTC Unix milliseconds. Can be 0 if closure has not occurred or the time is not provided.
+</ResponseField>
+
+<ResponseField name="data.operation.completed_at" type="integer">
+Completion time. Can be 0 if completion has not occurred. Expressed in UTC Unix milliseconds. Can be 0 if completion has not occurred or the time is not provided.
+</ResponseField>
+
+## Responses
+
+The following example shows the structure. Identifiers and timestamps are sample values. Evaluate the HTTP status and the JSON business code separately. <Badge color="orange" size="sm">Corrected · bank-account-close-query-F03</Badge> For business errors, see [Error Catalog](/api-reference/error-catalog).
+
+An unknown `operation_id`, or an `operation_id` belonging to another account, returns code `4004010` with message "Account or closure operation was not found". Account access failures return code `4004003`. Temporary closure-query unavailability can return code `501` with message "Account closure is temporarily unavailable"; transport failures can return code `501` with message "Service temporarily unavailable, please try again later". <Badge color="blue" size="sm">Added · bank-account-close-query-F10</Badge>
+
+| `code` | Meaning | Recommended action |
+| --- | --- | --- |
+| `200` | Request succeeded | Save operation_id. Use operation.status, reasons, and next_action to determine what to do next. |
+| `400` | Request or validation failed | Parameter issue. Check and correct the request parameters. |
+| `500` | System error | Log the response and confirm the business result first. |
+
+<Tip>
+To try this endpoint, send the request example to the Sandbox base URL `https://ebanking-openapi-sandbox.pagsmile.com.br` with your Sandbox AK/SK. Sign every request as described in [Environments & Credentials](/environments-and-credentials#api-request-signing).
+</Tip>
+
+
+<Accordion title="Corrections to the source document (10)" icon="clipboard-check">
+This page was checked against the Pagsmile Open API source code on 2026-11-10. Each change below is marked in the page with a badge that shows its ID.
+
+| ID | Change | Location | Source document text | Updated text |
+| --- | --- | --- | --- | --- |
+| bank-account-close-query-F01 | Corrected (did not match the code) | Permissions and account ownership | It does not support MA_MOR master accounts. | New merchant closure requests do not support MA_MOR master accounts, but this read-only endpoint can retrieve an existing closure operation for an authorized master account. |
+| bank-account-close-query-F02 | Corrected (did not match the code) | cURL request example | `cat > body.json <<'JSON' { "account_number": "replace-with-account-number", "operation_id": "replace-with-operation-id" } JSON` | `cat > body.json <<JSON { "account_number": "${TARGET_ACCOUNT_NUMBER}", "operation_id": "${OPERATION_ID}" } JSON` |
+| bank-account-close-query-F03 | Corrected (did not match the code) | Responses / Request succeeded | `{ "code": 200, "message": "success", "data": { "operation": { "operation_id": "closure_demo_001", "ispb": "37753531", "account_number": "00012345", "account_status": 4, "status": 5, "current_step": "COMPLETED", "reasons": [], "updated_at": 1792713600000, "checked_at": 1792713600000, "next_action": 4, "next_retry_at": 0, "closed_at": 1792713601000, "completed_at": 1792713602000 } }, "time": 1792713600000 }` | `{ "code": 200, "message": "success", "data": { "operation": { "operation_id": "closure_demo_001", "ispb": "37753531", "account_number": "00012345", "account_status": 4, "status": 5, "current_step": "DONE", "reasons": [], "updated_at": 1792713602000, "checked_at": 1792713600000, "next_action": 4, "next_retry_at": 0, "closed_at": 1792713601000, "completed_at": 1792713602000 } }, "time": 1792713600000 }` |
+| bank-account-close-query-F04 | Corrected (did not match the code) | Response fields | Total number of associated business records. If the check fails, you must not interpret 0 as a passing result. | Associated-record count when provided. Some checks use this as an indicator rather than a record total: balance issues use 1, while reasons without a count use 0. A value of 0 does not mean the check passed. |
+| bank-account-close-query-F05 | Corrected (did not match the code) | Response fields / Type | array | array or null |
+| bank-account-close-query-F06 | Corrected (did not match the code) | Response fields / Meaning | List of associated business record IDs that the caller is authorized to view. Can be truncated. | Associated business record IDs, when provided. Currently no IDs are populated and this field is null. Do not rely on it to enumerate the records associated with a reason. |
+| bank-account-close-query-F07 | Added (missing in the source) | Response fields / append to reason-code description | Stable reason code. Common values include NON_ZERO_BALANCE, FROZEN_BALANCE, ACTIVE_PIX_KEYS, OPEN_CHILD_ACCOUNTS, OPEN_MED_CASE, PENDING_PAYMENT, PENDING_REFUND, and UNPAID_BILL. The actual response is authoritative. | Stable reason code. Common values include NON_ZERO_BALANCE, FROZEN_BALANCE, ACTIVE_PIX_KEYS, OPEN_CHILD_ACCOUNTS, OPEN_MED_CASE, PENDING_PAYMENT, PENDING_REFUND, and UNPAID_BILL. The actual response is authoritative. Additional values include OPEN_INFRACTION, PENDING_MED_REFUND, PENDING_CHILD_CREATION, PENDING_BILLING, BILLING_RESULT_UNKNOWN, PENDING_DISPUTE, MED_QUERY_UNAVAILABLE, USER_QUERY_UNAVAILABLE, TRANSACTION_QUERY_UNAVAILABLE, BALANCE_QUERY_UNAVAILABLE, PIX_KEYS_QUERY_UNAVAILABLE, ACCOUNT_TYPE_NOT_SUPPORTED, ACCOUNT_INVALID_STATUS, CLOSURE_SOURCE_INVALID, DEPENDENCY_UNAVAILABLE, CLEANUP_STATE_INVALID, CLEANUP_FAILED, ELIGIBILITY_RESULT_INVALID, ELIGIBILITY_AFTER_KEY_DELETION, PIX_KEY_RESULT_UNKNOWN. |
+| bank-account-close-query-F09 | Added (missing in the source) | Response fields / append to next_action description | Recommended next action. Enum: 0 ACCOUNT_CLOSURE_NEXT_ACTION_UNSPECIFIED; 1 ACCOUNT_CLOSURE_NEXT_ACTION_WAIT_SYSTEM; 2 ACCOUNT_CLOSURE_NEXT_ACTION_RESOLVE_AND_REAPPLY; 3 ACCOUNT_CLOSURE_NEXT_ACTION_CONTACT_OPERATIONS; 4 ACCOUNT_CLOSURE_NEXT_ACTION_NONE. | Recommended next action. Enum: 0 ACCOUNT_CLOSURE_NEXT_ACTION_UNSPECIFIED; 1 ACCOUNT_CLOSURE_NEXT_ACTION_WAIT_SYSTEM; 2 ACCOUNT_CLOSURE_NEXT_ACTION_RESOLVE_AND_REAPPLY; 3 ACCOUNT_CLOSURE_NEXT_ACTION_CONTACT_OPERATIONS; 4 ACCOUNT_CLOSURE_NEXT_ACTION_NONE. Normally returns WAIT_SYSTEM while processing, RESOLVE_AND_REAPPLY for REJECTED, and NONE for COMPLETED. A MANUAL reason takes precedence and returns CONTACT_OPERATIONS. |
+| bank-account-close-query-F10 | Added (missing in the source) | Responses / after Error Catalog link | For business errors, see Error Catalog. | For business errors, see Error Catalog. An unknown operation_id, or an operation_id belonging to another account, returns code 4004010 with message "Account or closure operation was not found". Account access failures return code 4004003. Temporary closure-query unavailability can return code 501 with message "Account closure is temporarily unavailable"; transport failures can return code 501 with message "Service temporarily unavailable, please try again later". |
+| bank-account-close-query-F11 | Added (missing in the source) | Behavior and handling / after historical USER query sentence | After the account is closed, you can still query the original closure operation with authorized shared USER credentials. | After the account is closed, you can still query the original closure operation with authorized shared USER credentials. For shared USER queries, the target account and the accounts required by its ownership hierarchy must be ACTIVE or CLOSED, and their identities must remain authorized for the same USER owner. INACTIVE and BLOCKED account states do not pass this historical-query authorization check. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+cat > body.json <<JSON
+{
+  "account_number": "${TARGET_ACCOUNT_NUMBER}",
+  "operation_id": "${OPERATION_ID}"
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/bank_account/close/query' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${USER_AK}" \
+  --header "X-ISPB: ${TARGET_ISPB}" \
+  --header "X-Account-Number: ${TARGET_ACCOUNT_NUMBER}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Request succeeded
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "operation": {
+      "operation_id": "closure_demo_001",
+      "ispb": "37753531",
+      "account_number": "00012345",
+      "account_status": 4,
+      "status": 5,
+      "current_step": "DONE",
+      "reasons": [],
+      "updated_at": 1792713602000,
+      "checked_at": 1792713600000,
+      "next_action": 4,
+      "next_retry_at": 0,
+      "closed_at": 1792713601000,
+      "completed_at": 1792713602000
+    }
+  },
+  "time": 1792713600000
+}
+```
+
+```json 400 Request or validation failed
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 System error
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

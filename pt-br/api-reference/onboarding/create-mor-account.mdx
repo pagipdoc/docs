@@ -1,0 +1,179 @@
+---
+title: "Criar conta operacional MOR"
+description: "Crie uma conta operacional MOR que reutiliza os dados de conformidade já aprovados da MA superior."
+api: "POST /v3/onboarding/managed_accounts/create"
+keywords: ["/v3/onboarding/managed_accounts/create"]
+---
+
+## Funcionamento e tratamento
+
+Crie uma conta operacional MOR que reutiliza os dados de conformidade já aprovados da MA superior.
+
+## Permissões e titularidade da conta
+
+Use as credenciais USER do usuário titular da MA superior. Não inclua o header da conta bancária. O usuário titular deve ter a funcionalidade de contas gerenciadas habilitada e possuir exatamente uma MA válida com status `ACTIVE`. A MA deve ter uma conta bancária correspondente com status `ACTIVE` que não esteja em processo de encerramento, além de dados de conformidade aprovados com documentos de identidade válidos e evidências de aprovação disponíveis para reutilização. <Badge color="blue" size="sm">Complementado · create-mor-F07</Badge> As requisições devem seguir as orientações de [Ambientes e credenciais](/pt-br/environments-and-credentials).
+
+Parâmetros da requisição
+
+<ParamField body="reference_id" type="string" required>
+Não deve ficar vazio após a remoção dos espaços em branco no início e no fim. Gere e salve um valor único para cada nova solicitação de abertura de conta; o formato UUID não é exigido. Nas novas tentativas por motivos técnicos, mantenha `reference_id` e os valores originais da requisição inalterados, inclusive `trading_name` e `notification_email`. Reutilizar uma referência para outra requisição pode retornar o código de negócio `4001013` <Badge color="blue" size="sm">Complementado · create-mor-F03</Badge>
+</ParamField>
+
+<ParamField body="model" type="integer" required>
+Fixo em 1 (MOR)
+</ParamField>
+
+<ParamField body="trading_name" type="string">
+Nome fantasia. Para MOR, omita `compliance_mode`, `compliance_payload`, `provider_session_info`, `return_url` e `linked_account`. Um modo de conformidade diferente de zero, um objeto de conformidade ou de sessão do provedor, uma URL de retorno não vazia ou qualquer objeto de conta vinculada é rejeitado com o código de negócio `4001` <Badge color="blue" size="sm">Complementado · create-mor-F01</Badge>
+</ParamField>
+
+<ParamField body="notification_email" type="string">
+E-mail para notificações; a camada da Open API não valida o formato do e-mail atualmente. Remova os espaços em branco no início e no fim antes do envio
+</ParamField>
+
+## Exemplo de requisição cURL
+
+O exemplo mostra apenas a estrutura da requisição. Substitua `reference_id`, `trading_name` e `notification_email` pelos valores da sua solicitação de abertura de conta no Sandbox; MOR não aceita dados de documentos de identidade nem identificadores de verificação nesta requisição. <Badge color="orange" size="sm">Corrigido · create-mor-F02</Badge> Primeiro, calcule a assinatura com os bytes originais do mesmo arquivo body.json. Mesmo após a aceitação da requisição, é obrigatório confirmar o status da abertura da conta.
+
+## Campos da resposta
+
+Os caminhos dos campos partem da raiz da resposta. `[]` indica um elemento de array. Os valores monetários usam strings decimais. Os enums são interpretados conforme cada campo. A estrutura abaixo representa os dados de uma resposta de sucesso. Um valor nulo ou 0, por si só, não indica a conclusão da operação.
+
+<ResponseField name="code" type="integer">
+Código de resultado de negócio; 200 indica sucesso. Os erros de negócio são retornados neste campo, que não equivale ao código de status HTTP.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Descrição do resultado de negócio; em caso de falha, analise esta descrição junto com o campo code para identificar a causa.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Objeto de dados da resposta de sucesso; pode ser null em respostas de erro.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Horário da resposta, em timestamp Unix UTC em milissegundos.
+</ResponseField>
+
+<ResponseField name="data.reference_id" type="string">
+ID de referência do recurso fornecido pelo solicitante ao criar a conta gerenciada.
+</ResponseField>
+
+<ResponseField name="data.model" type="integer">
+Modelo de conta gerenciada. Enum: 0 VA_ACCOUNT_MODEL_UNSPECIFIED; 1 VA_ACCOUNT_MODEL_MOR; 2 VA_ACCOUNT_MODEL_VA; 3 VA_ACCOUNT_MODEL_PA.
+</ResponseField>
+
+<ResponseField name="data.status" type="integer">
+Status de negócio atual, interpretado conforme os valores do enum listados neste campo. Enum: 0 MANAGED_ACCOUNT_STATUS_V3_UNSPECIFIED; 1 MANAGED_ACCOUNT_STATUS_V3_PENDING; 2 MANAGED_ACCOUNT_STATUS_V3_ACTIVE; 3 MANAGED_ACCOUNT_STATUS_V3_FROZEN; 4 MANAGED_ACCOUNT_STATUS_V3_CLOSED; 5 MANAGED_ACCOUNT_STATUS_V3_REJECTED; 6 MANAGED_ACCOUNT_STATUS_V3_EXPIRED; 7 MANAGED_ACCOUNT_STATUS_V3_PENDING_SUBMISSION.
+</ResponseField>
+
+<ResponseField name="data.verification_url" type="string">
+Link de acesso à verificação de identidade; pode estar vazio quando a verificação externa não for necessária ou o link ainda não tiver sido gerado.
+</ResponseField>
+
+## Respostas
+
+Consulte os exemplos de resposta pelo `code` de negócio no JSON. Verifique o status HTTP e o code de negócio separadamente. Uma resposta HTTP 200 também pode retornar um erro de negócio. <Badge color="orange" size="sm">Corrigido · create-mor-F12</Badge>
+
+| `code` | Significado | Ação recomendada |
+| --- | --- | --- |
+| `200` | Requisição bem-sucedida | Leia data e confirme reference_id e o status da abertura da conta. Uma requisição à API bem-sucedida não significa que a conta já esteja disponível para uso. |
+| `400` | Falha na requisição ou validação | Problema nos parâmetros. Verifique e corrija os parâmetros da requisição. |
+| `500` | Erro do sistema | Registre a resposta e confirme primeiro o resultado de negócio. |
+| `4004004` | Tarifa de abertura de conta não configurada | Entre em contato com a equipe de suporte para configurar a tarifa de abertura de conta e tente novamente com o mesmo `reference_id` e os valores originais da requisição. Uma requisição MOR pode reservar a referência e o registro da solicitação de abertura de conta antes da confirmação da tarifa, mesmo quando a API retorna um erro com `data: null`. Não crie uma nova referência para repetir a mesma solicitação de abertura de conta. Confirme o status da abertura da conta antes de considerar a conta disponível para uso. HTTP 200 indica que uma resposta foi retornada. O código de negócio 4004004 indica que esta requisição de abertura de conta falhou. <Badge color="blue" size="sm">Complementado · create-mor-F08</Badge> |
+
+Os exemplos ilustram a estrutura da resposta. Os valores de message e do status de negócio devem ser obtidos da resposta efetiva. Nas falhas da tarifa de abertura de conta, o código de negócio `4001999` indica saldo insuficiente; adicione recursos à conta bancária da MA superior e tente novamente com o mesmo `reference_id`. O código `4001013` indica reutilização conflitante da referência. O código `400` pode indicar configuração inválida da tarifa, e o código `501` pode indicar configuração indisponível ou resultado da tarifa não confirmado; use `message` para distinguir essas condições. Entre em contato com o suporte para configurações ausentes ou inválidas e mantenha a mesma referência e os valores originais da requisição ao recuperar um resultado da tarifa não confirmado. Para outros erros de parâmetros, permissões e serviço, consulte [Catálogo de erros](/pt-br/api-reference/error-catalog). <Badge color="blue" size="sm">Complementado · create-mor-F09</Badge> Esta seção não indica que o endpoint retorna apenas os quatro valores de `code` apresentados. <Badge color="orange" size="sm">Corrigido · create-mor-F13</Badge>
+
+## Exemplo de acesso ao Sandbox
+
+Considere a resposta real como referência para os dados da transação ou do recurso, o status do processamento e as informações de erro.
+
+`X-Client-ID` usa a AK informada. O timestamp, o nonce, o hash do corpo da requisição e a assinatura são gerados automaticamente. A SK é usada apenas para assinar localmente, não é enviada na requisição nem armazenada. A visualização não envia a requisição; o botão de acesso envia uma requisição real. Se o resultado for desconhecido, consulte antes de tentar novamente. Não há novas tentativas automáticas. O acesso pelo navegador deve atender aos requisitos de CORS, IP e credenciais do Sandbox.
+
+<Tip>
+Para testar este endpoint, envie o exemplo de requisição para a Base URL do Sandbox `https://ebanking-openapi-sandbox.pagsmile.com.br` com sua AK/SK de Sandbox. Assine cada requisição conforme descrito em [Ambientes e credenciais](/pt-br/environments-and-credentials#assinatura-de-requisições-à-api).
+</Tip>
+
+
+<Accordion title="Correções em relação ao documento original (8)" icon="clipboard-check">
+Esta página foi conferida com o código-fonte da Pagsmile Open API em 2026-11-10. Cada alteração abaixo está marcada na página com um selo que mostra o seu ID.
+
+| ID | Alteração | Local | Texto do documento original | Texto atualizado |
+| --- | --- | --- | --- | --- |
+| create-mor-F01 | Complementado (ausente no original) | Request parameters / trading_name description | Nome fantasia; não envie o objeto de dados de conformidade da empresa | Nome fantasia. Para MOR, omita `compliance_mode`, `compliance_payload`, `provider_session_info`, `return_url` e `linked_account`. Um modo de conformidade diferente de zero, um objeto de conformidade ou de sessão do provedor, uma URL de retorno não vazia ou qualquer objeto de conta vinculada é rejeitado com o código de negócio 4001 |
+| create-mor-F02 | Corrigido (não correspondia ao código) | cURL request example / introductory paragraph | Os dados dos documentos e os identificadores de verificação devem ser substituídos por dados reais válidos no Sandbox. | Substitua `reference_id`, `trading_name` e `notification_email` pelos valores da sua solicitação de abertura de conta no Sandbox; MOR não aceita dados de documentos de identidade nem identificadores de verificação nesta requisição. |
+| create-mor-F03 | Complementado (ausente no original) | Request parameters / reference_id description | Não deve ficar vazio após a remoção dos espaços em branco no início e no fim. Deve ser gerado e salvo pelo integrador; o código não exige o formato UUID. Se precisar repetir a mesma solicitação de abertura de conta por motivos técnicos, mantenha o valor inalterado | Não deve ficar vazio após a remoção dos espaços em branco no início e no fim. Gere e salve um valor único para cada nova solicitação de abertura de conta; o formato UUID não é exigido. Nas novas tentativas por motivos técnicos, mantenha `reference_id` e os valores originais da requisição inalterados, inclusive `trading_name` e `notification_email`. Reutilizar uma referência para outra requisição pode retornar o código de negócio 4001013 |
+| create-mor-F07 | Complementado (ausente no original) | Permissions and account ownership | O usuário titular deve ter a funcionalidade de contas gerenciadas habilitada e possuir exatamente uma MA válida com status ACTIVE. | O usuário titular deve ter a funcionalidade de contas gerenciadas habilitada e possuir exatamente uma MA válida com status ACTIVE. A MA deve ter uma conta bancária correspondente com status ACTIVE que não esteja em processo de encerramento, além de dados de conformidade aprovados com documentos de identidade válidos e evidências de aprovação disponíveis para reutilização. |
+| create-mor-F08 | Complementado (ausente no original) | Responses / Account opening fee configuration not found / Recommended action | Entre em contato com a equipe de suporte para configurar a tarifa de abertura de conta. Depois, envie novamente a requisição de abertura de conta. | Entre em contato com a equipe de suporte para configurar a tarifa de abertura de conta e tente novamente com o mesmo `reference_id` e os valores originais da requisição. Uma requisição MOR pode reservar a referência e o registro da solicitação de abertura de conta antes da confirmação da tarifa, mesmo quando a API retorna um erro com `data: null`. Não crie uma nova referência para repetir a mesma solicitação de abertura de conta. Confirme o status da abertura da conta antes de considerar a conta disponível para uso. |
+| create-mor-F09 | Complementado (ausente no original) | Responses / Error Catalog link | Para outros erros de parâmetros, permissões e serviço, consulte Catálogo de erros. | Nas falhas da tarifa de abertura de conta, o código de negócio 4001999 indica saldo insuficiente; adicione recursos à conta bancária da MA superior e tente novamente com o mesmo `reference_id`. O código 4001013 indica reutilização conflitante da referência. O código 400 pode indicar configuração inválida da tarifa, e o código 501 pode indicar configuração indisponível ou resultado da tarifa não confirmado; use `message` para distinguir essas condições. Entre em contato com o suporte para configurações ausentes ou inválidas e mantenha a mesma referência e os valores originais da requisição ao recuperar um resultado da tarifa não confirmado. Para outros erros de parâmetros, permissões e serviço, consulte Catálogo de erros. |
+| create-mor-F12 | Corrigido (não correspondia ao código) | Responses / Request succeeded / JSON example | `{ "code": 200, "message": "success", "data": { "reference_id": "mor-demo-001", "model": 1, "status": 1 }, "time": 1791792000000 }` | `{ "code": 200, "message": "success", "data": { "reference_id": "mor-demo-001", "model": 1, "status": 1, "verification_url": "", "error": null, "result": null }, "time": 1791792000000 }` |
+| create-mor-F13 | Corrigido (não correspondia ao código) | Responses / final paragraph | Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados. | Esta seção não indica que o endpoint retorna apenas os quatro valores de code apresentados. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "reference_id": "mor-demo-001",
+  "model": 1,
+  "trading_name": "Demo Company",
+  "notification_email": "contact@example.test"
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/onboarding/managed_accounts/create' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${USER_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Requisição bem-sucedida
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "reference_id": "mor-demo-001",
+    "model": 1,
+    "status": 1,
+    "verification_url": "",
+    "error": null,
+    "result": null
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Falha na requisição ou validação
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 Erro do sistema
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 4004004 Tarifa de abertura de conta não configurada
+{
+  "code": 4004004,
+  "message": "Account creation fee configuration was not found. Please contact support.",
+  "data": null,
+  "time": 1792381001926
+}
+```
+</ResponseExample>

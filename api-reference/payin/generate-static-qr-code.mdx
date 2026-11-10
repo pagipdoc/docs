@@ -1,0 +1,175 @@
+---
+title: "Generate static QR code"
+description: "Generate a static Pix QR code without a specified amount for the target account. Query and verify each actual incoming payment separately."
+api: "POST /v3/qr_code/generate/static"
+keywords: ["/v3/qr_code/generate/static"]
+---
+
+## Behavior and handling
+
+Generate a static Pix QR code without a specified amount for the target account. The account must be `ACTIVE`, enabled to receive payments, and not undergoing closure. Its account type and account-holder document must be present and valid. <Badge color="blue" size="sm">Added · api-2-F06</Badge> Query and verify each actual incoming payment separately.
+
+A static QR code request does not include an amount. Record each actual incoming payment by its transaction ID. You must not use the QR code order ID in place of the transaction ID.
+
+For QR code generation errors, missing notifications, or unconfirmed credits to the account, see [Error scenarios in the incoming payment module](/api-reference/payin/overview).
+
+## Permissions and account ownership
+
+Use ACCOUNT credentials for the account bound to those credentials, or USER credentials with both `X-ISPB` and `X-Account-Number` selecting an active account owned by that USER within its valid account hierarchy. ACCOUNT credentials do not require these headers; if either is sent, both must be nonempty and match the bound account. PLATFORM credentials are not accepted. <Badge color="blue" size="sm">Added · api-2-F05</Badge> Requests must follow [Environments & Credentials](/environments-and-credentials).
+
+## Request parameters
+
+<ParamField body="city" type="string">
+**Required:** No (not enforced at this layer). City. Optional; an empty or whitespace-only value is allowed. When provided, whitespace is trimmed and collapsed, supported accented characters are converted to ASCII, and the value is converted to uppercase. The normalized value must contain at most 15 printable ASCII characters; values that cannot be represented this way are rejected <Badge color="blue" size="sm">Added · api-2-F04</Badge>
+</ParamField>
+
+<ParamField body="merchant_order_id" type="string" required>
+Merchant order ID; only English letters, digits, hyphens, and underscores are allowed. The first six characters must be a valid YYMMDD UTC date. The date must overlap the window within ±1 hour of the current UTC time. IDs share a 48-hour duplicate check across accounts and operations that use merchant order IDs; use an ID that is unique across your accounts and those operations. Reusing a reserved ID returns business code `4001013` with message `merchant_order_id already exists`, rather than the original success response. A reservation can remain after a failed creation attempt. If the result is unknown, query the original operation first. Do not blindly resubmit with a new ID <Badge color="blue" size="sm">Added · api-2-F07</Badge>
+</ParamField>
+
+<ParamField body="pix_key" type="string" required>
+Active EVP Pix key belonging to the target account and its account holder. Must contain 32 to 36 bytes and must not contain `@`. The registered key's account number, account-holder document value, and document type must match the target account <Badge color="blue" size="sm">Added · api-2-F03</Badge>
+</ParamField>
+
+<ParamField body="pix_key_type" type="integer" required>
+**Required:** Yes. <Badge color="orange" size="sm">Corrected · api-2-F01</Badge> Pix key type. Only `5 EVP` is accepted for static QR code generation. Values `0 UNSPECIFIED`, `1 CPF`, `2 CNPJ`, `3 EMAIL`, and `4 PHONE` are rejected <Badge color="orange" size="sm">Corrected · api-2-F02</Badge>
+</ParamField>
+
+<ParamField body="memo" type="string">
+**Required:** No (not enforced at this layer). Transaction note
+</ParamField>
+
+## cURL request example
+
+The example uses ACCOUNT-level credentials. Enter the actual parameters and generate the signature from the final body.json. <Badge color="orange" size="sm">Corrected · api-2-F10</Badge>
+
+## Response fields
+
+Field paths start at the response root. `[]` indicates an array element. Amounts use decimal strings. Enum values are defined separately for each field. The structure below describes a success response. A null value or 0 alone does not indicate that processing is complete.
+
+<ResponseField name="code" type="integer">
+Business result code. A value of 200 indicates success. Business errors are returned in this field. It is not the HTTP status code.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Business result description. On failure, use this with code to determine the cause.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Data object in a successful response. Can be null in an error response.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Response time as a UTC Unix timestamp in milliseconds.
+</ResponseField>
+
+<ResponseField name="data.payload_base64" type="string">
+Base64-encoded QR code payment payload.
+</ResponseField>
+
+<ResponseField name="data.payload_image_base64" type="string">
+Base64-encoded QR code image; the generation endpoint does not currently populate this field and returns an empty string.
+</ResponseField>
+
+<ResponseField name="data.qr_code_id" type="string">
+QR code ID.
+</ResponseField>
+
+<ResponseField name="data.merchant_order_id" type="string">
+Caller's merchant order ID.
+</ResponseField>
+
+## Responses
+
+View response examples by the business `code` in the JSON response. Check the HTTP status and business code separately. An HTTP 200 response can also return a business error. <Badge color="orange" size="sm">Corrected · api-2-F09</Badge>
+
+| `code` | Meaning | Recommended action |
+| --- | --- | --- |
+| `200` | Request succeeded | Check that `code` is 200, then save `data.qr_code_id` and `data.merchant_order_id`. Successful QR code generation does not confirm an incoming payment; query each payment separately. <Badge color="orange" size="sm">Corrected · api-2-F11</Badge> |
+| `400` | Request or validation failed | Parameter issue. Check and correct the request parameters. |
+| `500` | System error | Log the response and confirm the business result first. |
+
+The examples illustrate the response structure. Use the actual response for message and business status values. See [Error Catalog](/api-reference/error-catalog) for other parameter, permission, and service errors. This section does not imply that the endpoint returns only these three code values. A missing or empty `merchant_order_id` returns business code `4000`. A missing or empty `pix_key` currently returns business code `500` with message `pix_key field is required and cannot be empty`. Downstream static QR validation failures return business code `400` with the specific validation message. QR code processing or verification failures can return business code `4003014`. Inspect the actual code and message before deciding whether a retry is appropriate. <Badge color="blue" size="sm">Added · api-2-F12</Badge>
+
+<Tip>
+To try this endpoint, send the request example to the Sandbox base URL `https://ebanking-openapi-sandbox.pagsmile.com.br` with your Sandbox AK/SK. Sign every request as described in [Environments & Credentials](/environments-and-credentials#api-request-signing).
+</Tip>
+
+
+<Accordion title="Corrections to the source document (11)" icon="clipboard-check">
+This page was checked against the Pagsmile Open API source code on 2026-11-10. Each change below is marked in the page with a badge that shows its ID.
+
+| ID | Change | Location | Source document text | Updated text |
+| --- | --- | --- | --- | --- |
+| api-2-F01 | Corrected (did not match the code) | Request parameters / pix_key_type / Required | No (not enforced at this layer) | Yes |
+| api-2-F02 | Corrected (did not match the code) | Request parameters / pix_key_type / Format and conditions | Pix key type. Values: 0 UNSPECIFIED; 1 CPF; 2 CNPJ; 3 EMAIL; 4 PHONE; 5 EVP | Pix key type. Only 5 EVP is accepted for static QR code generation. Values 0 UNSPECIFIED, 1 CPF, 2 CNPJ, 3 EMAIL, and 4 PHONE are rejected |
+| api-2-F03 | Added (missing in the source) | Request parameters / pix_key / Format and conditions | Pix key value | Active EVP Pix key belonging to the target account and its account holder. Must contain 32 to 36 bytes and must not contain @. The registered key's account number, account-holder document value, and document type must match the target account |
+| api-2-F04 | Added (missing in the source) | Request parameters / city / Format and conditions | City | City. Optional; an empty or whitespace-only value is allowed. When provided, whitespace is trimmed and collapsed, supported accented characters are converted to ASCII, and the value is converted to uppercase. The normalized value must contain at most 15 printable ASCII characters; values that cannot be represented this way are rejected |
+| api-2-F05 | Added (missing in the source) | Permissions and account ownership | ACCOUNT, or USER with the target account header. | Use ACCOUNT credentials for the account bound to those credentials, or USER credentials with both `X-ISPB` and `X-Account-Number` selecting an active account owned by that USER within its valid account hierarchy. ACCOUNT credentials do not require these headers; if either is sent, both must be nonempty and match the bound account. PLATFORM credentials are not accepted. |
+| api-2-F06 | Added (missing in the source) | Behavior and handling / account eligibility | Generate a static Pix QR code without a specified amount for the target account. | Generate a static Pix QR code without a specified amount for the target account. The account must be ACTIVE, enabled to receive payments, and not undergoing closure. Its account type and account-holder document must be present and valid. |
+| api-2-F07 | Added (missing in the source) | Request parameters / merchant_order_id / Format and conditions | Merchant order ID; only English letters, digits, hyphens, and underscores are allowed. The first six characters must be a valid YYMMDD UTC date. The date must overlap the window within ±1 hour of the current UTC time. If the result is unknown, query the original operation first. Do not blindly resubmit with a new ID | Merchant order ID; only English letters, digits, hyphens, and underscores are allowed. The first six characters must be a valid YYMMDD UTC date. The date must overlap the window within ±1 hour of the current UTC time. IDs share a 48-hour duplicate check across accounts and operations that use merchant order IDs; use an ID that is unique across your accounts and those operations. Reusing a reserved ID returns business code 4001013 with message merchant_order_id already exists, rather than the original success response. A reservation can remain after a failed creation attempt. If the result is unknown, query the original operation first. Do not blindly resubmit with a new ID |
+| api-2-F09 | Corrected (did not match the code) | Responses / Request succeeded / JSON example | `{ "code": 200, "message": "success", "data": { "payload_base64": "example-payload_base64", "payload_image_base64": "example-payload_image_base64", "qr_code_id": "example-qr_code_id", "merchant_order_id": "example-merchant_order_id" }, "time": 1791792000000 }` | `{ "code": 200, "message": "success", "data": { "payload_base64": "example-payload_base64", "payload_image_base64": "", "qr_code_id": "example-qr_code_id", "merchant_order_id": "example-merchant_order_id", "error": null }, "time": 1791792000000 }` |
+| api-2-F10 | Corrected (did not match the code) | cURL request example / ORDER_ID generation | `ORDER_ID="$(date +%y%m%d%H%M%S)$(openssl rand -hex 3 \| python3 -c 'import sys; print(str(int(sys.stdin.read().strip(),16)%1000000).zfill(6))')"` | `ORDER_ID="$(date -u +%y%m%d%H%M%S)$(openssl rand -hex 3 \| python3 -c 'import sys; print(str(int(sys.stdin.read().strip(),16)%1000000).zfill(6))')"` |
+| api-2-F11 | Corrected (did not match the code) | Responses / Request succeeded / Recommended action | Read data and determine the result using the business status defined for this endpoint. | Check that `code` is 200, then save `data.qr_code_id` and `data.merchant_order_id`. Successful QR code generation does not confirm an incoming payment; query each payment separately. |
+| api-2-F12 | Added (missing in the source) | Responses / endpoint-specific validation and processing errors | This section does not imply that the endpoint returns only these three code values. | This section does not imply that the endpoint returns only these three code values. A missing or empty `merchant_order_id` returns business code 4000. A missing or empty `pix_key` currently returns business code 500 with message pix_key field is required and cannot be empty. Downstream static QR validation failures return business code 400 with the specific validation message. QR code processing or verification failures can return business code 4003014. Inspect the actual code and message before deciding whether a retry is appropriate. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+ORDER_ID="$(date -u +%y%m%d%H%M%S)$(openssl rand -hex 3 | python3 -c 'import sys; print(str(int(sys.stdin.read().strip(),16)%1000000).zfill(6))')"
+cat > body.json <<JSON
+{
+  "city": "Parisianville",
+  "merchant_order_id": "${ORDER_ID}",
+  "pix_key": "fe72f067-207c-47e0-9d84-2b2a75c12b97",
+  "pix_key_type": 5,
+  "memo": "culpa in consequat in"
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/qr_code/generate/static' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${ACCOUNT_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Request succeeded
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "payload_base64": "example-payload_base64",
+    "payload_image_base64": "",
+    "qr_code_id": "example-qr_code_id",
+    "merchant_order_id": "example-merchant_order_id",
+    "error": null
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Request or validation failed
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 System error
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

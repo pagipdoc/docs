@@ -1,0 +1,197 @@
+---
+title: "Initialize Pix key payment"
+description: "Initialize a payment using the payee's Pix key to obtain payment information and a ref_id."
+api: "POST /v3/transfers/pix/key-initiate"
+keywords: ["/v3/transfers/pix/key-initiate"]
+---
+
+## Behavior and handling
+
+Initialize a payment using the payee's Pix key to obtain payment information and a ref_id. Verify the payee, then call the confirmation endpoint within the reference validity period. Initialization alone does not mean the payment has been made. The payer account must be active and enabled to send payments; otherwise, initialization can return business code `4004008`. Access also depends on active user status and outgoing-payment permissions, including applicable MED restrictions. <Badge color="blue" size="sm">Added · api-8-F04</Badge>
+
+Initialization alone does not mean the payment has been made. When current Pix quota information is available, initialization checks the remaining allowance for the payee's CPF or CNPJ category. The required allowance is BRL 1.00 when `amount` is omitted, or the greater of BRL 1.00 and the supplied amount. Insufficient allowance returns business code `4001998`. Successful initialization does not reserve quota or guarantee that confirmation will pass the payment limits. <Badge color="blue" size="sm">Added · api-8-F05</Badge>
+
+### Two-step payment validity and context
+
+A Pix key initialization reference is valid for 1 minute. A QR code initialization reference is valid for 5 minutes. You must use the same payer account for initialization and confirmation. If the reference expires, resolve the Pix key or QR code again and verify the payment information.
+
+The initialization reference validity period and the QR code's own validity period are checked separately. `ref_id` is used for short-term payment confirmation. It does not replace a permanent merchant order ID or transaction ID.
+
+Initialization alone does not mean the payment has been made. Pix key lookup restrictions may apply to the payer's document number and the requested key. Excessive lookup attempts can return business code `4004029`; wait before trying again. The lookup window, threshold and waiting period depend on the applicable configuration. Invalid or restricted keys can return `4001001`; inactive or deleted keys can return `4001096`. Read the actual message to distinguish fraud-related restrictions from an invalid key. <Badge color="blue" size="sm">Added · api-8-F06</Badge>
+
+## Permissions and account ownership
+
+Use `ACCOUNT` credentials for their bound account, or `USER` credentials with both `X-ISPB` and `X-Account-Number` selecting an active account owned by that `USER` within its permitted account hierarchy. `ACCOUNT` credentials do not require these headers; if supplied, both must match the bound account. A single, empty or mismatched account header is rejected. `PLATFORM` credentials are not accepted. <Badge color="blue" size="sm">Added · api-8-F03</Badge> Requests must follow [Environments & Credentials](/environments-and-credentials).
+
+## Request parameters
+
+<ParamField body="pix_key" type="string" required>
+Pix key value. Leading and trailing whitespace is removed. Accepted formats: CPF with 11 digits; CNPJ with 12 alphanumeric characters followed by 2 digits; Brazilian phone matching `^\+55\d\{10,11\}$`; email matching `^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]\{2,\}$`; or EVP UUID with version 1–5 and a valid UUID variant. CNPJ letters are normalized to uppercase. Whitespace-only or unrecognized values return business code `400`. An omitted or empty value returns `4000`. <Badge color="blue" size="sm">Added · api-8-F02</Badge>
+</ParamField>
+
+<ParamField body="amount" type="string">
+  Optional amount in BRL. Omitted, empty or whitespace-only values skip the initialization balance check. A supplied value is trimmed, must be greater than 0 and must be exactly representable to two decimal places. The available balance is checked. Confirmation must use a numerically equal amount. Initialization does not reserve funds. <Badge color="blue" size="sm">Added · api-8-F01</Badge>
+</ParamField>
+
+## cURL request example
+
+The example uses ACCOUNT-level credentials. Enter the actual parameters and generate the signature from the final body.json.
+
+## Response fields
+
+Field paths start at the response root. `[]` indicates an array element. Amounts use decimal strings. Enum values are defined separately for each field. The structure below describes a success response. A null value or 0 alone does not indicate that processing is complete.
+
+<ResponseField name="code" type="integer">
+Business result code. A value of 200 indicates success. Business errors are returned in this field. It is not the HTTP status code.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Business result description. On failure, use this with code to determine the cause.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Data object in a successful response. Can be null in an error response.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Response time as a UTC Unix timestamp in milliseconds.
+</ResponseField>
+
+<ResponseField name="data.ref_id" type="string">
+Payment initialization reference used to confirm payment.
+</ResponseField>
+
+<ResponseField name="data.payee" type="object">
+Payee details.
+</ResponseField>
+
+<ResponseField name="data.payee.name" type="string">
+Name.
+</ResponseField>
+
+<ResponseField name="data.payee.document_id" type="string">
+Transaction participant's document number. It may be masked based on the merchant's configuration.
+</ResponseField>
+
+<ResponseField name="data.payee.document_type" type="integer">
+Document type. Enum: 0 DOCUMENT_TYPE_UNSPECIFIED; 1 DOCUMENT_TYPE_CPF; 2 DOCUMENT_TYPE_CNPJ.
+</ResponseField>
+
+<ResponseField name="data.payee.bank_account" type="string">
+Account number.
+</ResponseField>
+
+<ResponseField name="data.payee.bank_account_type" type="integer">
+Bank account type. Enum: 0 BANK_ACCOUNT_TYPE_UNSPECIFIED; 1 BANK_ACCOUNT_TYPE_CHECKING; 2 BANK_ACCOUNT_TYPE_SALARY; 3 BANK_ACCOUNT_TYPE_SAVINGS; 4 BANK_ACCOUNT_TYPE_PAYMENT; 5 BANK_ACCOUNT_TYPE_TRANSCTIONAL_PI; 7 BANK_ACCOUNT_TYPE_DEPOSIT; 6 BANK_ACCOUNT_TYPE_GUARANTEED.
+</ResponseField>
+
+<ResponseField name="data.payee.bank_branch" type="string">
+Bank branch code.
+</ResponseField>
+
+<ResponseField name="data.payee.bank_code" type="string">
+Bank ISPB.
+</ResponseField>
+
+<ResponseField name="data.payee.bank_name" type="string">
+Bank name.
+</ResponseField>
+
+<ResponseField name="data.settlement_id" type="string">
+Settlement transaction ID.
+</ResponseField>
+
+## Responses
+
+View response examples by the business `code` in the JSON response. Check the HTTP status and business code separately. An HTTP 200 response can also return a business error. <Badge color="orange" size="sm">Corrected · api-8-F10</Badge>
+
+| `code` | Meaning | Recommended action |
+| --- | --- | --- |
+| `200` | Request succeeded | Check that `code` is `200`, then read `data.ref_id` and verify the payee details. Call the confirmation endpoint within 1 minute using the same payer account. Initialization does not return a payment status or mean that payment has been made. <Badge color="orange" size="sm">Corrected · api-8-F11</Badge> |
+| `400` | Request or validation failed | Parameter issue. Check and correct the request parameters. |
+| `500` | System error | Log the response and confirm the business result first. |
+
+The examples illustrate the response structure. Use the actual response for message and business status values. See [Error Catalog](/api-reference/error-catalog) for other parameter, permission, and service errors. This section does not imply that the endpoint returns only these three code values.
+
+<Tip>
+To try this endpoint, send the request example to the Sandbox base URL `https://ebanking-openapi-sandbox.pagsmile.com.br` with your Sandbox AK/SK. Sign every request as described in [Environments & Credentials](/environments-and-credentials#api-request-signing).
+</Tip>
+
+<Accordion title="Corrections to the source document (8)" icon="clipboard-check">
+  This page was checked against the Pagsmile Open API source code on 2026-11-10. Each change below is marked in the page with a badge that shows its ID.
+
+  | ID | Change | Location | Source document text | Updated text |
+  | --- | --- | --- | --- | --- |
+  | api-8-F01 | Added (missing in the source) | Request parameters; new row after pix_key | — | `amount` \| string \| No \| Optional amount in BRL. Omitted, empty or whitespace-only values skip the initialization balance check. A supplied value is trimmed, must be greater than 0 and must be exactly representable to two decimal places. The available balance is checked. Confirmation must use a numerically equal amount. Initialization does not reserve funds. |
+  | api-8-F02 | Added (missing in the source) | Request parameters; pix_key description cell | Pix key value | Pix key value. Leading and trailing whitespace is removed. Accepted formats: CPF with 11 digits; CNPJ with 12 alphanumeric characters followed by 2 digits; Brazilian phone matching `^\\+55\\d\{10,11\}$`; email matching `^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]\{2,\}$`; or EVP UUID with version 1–5 and a valid UUID variant. CNPJ letters are normalized to uppercase. Whitespace-only or unrecognized values return business code 400. An omitted or empty value returns 4000. |
+  | api-8-F03 | Added (missing in the source) | Permissions and account ownership | ACCOUNT, or USER with the target account header. | Use ACCOUNT credentials for their bound account, or USER credentials with both `X-ISPB` and `X-Account-Number` selecting an active account owned by that USER within its permitted account hierarchy. ACCOUNT credentials do not require these headers; if supplied, both must match the bound account. A single, empty or mismatched account header is rejected. PLATFORM credentials are not accepted. |
+  | api-8-F04 | Added (missing in the source) | Behavior and handling; append eligibility paragraph | Initialization alone does not mean the payment has been made. | Initialization alone does not mean the payment has been made. The payer account must be active and enabled to send payments; otherwise, initialization can return business code 4004008. Access also depends on active user status and outgoing-payment permissions, including applicable MED restrictions. |
+  | api-8-F05 | Added (missing in the source) | Behavior and handling; append quota paragraph | Initialization alone does not mean the payment has been made. | Initialization alone does not mean the payment has been made. When current Pix quota information is available, initialization checks the remaining allowance for the payee's CPF or CNPJ category. The required allowance is BRL 1.00 when amount is omitted, or the greater of BRL 1.00 and the supplied amount. Insufficient allowance returns business code 4001998. Successful initialization does not reserve quota or guarantee that confirmation will pass the payment limits. |
+  | api-8-F06 | Added (missing in the source) | Behavior and handling; append lookup restriction paragraph | Initialization alone does not mean the payment has been made. | Initialization alone does not mean the payment has been made. Pix key lookup restrictions may apply to the payer's document number and the requested key. Excessive lookup attempts can return business code 4004029; wait before trying again. The lookup window, threshold and waiting period depend on the applicable configuration. Invalid or restricted keys can return 4001001; inactive or deleted keys can return 4001096. Read the actual message to distinguish fraud-related restrictions from an invalid key. |
+  | api-8-F10 | Corrected (did not match the code) | Responses; Request succeeded JSON example | `{ "code": 200, "message": "success", "data": { "ref_id": "example-ref_id", "payee": { "name": "example-name", "document_id": "example-document_id", "document_type": 0, "bank_account": "example-bank_account", "bank_account_type": 0, "bank_branch": "example-bank_branch", "bank_code": "example-bank_code", "bank_name": "example-bank_name" }, "settlement_id": "example-settlement_id" }, "time": 1791792000000 }` | `{ "code": 200, "message": "success", "data": { "ref_id": "example-ref_id", "payee": { "name": "example-name", "document_id": "example-document_id", "document_type": 0, "bank_account": "example-bank_account", "bank_account_type": 0, "bank_branch": "example-bank_branch", "bank_code": "example-bank_code", "bank_name": "example-bank_name" }, "settlement_id": "example-settlement_id", "error": null, "result": null }, "time": 1791792000000 }` |
+  | api-8-F11 | Corrected (did not match the code) | Responses; Request succeeded; Recommended action | Read data and determine the result using the business status defined for this endpoint. | Check that code is 200, then read data.ref_id and verify the payee details. Call the confirmation endpoint within 1 minute using the same payer account. Initialization does not return a payment status or mean that payment has been made. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "pix_key": "replace-with-valid-pix-key"
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/transfers/pix/key-initiate' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${ACCOUNT_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Request succeeded
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "ref_id": "example-ref_id",
+    "payee": {
+      "name": "example-name",
+      "document_id": "example-document_id",
+      "document_type": 0,
+      "bank_account": "example-bank_account",
+      "bank_account_type": 0,
+      "bank_branch": "example-bank_branch",
+      "bank_code": "example-bank_code",
+      "bank_name": "example-bank_name"
+    },
+    "settlement_id": "example-settlement_id",
+    "error": null,
+    "result": null
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Request or validation failed
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 System error
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

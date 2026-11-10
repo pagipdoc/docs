@@ -1,0 +1,94 @@
+---
+title: "Callbacks KYB"
+description: "Receba alterações no status da análise de conformidade das contas gerenciadas MOR, VA e PA."
+---
+
+## Funcionamento e tratamento
+
+Receba alterações no status da análise de conformidade das contas gerenciadas MOR, VA e PA quando as atualizações de seus resultados de conformidade forem aceitas. Contas MOR que reutilizam os registros de conformidade aprovados da MA superior não iniciam uma nova análise no provedor nem recebem um novo callback de resultado KYB apenas pela criação da conta. <Badge color="blue" size="sm">Complementado · kyb-webhooks-F07</Badge> O callback só é agendado quando a sessão de conformidade atual aceita a atualização do resultado. Eventos duplicados do provedor e regressões de estado desatualizadas não geram novas entregas.
+
+## Eventos e escopos
+
+| Evento | Identidade titular da assinatura de eventos | Pessoa ou empresa em análise | Identificador do titular |
+| --- | --- | --- | --- |
+| `VA_ACCOUNT_KYB` | USER | `VA_MOR`, `VA`, `PA` | `user_id` |
+
+Os eventos KYB de contas gerenciadas usam `user_id` para identificar o USER titular. A entrega exige uma assinatura de eventos ativa, de titularidade USER, para `VA_ACCOUNT_KYB`, correspondente a esse `user_id` e com URL de callback e credencial de assinatura. Uma entrega pendente é cancelada se a assinatura de eventos for desativada ou se sua revisão, aplicação, URL de callback, credencial de assinatura, titular ou evento deixar de corresponder à configuração selecionada para essa entrega. <Badge color="blue" size="sm">Complementado · kyb-webhooks-F08</Badge> As configurações de webhook de titularidade ACCOUNT não participam das entregas KYB.
+
+## Status de conformidade e status da conta
+
+`status` indica o status de conformidade e pode ter os valores `PENDING`, `PENDING_SUBMISSION`, `APPROVED`, `REJECTED`, `EXPIRED`, `CREATION_FAILED`, `REVIEWING`, `ERROR` ou `FORCE_APPROVED`, sem o prefixo `COMPLIANCE_STATUS_`.
+
+O status de conformidade `APPROVED` não pode ser mapeado diretamente para o status da conta `ACTIVE`. Atualize os registros de conformidade após receber a notificação. Para confirmar se a conta está disponível para uso, consulte o status atual do recurso dessa conta.
+
+## Campos do payload
+
+Campos opcionais vazios são omitidos. O pipeline de entrega exige valores não vazios para `session_id`, `status`, `provider` e `provider_event_id`.
+
+| Campo | Tipo JSON | Significado |
+| --- | --- | --- |
+| `delivery_id` | string | ID estável de entrega da assinatura de eventos atual, que pode ser usado para deduplicação no receptor |
+| `request_id` | string | Identificador da requisição para processar o resultado de conformidade |
+| `session_id` | string | Identificador da sessão de conformidade |
+| `event_type` | string | Nome do evento na tabela acima |
+| `subject_type` | string | Tipo de pessoa ou empresa em análise |
+| `merchant_id` | string | Identificador da identidade do comerciante em análise |
+| `webhook_owner_merchant_id` | string | Identificador do comerciante superior direto que criou a conta gerenciada, quando disponível. Não identifica o titular USER da assinatura de eventos; use `user_id` para identificar esse titular <Badge color="blue" size="sm">Complementado · kyb-webhooks-F05</Badge> |
+| `user_id` | string | Identificador do titular USER nos eventos de contas gerenciadas |
+| `bank_code` | string | Código bancário ou ISPB, quando disponível |
+| `bank_account` | string | Número da conta da pessoa ou empresa em análise, quando disponível |
+| `creator_bank_account` | string | Número da conta de quem criou o recurso, quando disponível |
+| `master_bank_account` | string | Número da conta da MA superior na hierarquia, quando disponível. Para uma PA criada sob uma VA, pode ser diferente de `creator_bank_account` <Badge color="blue" size="sm">Complementado · kyb-webhooks-F04</Badge> |
+| `reference_id` | string | Número de associação à identidade de quem faz a chamada, quando disponível |
+| `status` | string | Status de conformidade nesta notificação |
+| `provider` | string | Identificador público do provedor de conformidade. Sempre `PAGSMILE_COMPLIANCE` <Badge color="orange" size="sm">Corrigido · kyb-webhooks-F01</Badge> |
+| `provider_event_id` | string | ID do evento do provedor |
+| `provider_case_id` | string | ID do caso no provedor (opcional) |
+| `provider_profile_id` | string | Identificador do perfil no provedor (opcional) |
+| `provider_session_id` | string | Identificador da sessão no provedor (opcional) |
+| `result_code` | string | Código público do resultado. Sempre presente. Valores possíveis: `PENDING`, `PENDING_SUBMISSION`, `REVIEWING`, `READY_FOR_REVIEW`, `APPROVED`, `REJECTED`, `EXPIRED`, `ERROR`, `UNKNOWN`, `FORCE_APPROVED`, `RESUBMIT_REQUIRED` ou `CREATION_FAILED`. Um código vazio ou não aceito é retornado como `UNKNOWN`. Esses códigos de resultado são distintos dos valores de `status` <Badge color="orange" size="sm">Corrigido · kyb-webhooks-F02</Badge> |
+| `error_reason` | string | Motivo público da falha. Para `ERROR`, `REJECTED` ou `CREATION_FAILED`, o valor é `Address verification document is required.` ou `Verification could not be completed. Please contact support.`. Omitido nos demais status entregues <Badge color="blue" size="sm">Complementado · kyb-webhooks-F06</Badge> |
+| `raw_result_ref` | string | Referência ao resultado bruto armazenado (opcional) |
+| `verification_result_ref` | string | Referência ao resultado da verificação (opcional) |
+| `business_profile_ref` | string | Referência aos dados de negócio (opcional) |
+| `occurred_at` | number | Timestamp Unix em milissegundos |
+
+## Exemplos de callback USER
+
+Os exemplos a seguir mostram a estrutura. Todos os identificadores são valores de demonstração. <Badge color="orange" size="sm">Corrigido · kyb-webhooks-F03</Badge>
+
+```json
+{
+  "delivery_id": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "request_id": "request_demo_001",
+  "session_id": "compliance_session_demo_001",
+  "event_type": "VA_ACCOUNT_KYB",
+  "subject_type": "VA",
+  "merchant_id": "merchant_demo_va_001",
+  "webhook_owner_merchant_id": "merchant_demo_parent_001",
+  "user_id": "user_demo_001",
+  "bank_code": "12345678",
+  "bank_account": "00012345",
+  "reference_id": "account_reference_demo_001",
+  "status": "APPROVED",
+  "provider": "PAGSMILE_COMPLIANCE",
+  "provider_event_id": "provider_event_demo_001",
+  "result_code": "APPROVED",
+  "occurred_at": 1710000000123
+}
+```
+
+<Accordion title="Correções em relação ao documento original (8)" icon="clipboard-check">
+Esta página foi conferida com o código-fonte da Pagsmile Open API em 2026-11-10. Cada alteração abaixo está marcada na página com um selo que mostra o seu ID.
+
+| ID | Alteração | Local | Texto do documento original | Texto atualizado |
+| --- | --- | --- | --- | --- |
+| kyb-webhooks-F01 | Corrigido (não correspondia ao código) | Payload fields | Nome do provedor de conformidade em maiúsculas | Identificador público do provedor de conformidade. Sempre `PAGSMILE_COMPLIANCE` |
+| kyb-webhooks-F02 | Corrigido (não correspondia ao código) | Payload fields | Código de resultado do provedor ou código de resultado de negócio (opcional) | Código público do resultado. Sempre presente. Valores possíveis: `PENDING`, `PENDING_SUBMISSION`, `REVIEWING`, `READY_FOR_REVIEW`, `APPROVED`, `REJECTED`, `EXPIRED`, `ERROR`, `UNKNOWN`, `FORCE_APPROVED`, `RESUBMIT_REQUIRED` ou `CREATION_FAILED`. Um código vazio ou não aceito é retornado como `UNKNOWN`. Esses códigos de resultado são distintos dos valores de `status` |
+| kyb-webhooks-F03 | Corrigido (não correspondia ao código) | USER callback examples | `{ "delivery_id": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "request_id": "request_demo_001", "session_id": "compliance_session_demo_001", "event_type": "VA_ACCOUNT_KYB", "subject_type": "VA", "merchant_id": "merchant_demo_va_001", "user_id": "user_demo_001", "bank_code": "12345678", "bank_account": "00012345", "reference_id": "account_reference_demo_001", "status": "APPROVED", "provider": "AIPRISE", "provider_event_id": "provider_event_demo_001", "occurred_at": 1710000000123 }` | `{ "delivery_id": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "request_id": "request_demo_001", "session_id": "compliance_session_demo_001", "event_type": "VA_ACCOUNT_KYB", "subject_type": "VA", "merchant_id": "merchant_demo_va_001", "webhook_owner_merchant_id": "merchant_demo_parent_001", "user_id": "user_demo_001", "bank_code": "12345678", "bank_account": "00012345", "reference_id": "account_reference_demo_001", "status": "APPROVED", "provider": "PAGSMILE_COMPLIANCE", "provider_event_id": "provider_event_demo_001", "result_code": "APPROVED", "occurred_at": 1710000000123 }` |
+| kyb-webhooks-F04 | Complementado (ausente no original) | Payload fields; insert after creator_bank_account | — | `master_bank_account` \| string \| Não \| Número da conta da MA superior na hierarquia, quando disponível. Para uma PA criada sob uma VA, pode ser diferente de `creator_bank_account` |
+| kyb-webhooks-F05 | Complementado (ausente no original) | Payload fields; insert after merchant_id | — | `webhook_owner_merchant_id` \| string \| Não \| Identificador do comerciante superior direto que criou a conta gerenciada, quando disponível. Não identifica o titular USER da assinatura de eventos; use `user_id` para identificar esse titular |
+| kyb-webhooks-F06 | Complementado (ausente no original) | Payload fields; insert after result_code | — | `error_reason` \| string \| Não \| Motivo público da falha. Para `ERROR`, `REJECTED` ou `CREATION_FAILED`, o valor é `Address verification document is required.` ou `Verification could not be completed. Please contact support.`. Omitido nos demais status entregues |
+| kyb-webhooks-F07 | Complementado (ausente no original) | Behavior and handling; append caveat to the opening sentence | Receba alterações no status da análise de conformidade das contas gerenciadas MOR, VA e PA. | Receba alterações no status da análise de conformidade das contas gerenciadas MOR, VA e PA quando as atualizações de seus resultados de conformidade forem aceitas. Contas MOR que reutilizam os registros de conformidade aprovados da MA superior não iniciam uma nova análise no provedor nem recebem um novo callback de resultado KYB apenas pela criação da conta. |
+| kyb-webhooks-F08 | Complementado (ausente no original) | Events and scopes; append subscription prerequisites to the USER-owner sentence | Os eventos KYB de contas gerenciadas usam `user_id` para identificar o USER titular. | Os eventos KYB de contas gerenciadas usam `user_id` para identificar o USER titular. A entrega exige uma assinatura de eventos ativa, de titularidade USER, para `VA_ACCOUNT_KYB`, correspondente a esse `user_id` e com URL de callback e credencial de assinatura. Uma entrega pendente é cancelada se a assinatura de eventos for desativada ou se sua revisão, aplicação, URL de callback, credencial de assinatura, titular ou evento deixar de corresponder à configuração selecionada para essa entrega. |
+</Accordion>

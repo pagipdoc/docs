@@ -1,0 +1,158 @@
+---
+title: "Create Pix key"
+description: "Create a Pix key for the target account to use as an identifier for incoming Pix payments. The server generates random EVP keys."
+api: "POST /v3/pix_keys/create"
+keywords: ["/v3/pix_keys/create"]
+---
+
+## Behavior and handling
+
+Create a Pix key for the target account to use as an identifier for incoming Pix payments. Key creation is rejected if the account is closed or an account-closure operation is in progress. <Badge color="blue" size="sm">Added · api-25-F07</Badge> The server generates random EVP keys. For other types, provide the key value for the selected type.
+
+The endpoint supports CPF, CNPJ, EMAIL, PHONE, and EVP. See the parameter table for the values to provide. After creation, save the returned key and query the bank account to verify valid keys. Creating a value that is already `ACTIVE` fails, including when it belongs to the same account. An existing non-active value can enter a re-creation flow, subject to registration checks. This endpoint has no customer-supplied idempotency key. Repeating an EVP request without a key value requests a new random key, so query the account before retrying a request whose result is unknown. <Badge color="blue" size="sm">Added · api-25-F06</Badge>
+
+## Permissions and account ownership
+
+Use ACCOUNT credentials for the account bound to those credentials, or USER credentials with both `X-ISPB` and `X-Account-Number` for an account owned by that USER. With ACCOUNT credentials, account headers are optional; if supplied, both must match the bound account. PLATFORM credentials cannot call this endpoint. Requests must follow [Environments & Credentials](/environments-and-credentials). <Badge color="orange" size="sm">Corrected · api-25-F01</Badge>
+
+## Request parameters
+
+<ParamField body="pix_key_type" type="integer" required>
+Pix key type. Values: 1 CPF; 2 CNPJ; 3 EMAIL; 4 PHONE; 5 EVP
+</ParamField>
+
+<ParamField body="pix_key_value" type="string">
+**Required:** Conditionally required. Required for non-EVP types. CPF must contain exactly 11 digits. CNPJ must contain exactly 14 characters: 12 uppercase letters/digits followed by 2 digits, without punctuation or internal spaces; leading and trailing whitespace is trimmed and matching values are converted to uppercase. EMAIL must match `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]\{2,\}$`; confirm the supported maximum length before sending unusually long addresses. PHONE must match `^\+55[1-9][0-9]9[0-9]\{8\}$`, including the `+55` country code. For EVP, omit the field or send an empty string to generate a key; `GENERATE_EVP` also requests generation. A supplied EVP value must be a 36-character lowercase UUID matching `^[a-f0-9]\{8\}-[a-f0-9]\{4\}-[a-f0-9]\{4\}-[a-f0-9]\{4\}-[a-f0-9]\{12\}$` <Badge color="blue" size="sm">Added · api-25-F02</Badge>
+</ParamField>
+
+## cURL request example
+
+The example uses ACCOUNT-level credentials. Enter the actual parameters and generate the signature from the final body.json.
+
+## Response fields
+
+Field paths start at the response root. `[]` indicates an array element. Amounts use decimal strings. Enum values are defined separately for each field. The structure below describes a success response. A null value or 0 alone does not indicate that processing is complete.
+
+<ResponseField name="code" type="integer">
+Business result code. A value of 200 indicates success. Business errors are returned in this field. It is not the HTTP status code.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Business result description. On failure, use this with code to determine the cause.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Data object in a successful response. Can be null in an error response.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Response time as a UTC Unix timestamp in milliseconds.
+</ResponseField>
+
+<ResponseField name="data.pix_key" type="string">
+Pix key value.
+</ResponseField>
+
+<ResponseField name="data.pix_key_type" type="integer">
+Pix key type. Enum: 0 PIX_KEY_TYPE_UNSPECIFIED; 1 PIX_KEY_TYPE_CPF; 2 PIX_KEY_TYPE_CNPJ; 3 PIX_KEY_TYPE_EMAIL; 4 PIX_KEY_TYPE_PHONE; 5 PIX_KEY_TYPE_EVP.
+</ResponseField>
+
+<ResponseField name="data.status" type="integer">
+Current Pix key status. Enum: 0 `PIX_KEY_STATUS_UNSPECIFIED`; 1 `PIX_KEY_STATUS_ACTIVE`; 2 `PIX_KEY_STATUS_INACTIVE`; 3 `PIX_KEY_STATUS_BLOCKED`; 4 `PIX_KEY_STATUS_DELETED`. Creation can return `ACTIVE` (1), `INACTIVE` (2), or `BLOCKED` (3). `BLOCKED` includes keys awaiting identity validation or registration, so it does not necessarily mean the key was blocked for fraud. Treat only `ACTIVE` as a usable key and query the bank account if the returned status is not `ACTIVE`. <Badge color="blue" size="sm">Added · api-25-F05</Badge>
+</ResponseField>
+
+<ResponseField name="data.created_at" type="integer">
+Creation time in UTC Unix milliseconds. A successful response contains a nonzero timestamp; if the creation timestamp is unavailable, the current server timestamp is returned. <Badge color="orange" size="sm">Corrected · api-25-F03</Badge>
+</ResponseField>
+
+## Responses
+
+View response examples by the business `code` in the JSON response. Check the HTTP status and business code separately. An HTTP 200 response can also return a business error. <Badge color="orange" size="sm">Corrected · api-25-F04</Badge>
+
+| `code` | Meaning | Recommended action |
+| --- | --- | --- |
+| `200` | Request succeeded | Read data and determine the result using the business status defined for this endpoint. |
+| `400` | Request or validation failed | Parameter issue. Check and correct the request parameters. |
+| `500` | System error | Log the response and confirm the business result first. |
+
+The examples illustrate JSON business responses. Malformed JSON or a request-body read failure can instead return HTTP 400 with a plain-text error body. Check the HTTP status and `Content-Type` before parsing the response as JSON. <Badge color="blue" size="sm">Added · api-25-F08</Badge> Use the actual response for message and business status values. See [Error Catalog](/api-reference/error-catalog) for other parameter, permission, and service errors. This section does not imply that the endpoint returns only these three code values.
+
+## Sandbox access example
+
+Use the actual response as the source of truth for transaction or resource information, processing status, and error information.
+
+`X-Client-ID` uses the AK you enter. The timestamp, nonce, request body hash, and signature are generated automatically. SK is used only for local signing. It is not included in the request or stored. Previewing does not send a request. The access button submits a real request. If the result is unknown, query first. Requests are not retried automatically. Browser access must meet Sandbox CORS, IP, and credential requirements.
+
+<Tip>
+To try this endpoint, send the request example to the Sandbox base URL `https://ebanking-openapi-sandbox.pagsmile.com.br` with your Sandbox AK/SK. Sign every request as described in [Environments & Credentials](/environments-and-credentials#api-request-signing).
+</Tip>
+
+
+<Accordion title="Corrections to the source document (8)" icon="clipboard-check">
+This page was checked against the Pagsmile Open API source code on 2026-11-10. Each change below is marked in the page with a badge that shows its ID.
+
+| ID | Change | Location | Source document text | Updated text |
+| --- | --- | --- | --- | --- |
+| api-25-F01 | Corrected (did not match the code) | Permissions and account ownership | ACCOUNT plus the target account header. | Use ACCOUNT credentials for the account bound to those credentials, or USER credentials with both `X-ISPB` and `X-Account-Number` for an account owned by that USER. With ACCOUNT credentials, account headers are optional; if supplied, both must match the bound account. PLATFORM credentials cannot call this endpoint. |
+| api-25-F02 | Added (missing in the source) | Request parameters / pix_key_value description cell | Required for non-EVP types; EVP keys can be generated downstream. For CNPJ, trim leading and trailing whitespace first. If the value matches the format of 12 letters/digits followed by 2 digits, convert it to uppercase, with no punctuation or internal spaces | Required for non-EVP types. CPF must contain exactly 11 digits. CNPJ must contain exactly 14 characters: 12 uppercase letters/digits followed by 2 digits, without punctuation or internal spaces; leading and trailing whitespace is trimmed and matching values are converted to uppercase. EMAIL must match `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]\{2,\}$`; confirm the supported maximum length before sending unusually long addresses. PHONE must match `^\\+55[1-9][0-9]9[0-9]\{8\}$`, including the `+55` country code. For EVP, omit the field or send an empty string to generate a key; `GENERATE_EVP` also requests generation. A supplied EVP value must be a 36-character lowercase UUID matching `^[a-f0-9]\{8\}-[a-f0-9]\{4\}-[a-f0-9]\{4\}-[a-f0-9]\{4\}-[a-f0-9]\{12\}$` |
+| api-25-F03 | Corrected (did not match the code) | Response fields / data.created_at description cell | Creation time in UTC Unix milliseconds. Can be 0 if creation has not occurred or the time is not provided. | Creation time in UTC Unix milliseconds. A successful response contains a nonzero timestamp; if the creation timestamp is unavailable, the current server timestamp is returned. |
+| api-25-F04 | Corrected (did not match the code) | Responses / Request succeeded JSON example | `{ "code": 200, "message": "success", "data": { "pix_key": "example-pix_key", "pix_key_type": 0, "status": 0, "created_at": 0 }, "time": 1791792000000 }` | `{ "code": 200, "message": "success", "data": { "pix_key": "8e67c99a-7c55-4e91-9557-512b5e198561", "pix_key_type": 5, "status": 1, "created_at": 1791792000000 }, "time": 1791792000000 }` |
+| api-25-F05 | Added (missing in the source) | Response fields / data.status description cell | Current business status, interpreted according to the enum values listed for this field. Enum: 0 PIX_KEY_STATUS_UNSPECIFIED; 1 PIX_KEY_STATUS_ACTIVE; 2 PIX_KEY_STATUS_INACTIVE; 3 PIX_KEY_STATUS_BLOCKED; 4 PIX_KEY_STATUS_DELETED. | Current Pix key status. Enum: 0 PIX_KEY_STATUS_UNSPECIFIED; 1 PIX_KEY_STATUS_ACTIVE; 2 PIX_KEY_STATUS_INACTIVE; 3 PIX_KEY_STATUS_BLOCKED; 4 PIX_KEY_STATUS_DELETED. Creation can return ACTIVE (1), INACTIVE (2), or BLOCKED (3). BLOCKED includes keys awaiting identity validation or registration, so it does not necessarily mean the key was blocked for fraud. Treat only ACTIVE as a usable key and query the bank account if the returned status is not ACTIVE. |
+| api-25-F06 | Added (missing in the source) | Behavior and handling / after-creation guidance | After creation, save the returned key and query the bank account to verify valid keys. | After creation, save the returned key and query the bank account to verify valid keys. Creating a value that is already ACTIVE fails, including when it belongs to the same account. An existing non-active value can enter a re-creation flow, subject to registration checks. This endpoint has no customer-supplied idempotency key. Repeating an EVP request without a key value requests a new random key, so query the account before retrying a request whose result is unknown. |
+| api-25-F07 | Added (missing in the source) | Behavior and handling / first sentence | Create a Pix key for the target account to use as an identifier for incoming Pix payments. | Create a Pix key for the target account to use as an identifier for incoming Pix payments. Key creation is rejected if the account is closed or an account-closure operation is in progress. |
+| api-25-F08 | Added (missing in the source) | Responses / explanation after examples | The examples illustrate the response structure. | The examples illustrate JSON business responses. Malformed JSON or a request-body read failure can instead return HTTP 400 with a plain-text error body. Check the HTTP status and Content-Type before parsing the response as JSON. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "pix_key_type": 5
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/pix_keys/create' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${ACCOUNT_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Request succeeded
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "pix_key": "8e67c99a-7c55-4e91-9557-512b5e198561",
+    "pix_key_type": 5,
+    "status": 1,
+    "created_at": 1791792000000
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Request or validation failed
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 System error
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

@@ -1,0 +1,189 @@
+---
+title: "Initiate Pix refund"
+description: "Initiate a refund for the original Pix incoming payment to return funds to the original payer."
+api: "POST /v3/refunds/pix"
+keywords: ["/v3/refunds/pix"]
+---
+
+## Behavior and handling
+
+Initiate a refund for the original Pix incoming payment to return funds to the original payer. The Payee (original payee) initiates the refund using the credentials for the original payee account. After the request is accepted, save the refund identifiers, continue querying the refund result, and verify the refund statement entries. Acceptance returns `PENDING` before funds are blocked for the refund. Insufficient available balance can therefore cause the refund to fail during subsequent processing. <Badge color="blue" size="sm">Added · api-5-F13</Badge> See [Refunds](/api-reference/refunds/overview) for status transitions and error handling.
+
+### Pre-initiation checks
+
+| Conditions | Requirements |
+| --- | --- |
+| Original transaction | The original transaction must be a completed Pix payment with a positive remaining returnable amount, and the target account must be its original payee. Use that payment's `settlement_id` from the matching account statement entry with `is_credit=true` <Badge color="blue" size="sm">Added · api-5-F09</Badge> |
+| Refund deadline | The current local code checks the deadline as the original transaction's initiated_at plus 90 days and rejects requests after that deadline; the version deployed in production takes precedence |
+| Amount | Greater than 0, with a value exactly representable to two decimal places, and no more than the original transaction's remaining returnable amount; extra trailing decimal zeroes are accepted. Save a separate record for each partial refund <Badge color="orange" size="sm">Corrected · api-5-F03</Badge> |
+| Account | The original payee account matches the account initiating the refund and meets the account status and funding requirements |
+| Order ID | Follow the UTC date and format rules in the parameter table; see the [Refunds](/api-reference/refunds/overview) module for error handling |
+
+The remaining returnable amount is the original amount minus amounts already refunded, amounts returned through chargebacks, and amounts reserved for pending returns. A negative result is treated as zero. <Badge color="blue" size="sm">Added · api-5-F10</Badge>
+
+## Permissions and account ownership
+
+Use ACCOUNT credentials for the original payee account, or USER credentials with both `X-ISPB` and `X-Account-Number` selecting an account owned by that USER. ACCOUNT credentials cannot select another account; if account headers are supplied, both must be nonempty and match the credential's account. PLATFORM credentials are not accepted. <Badge color="blue" size="sm">Added · api-5-F08</Badge> Requests must follow [Environments & Credentials](/environments-and-credentials).
+
+## Request parameters
+
+<ParamField body="original_settlement_id" type="string" required>
+Settlement ID of the original Pix incoming payment being refunded; obtain it from `data.details.settlement_id` in [Get transaction details](/api-reference/payin/get-transaction-details), or from the matching credit entry in [Get account statement](/api-reference/accounts/get-account-statement) <Badge color="orange" size="sm">Corrected · api-5-F01</Badge>
+</ParamField>
+
+<ParamField body="merchant_order_id" type="string" required>
+Merchant order ID; only English letters, digits, hyphens, and underscores are allowed. The first six characters must be a valid YYMMDD UTC date. The date must overlap the window within ±1 hour of the current UTC time. If the result is unknown, query the original operation first. Do not blindly resubmit with a new ID
+</ParamField>
+
+Use a unique order ID across accounts and operations in the same environment. Duplicate order IDs are retained for 48 hours and rejected with business code `4001013`; the endpoint does not replay the original success response. A duplicate error does not establish that the original refund failed. Keep the original order ID and investigate the existing operation before retrying. <Badge color="blue" size="sm">Added · api-5-F11</Badge>
+
+<ParamField body="amount" type="string" required>
+Decimal amount string; the value must be greater than 0 and exactly representable to two decimal places (for example, `10.00`). Extra trailing decimal zeroes, such as `10.000`, are accepted; `0`, negative numbers, and `10.555` are not accepted <Badge color="orange" size="sm">Corrected · api-5-F04</Badge>
+</ParamField>
+
+<ParamField body="reason" type="string">
+**Required:** No (not enforced at this layer). Optional explanatory text for the refund. This field does not select a Pix return reason code; this endpoint initiates a payee-request refund using `MD06`. If omitted, the explanatory text is empty <Badge color="blue" size="sm">Added · api-5-F12</Badge>
+</ParamField>
+
+<Info>
+**Parameter sources**
+
+Select the statement entry for the specific original Pix incoming payment being refunded. Use its `settlement_id` from a successful [Get account statement ↗](/api-reference/accounts/get-account-statement) (`/v3/statements`) response, and confirm that `is_credit=true` and the settlement ID is valid. Do not automatically select the first credit entry. <Badge color="orange" size="sm">Corrected · api-5-F02</Badge>
+</Info>
+
+## cURL request example
+
+The example uses ACCOUNT-level credentials. Enter the actual parameters and generate the signature from the final body.json. <Badge color="orange" size="sm">Corrected · api-5-F05</Badge>
+
+## Response fields
+
+Field paths start at the response root. `[]` indicates an array element. Amounts use decimal strings. Enum values are defined separately for each field. The structure below describes a success response. A null value or 0 alone does not indicate that processing is complete.
+
+<ResponseField name="code" type="integer">
+Business result code. A value of 200 indicates success. Business errors are returned in this field. It is not the HTTP status code.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Business result description. On failure, use this with code to determine the cause.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Data object in a successful response. Can be null in an error response.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Response time as a UTC Unix timestamp in milliseconds.
+</ResponseField>
+
+<ResponseField name="data.settlement_refund_id" type="string">
+Settlement refund ID.
+</ResponseField>
+
+<ResponseField name="data.refund_id" type="string">
+Refund ID; used to query refund details or status.
+</ResponseField>
+
+<ResponseField name="data.merchant_order_id" type="string">
+Merchant order ID supplied by the caller; currently not populated in the refund creation response and returned as an empty string.
+</ResponseField>
+
+<ResponseField name="data.txn_status" type="integer">
+Transaction status. An accepted creation request returns `1 TXN_STATUS_PENDING`; processing is asynchronous. Query the refund status to determine the final result. Enum: `0 TXN_STATUS_UNSPECIFIED`; `1 TXN_STATUS_PENDING`; `2 TXN_STATUS_COMPLETED`; `3 TXN_STATUS_FAILED`; `4 TXN_STATUS_CANCELLED`; `5 TXN_STATUS_PROCESSING`; `6 TXN_STATUS_REFUNDED`; `7 TXN_STATUS_PARTIALLY_REFUNDED`; `8 TXN_STATUS_DISPUTED`. <Badge color="blue" size="sm">Added · api-5-F07</Badge>
+</ResponseField>
+
+## Responses
+
+View response examples by the business `code` in the JSON response. Check the HTTP status and business code separately. An HTTP 200 response can also return a business error. <Badge color="orange" size="sm">Corrected · api-5-F06</Badge>
+
+| `code` | Meaning | Recommended action |
+| --- | --- | --- |
+| `200` | Request succeeded | Read data and determine the result using the business status defined for this endpoint. |
+| `400` | Request or validation failed | Parameter issue. Check and correct the request parameters. |
+| `500` | System error | Log the response and confirm the business result first. |
+
+The examples illustrate the response structure. Use the actual response for message and business status values. See [Error Catalog](/api-reference/error-catalog) for other parameter, permission, and service errors. This section does not imply that the endpoint returns only these three code values. Relevant errors include `4000` for a missing `original_settlement_id`, `merchant_order_id`, or `amount`; `4002` for an invalid amount format; `400` for invalid order-ID rules, an ineligible original transaction, a blocked account, or an expired refund deadline; `4001013` for a duplicate order ID; `4003003` for an original transaction not found; `4003005` when the amount exceeds the remaining returnable amount; `4004101` when the refunding account does not match the original payee; `4003016` for a risk-control rejection; and `501` for temporary API unavailability. Read the actual `message` with `code` to distinguish the cause. <Badge color="blue" size="sm">Added · api-5-F16</Badge>
+
+<Tip>
+To try this endpoint, send the request example to the Sandbox base URL `https://ebanking-openapi-sandbox.pagsmile.com.br` with your Sandbox AK/SK. Sign every request as described in [Environments & Credentials](/environments-and-credentials#api-request-signing).
+</Tip>
+
+
+<Accordion title="Corrections to the source document (14)" icon="clipboard-check">
+This page was checked against the Pagsmile Open API source code on 2026-11-10. Each change below is marked in the page with a badge that shows its ID.
+
+| ID | Change | Location | Source document text | Updated text |
+| --- | --- | --- | --- | --- |
+| api-5-F01 | Corrected (did not match the code) | Request parameters | Settlement ID of the original incoming payment; from `data.details.settlement_id` in the Get payment details response | Settlement ID of the original Pix incoming payment being refunded; obtain it from `data.details.settlement_id` in Get transaction details, or from the matching credit entry in Get account statement |
+| api-5-F02 | Corrected (did not match the code) | Parameter sources | `original_settlement_id` comes from `settlement_id` in the first record with `is_credit=true` and a valid settlement ID in a successful Get account statement ↗ (`/v3/statements`) response. | Select the statement entry for the specific original Pix incoming payment being refunded. Use its `settlement_id` from a successful Get account statement ↗ (`/v3/statements`) response, and confirm that `is_credit=true` and the settlement ID is valid. Do not automatically select the first credit entry. |
+| api-5-F03 | Corrected (did not match the code) | Pre-initiation checks | Greater than 0, with at most two decimal places, and no more than the original transaction's remaining returnable amount; save a separate record for each partial refund | Greater than 0, with a value exactly representable to two decimal places, and no more than the original transaction's remaining returnable amount; extra trailing decimal zeroes are accepted. Save a separate record for each partial refund |
+| api-5-F04 | Corrected (did not match the code) | Request parameters | Decimal amount string; the value must be greater than 0 and have at most two decimal places (for example, 10.00); 0, negative numbers, and 10.555 are not accepted | Decimal amount string; the value must be greater than 0 and exactly representable to two decimal places (for example, 10.00). Extra trailing decimal zeroes, such as 10.000, are accepted; 0, negative numbers, and 10.555 are not accepted |
+| api-5-F05 | Corrected (did not match the code) | cURL request example | `ORDER_ID="$(date +%y%m%d%H%M%S)$(openssl rand -hex 3 \| python3 -c 'import sys; print(str(int(sys.stdin.read().strip(),16)%1000000).zfill(6))')"` | `ORDER_ID="$(date -u +%y%m%d%H%M%S)$(openssl rand -hex 3 \| python3 -c 'import sys; print(str(int(sys.stdin.read().strip(),16)%1000000).zfill(6))')"` |
+| api-5-F06 | Corrected (did not match the code) | Responses / Request succeeded | `{ "code": 200, "message": "success", "data": { "settlement_refund_id": "example-settlement_refund_id", "refund_id": "example-refund_id", "merchant_order_id": "example-merchant_order_id", "txn_status": 0 }, "time": 1791792000000 }` | `{ "code": 200, "message": "success", "data": { "settlement_refund_id": "example-settlement_refund_id", "refund_id": "example-refund_id", "merchant_order_id": "", "txn_status": 1, "error": null, "result": null }, "time": 1791792000000 }` |
+| api-5-F07 | Added (missing in the source) | Response fields | Transaction status. Enum: 0 TXN_STATUS_UNSPECIFIED; 1 TXN_STATUS_PENDING; 2 TXN_STATUS_COMPLETED; 3 TXN_STATUS_FAILED; 4 TXN_STATUS_CANCELLED; 5 TXN_STATUS_PROCESSING; 6 TXN_STATUS_REFUNDED; 7 TXN_STATUS_PARTIALLY_REFUNDED; 8 TXN_STATUS_DISPUTED. | Transaction status. An accepted creation request returns 1 TXN_STATUS_PENDING; processing is asynchronous. Query the refund status to determine the final result. Enum: 0 TXN_STATUS_UNSPECIFIED; 1 TXN_STATUS_PENDING; 2 TXN_STATUS_COMPLETED; 3 TXN_STATUS_FAILED; 4 TXN_STATUS_CANCELLED; 5 TXN_STATUS_PROCESSING; 6 TXN_STATUS_REFUNDED; 7 TXN_STATUS_PARTIALLY_REFUNDED; 8 TXN_STATUS_DISPUTED. |
+| api-5-F08 | Added (missing in the source) | Permissions and account ownership | ACCOUNT, or USER with the target account header. | Use ACCOUNT credentials for the original payee account, or USER credentials with both `X-ISPB` and `X-Account-Number` selecting an account owned by that USER. ACCOUNT credentials cannot select another account; if account headers are supplied, both must be nonempty and match the credential's account. PLATFORM credentials are not accepted. |
+| api-5-F09 | Added (missing in the source) | Pre-initiation checks | A Pix credit transaction that belongs to the target account and whose current status allows refunds; use the original incoming payment's settlement ID from `settlement_id` in an account statement entry with `is_credit=true` | The original transaction must be a completed Pix payment with a positive remaining returnable amount, and the target account must be its original payee. Use that payment's `settlement_id` from the matching account statement entry with `is_credit=true` |
+| api-5-F10 | Added (missing in the source) | Pre-initiation checks / after Amount row | — | The remaining returnable amount is the original amount minus amounts already refunded, amounts returned through chargebacks, and amounts reserved for pending returns. A negative result is treated as zero. |
+| api-5-F11 | Added (missing in the source) | Request parameters / after merchant_order_id row | — | `merchant_order_id` \| string \| Yes \| Use a unique order ID across accounts and operations in the same environment. Duplicate order IDs are retained for 48 hours and rejected with business code 4001013; the endpoint does not replay the original success response. A duplicate error does not establish that the original refund failed. Keep the original order ID and investigate the existing operation before retrying. |
+| api-5-F12 | Added (missing in the source) | Request parameters | Refund reason | Optional explanatory text for the refund. This field does not select a Pix return reason code; this endpoint initiates a payee-request refund using MD06. If omitted, the explanatory text is empty |
+| api-5-F13 | Added (missing in the source) | Behavior and handling | After the request is accepted, continue querying the refund result and verify the refund statement entries. | After the request is accepted, save the refund identifiers, continue querying the refund result, and verify the refund statement entries. Acceptance returns PENDING before funds are blocked for the refund. Insufficient available balance can therefore cause the refund to fail during subsequent processing. |
+| api-5-F16 | Added (missing in the source) | Responses / after error catalog reference | This section does not imply that the endpoint returns only these three code values. | This section does not imply that the endpoint returns only these three code values. Relevant errors include 4000 for a missing `original_settlement_id`, `merchant_order_id`, or `amount`; 4002 for an invalid amount format; 400 for invalid order-ID rules, an ineligible original transaction, a blocked account, or an expired refund deadline; 4001013 for a duplicate order ID; 4003003 for an original transaction not found; 4003005 when the amount exceeds the remaining returnable amount; 4004101 when the refunding account does not match the original payee; 4003016 for a risk-control rejection; and 501 for temporary API unavailability. Read the actual `message` with `code` to distinguish the cause. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+ORDER_ID="$(date -u +%y%m%d%H%M%S)$(openssl rand -hex 3 | python3 -c 'import sys; print(str(int(sys.stdin.read().strip(),16)%1000000).zfill(6))')"
+cat > body.json <<JSON
+{
+  "original_settlement_id": "replace-with-original-settlement-id",
+  "merchant_order_id": "${ORDER_ID}",
+  "amount": "1.00"
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/refunds/pix' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${ACCOUNT_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Request succeeded
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "settlement_refund_id": "example-settlement_refund_id",
+    "refund_id": "example-refund_id",
+    "merchant_order_id": "",
+    "txn_status": 1,
+    "error": null,
+    "result": null
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Request or validation failed
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 System error
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

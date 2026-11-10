@@ -1,0 +1,190 @@
+---
+title: "Iniciar devolução Pix"
+description: "Inicie uma devolução referente ao recebimento Pix original para devolver os recursos ao pagador original."
+api: "POST /v3/refunds/pix"
+keywords: ["/v3/refunds/pix"]
+---
+
+## Funcionamento e tratamento
+
+Inicie uma devolução referente ao recebimento Pix original para devolver os recursos ao pagador original. A devolução é iniciada pelo recebedor original, com as credenciais da conta do recebedor original. <Badge color="orange" size="sm">Corrigido · api-5-F17</Badge> Após a aceitação da requisição, salve os IDs da devolução, continue consultando o resultado e confira os lançamentos da devolução no extrato. A aceitação retorna `PENDING` antes do bloqueio dos recursos para a devolução. Por isso, saldo disponível insuficiente pode causar a falha da devolução durante o processamento posterior. <Badge color="blue" size="sm">Complementado · api-5-F13</Badge> Para transições de status e tratamento de erros, veja [Devoluções](/pt-br/api-reference/refunds/overview).
+
+### Verificações antes de iniciar
+
+| Condições | Requisitos |
+| --- | --- |
+| Transação original | A transação original deve ser um pagamento Pix concluído, com valor restante disponível para devolução maior que zero, e a conta-alvo deve ser a do recebedor original. Use o `settlement_id` desse pagamento no lançamento correspondente do extrato da conta com `is_credit=true` <Badge color="blue" size="sm">Complementado · api-5-F09</Badge> |
+| Prazo para devolução | O código local atual valida o prazo somando 90 dias ao initiated_at da transação original e rejeita requisições após esse prazo. Em produção, prevalece a versão efetivamente implantada |
+| Valor | Maior que 0, com um valor exatamente representável com duas casas decimais, sem exceder o valor restante disponível para devolução da transação original; zeros adicionais ao final da parte decimal são aceitos. Salve um registro separado para cada devolução parcial <Badge color="orange" size="sm">Corrigido · api-5-F03</Badge> |
+| Conta | A conta do recebedor original deve ser a mesma que inicia a devolução e atender aos requisitos de status da conta e de recursos |
+| ID do pedido | Preencha conforme as regras de data UTC e de formato da tabela de parâmetros. Para tratamento de erros, veja o módulo [Devoluções](/pt-br/api-reference/refunds/overview) |
+
+O valor restante disponível para devolução é o valor original menos os valores já devolvidos, os valores retornados por chargebacks e os valores reservados para devoluções pendentes. Um resultado negativo é considerado zero. <Badge color="blue" size="sm">Complementado · api-5-F10</Badge>
+
+## Permissões e titularidade da conta
+
+Use credenciais `ACCOUNT` da conta do recebedor original ou credenciais `USER` com os headers `X-ISPB` e `X-Account-Number`, selecionando uma conta pertencente a esse `USER`. Credenciais `ACCOUNT` não podem selecionar outra conta; se os headers da conta forem enviados, ambos devem estar preenchidos e corresponder à conta da credencial. Credenciais `PLATFORM` não são aceitas. <Badge color="blue" size="sm">Complementado · api-5-F08</Badge> As requisições devem seguir as orientações de [Ambientes e credenciais](/pt-br/environments-and-credentials).
+
+## Parâmetros da requisição
+
+<ParamField body="original_settlement_id" type="string" required>
+ID de liquidação do recebimento Pix original que será devolvido; obtenha-o em `data.details.settlement_id` de [Consultar detalhes da transação](/pt-br/api-reference/payin/get-transaction-details) ou no lançamento de crédito correspondente em [Consultar extrato da conta](/pt-br/api-reference/accounts/get-account-statement) <Badge color="orange" size="sm">Corrigido · api-5-F01</Badge>
+</ParamField>
+
+<ParamField body="merchant_order_id" type="string" required>
+ID do pedido do comerciante; permite apenas letras do alfabeto inglês, números, hífens e sublinhados. Os primeiros seis caracteres devem formar uma data UTC válida no formato YYMMDD. A data deve ter interseção com a janela de ±1 hora em relação ao horário UTC atual. Se o resultado for desconhecido, consulte primeiro a operação original. Não reenvie com outro ID sem essa verificação
+</ParamField>
+
+Use um ID de pedido único entre contas e operações no mesmo ambiente. IDs duplicados são retidos por 48 horas e rejeitados com o code de negócio `4001013`; o endpoint não retorna novamente a resposta de sucesso original. Um erro de duplicidade não comprova que a devolução original falhou. Mantenha o ID de pedido original e verifique a operação existente antes de tentar novamente. <Badge color="blue" size="sm">Complementado · api-5-F11</Badge>
+
+<ParamField body="amount" type="string" required>
+String com o valor decimal; o valor deve ser maior que 0 e exatamente representável com duas casas decimais (por exemplo, `10.00`). Zeros adicionais ao final da parte decimal, como em `10.000`, são aceitos; não são aceitos `0`, números negativos ou `10.555` <Badge color="orange" size="sm">Corrigido · api-5-F04</Badge>
+</ParamField>
+
+<ParamField body="reason" type="string">
+**Obrigatório:** Não (não obrigatório nesta camada). Texto explicativo opcional da devolução. Este campo não seleciona o código do motivo da devolução Pix; este endpoint inicia uma devolução solicitada pelo recebedor usando `MD06`. Se omitido, o texto explicativo fica vazio <Badge color="blue" size="sm">Complementado · api-5-F12</Badge>
+</ParamField>
+
+<Info>
+**Origem dos parâmetros**
+
+Selecione o lançamento do extrato correspondente ao recebimento Pix original específico que será devolvido. Use o `settlement_id` desse lançamento na resposta de sucesso de [Consultar extrato da conta ↗](/pt-br/api-reference/accounts/get-account-statement) (`/v3/statements`) e confirme que `is_credit=true` e que o ID de liquidação é válido. Não selecione automaticamente o primeiro lançamento de crédito. <Badge color="orange" size="sm">Corrigido · api-5-F02</Badge>
+</Info>
+
+## Exemplo de requisição cURL
+
+O exemplo usa credenciais de nível ACCOUNT. Preencha os parâmetros reais e gere a assinatura com base no body.json final. <Badge color="orange" size="sm">Corrigido · api-5-F05</Badge>
+
+## Campos da resposta
+
+Os caminhos dos campos partem da raiz da resposta. `[]` indica um elemento de array. Os valores monetários usam strings decimais. Os enums são interpretados conforme cada campo. A estrutura abaixo representa os dados de uma resposta de sucesso. Um valor nulo ou 0, por si só, não indica a conclusão da operação.
+
+<ResponseField name="code" type="integer">
+Código de resultado de negócio; 200 indica sucesso. Os erros de negócio são retornados neste campo, que não equivale ao código de status HTTP.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Descrição do resultado de negócio; em caso de falha, analise esta descrição junto com o campo code para identificar a causa.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Objeto de dados da resposta de sucesso; pode ser null em respostas de erro.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Horário da resposta, em timestamp Unix UTC em milissegundos.
+</ResponseField>
+
+<ResponseField name="data.settlement_refund_id" type="string">
+ID de liquidação da devolução.
+</ResponseField>
+
+<ResponseField name="data.refund_id" type="string">
+ID da devolução; usado para consultar os detalhes ou o status da devolução.
+</ResponseField>
+
+<ResponseField name="data.merchant_order_id" type="string">
+ID do pedido do comerciante fornecido pelo chamador; atualmente não é preenchido na resposta de criação da devolução e retorna como uma string vazia.
+</ResponseField>
+
+<ResponseField name="data.txn_status" type="integer">
+Status da transação. Uma requisição de criação aceita retorna `1` `TXN_STATUS_PENDING`; o processamento é assíncrono. Consulte o status da devolução para determinar o resultado final. Enum: `0` `TXN_STATUS_UNSPECIFIED`; `1` `TXN_STATUS_PENDING`; `2` `TXN_STATUS_COMPLETED`; `3` `TXN_STATUS_FAILED`; `4` `TXN_STATUS_CANCELLED`; `5` `TXN_STATUS_PROCESSING`; `6` `TXN_STATUS_REFUNDED`; `7` `TXN_STATUS_PARTIALLY_REFUNDED`; `8` `TXN_STATUS_DISPUTED`. <Badge color="blue" size="sm">Complementado · api-5-F07</Badge>
+</ResponseField>
+
+## Respostas
+
+Consulte os exemplos de resposta pelo `code` de negócio no JSON. Verifique o status HTTP e o code de negócio separadamente. Uma resposta HTTP 200 também pode retornar um erro de negócio. <Badge color="orange" size="sm">Corrigido · api-5-F06</Badge>
+
+| `code` | Significado | Ação recomendada |
+| --- | --- | --- |
+| `200` | Requisição bem-sucedida | Leia data e avalie o resultado do processamento conforme o status de negócio deste endpoint. |
+| `400` | Falha na requisição ou validação | Problema nos parâmetros. Verifique e corrija os parâmetros da requisição. |
+| `500` | Erro do sistema | Registre a resposta e confirme primeiro o resultado de negócio. |
+
+Os exemplos ilustram a estrutura da resposta. Os valores de message e do status de negócio devem ser obtidos da resposta efetiva. Para outros erros de parâmetros, permissões e serviço, consulte [Catálogo de erros](/pt-br/api-reference/error-catalog). Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados. Erros relevantes incluem `4000` quando falta `original_settlement_id`, `merchant_order_id` ou `amount`; `4002` para formato inválido do valor; `400` para regras inválidas do ID do pedido, transação original inelegível, conta bloqueada ou prazo de devolução expirado; `4001013` para ID de pedido duplicado; `4003003` quando a transação original não é encontrada; `4003005` quando o valor excede o valor restante disponível para devolução; `4004101` quando a conta que inicia a devolução não corresponde à do recebedor original; `4003016` para rejeição por controles de risco; e `501` para indisponibilidade temporária da API. Leia o `message` efetivo junto com o `code` para distinguir a causa. <Badge color="blue" size="sm">Complementado · api-5-F16</Badge>
+
+<Tip>
+Para testar este endpoint, envie o exemplo de requisição para a Base URL do Sandbox `https://ebanking-openapi-sandbox.pagsmile.com.br` com sua AK/SK de Sandbox. Assine cada requisição conforme descrito em [Ambientes e credenciais](/pt-br/environments-and-credentials#assinatura-de-requisições-à-api).
+</Tip>
+
+
+<Accordion title="Correções em relação ao documento original (15)" icon="clipboard-check">
+Esta página foi conferida com o código-fonte da Pagsmile Open API em 2026-11-10. Cada alteração abaixo está marcada na página com um selo que mostra o seu ID.
+
+| ID | Alteração | Local | Texto do documento original | Texto atualizado |
+| --- | --- | --- | --- | --- |
+| api-5-F01 | Corrigido (não correspondia ao código) | Request parameters | ID de liquidação do recebimento original, obtido em `data.details.settlement_id` na resposta de Consultar detalhes do pagamento | ID de liquidação do recebimento Pix original que será devolvido; obtenha-o em `data.details.settlement_id` de Consultar detalhes da transação ou no lançamento de crédito correspondente em Consultar extrato da conta |
+| api-5-F02 | Corrigido (não correspondia ao código) | Parameter sources | O `original_settlement_id` é obtido do `settlement_id` do primeiro registro com `is_credit=true` e ID de liquidação válido na resposta de sucesso de Consultar extrato da conta ↗ (`/v3/statements`). | Selecione o lançamento do extrato correspondente ao recebimento Pix original específico que será devolvido. Use o `settlement_id` desse lançamento na resposta de sucesso de Consultar extrato da conta ↗ (`/v3/statements`) e confirme que `is_credit=true` e que o ID de liquidação é válido. Não selecione automaticamente o primeiro lançamento de crédito. |
+| api-5-F03 | Corrigido (não correspondia ao código) | Pre-initiation checks | Maior que 0, com no máximo duas casas decimais, sem exceder o valor restante disponível para devolução da transação original. Salve um registro separado para cada devolução parcial | Maior que 0, com um valor exatamente representável com duas casas decimais, sem exceder o valor restante disponível para devolução da transação original; zeros adicionais ao final da parte decimal são aceitos. Salve um registro separado para cada devolução parcial |
+| api-5-F04 | Corrigido (não correspondia ao código) | Request parameters | String com o valor decimal; o valor deve ser maior que 0 e ter no máximo duas casas decimais (por exemplo, 10.00). Não são aceitos 0, números negativos ou 10.555 | String com o valor decimal; o valor deve ser maior que 0 e exatamente representável com duas casas decimais (por exemplo, 10.00). Zeros adicionais ao final da parte decimal, como em 10.000, são aceitos; não são aceitos 0, números negativos ou 10.555 |
+| api-5-F05 | Corrigido (não correspondia ao código) | cURL request example | `ORDER_ID="$(date +%y%m%d%H%M%S)$(openssl rand -hex 3 \| python3 -c 'import sys; print(str(int(sys.stdin.read().strip(),16)%1000000).zfill(6))')"` | `ORDER_ID="$(date -u +%y%m%d%H%M%S)$(openssl rand -hex 3 \| python3 -c 'import sys; print(str(int(sys.stdin.read().strip(),16)%1000000).zfill(6))')"` |
+| api-5-F06 | Corrigido (não correspondia ao código) | Responses / Request succeeded | `{ "code": 200, "message": "success", "data": { "settlement_refund_id": "example-settlement_refund_id", "refund_id": "example-refund_id", "merchant_order_id": "example-merchant_order_id", "txn_status": 0 }, "time": 1791792000000 }` | `{ "code": 200, "message": "success", "data": { "settlement_refund_id": "example-settlement_refund_id", "refund_id": "example-refund_id", "merchant_order_id": "", "txn_status": 1, "error": null, "result": null }, "time": 1791792000000 }` |
+| api-5-F07 | Complementado (ausente no original) | Response fields | Status da transação. Enum: 0 TXN_STATUS_UNSPECIFIED; 1 TXN_STATUS_PENDING; 2 TXN_STATUS_COMPLETED; 3 TXN_STATUS_FAILED; 4 TXN_STATUS_CANCELLED; 5 TXN_STATUS_PROCESSING; 6 TXN_STATUS_REFUNDED; 7 TXN_STATUS_PARTIALLY_REFUNDED; 8 TXN_STATUS_DISPUTED. | Status da transação. Uma requisição de criação aceita retorna 1 TXN_STATUS_PENDING; o processamento é assíncrono. Consulte o status da devolução para determinar o resultado final. Enum: 0 TXN_STATUS_UNSPECIFIED; 1 TXN_STATUS_PENDING; 2 TXN_STATUS_COMPLETED; 3 TXN_STATUS_FAILED; 4 TXN_STATUS_CANCELLED; 5 TXN_STATUS_PROCESSING; 6 TXN_STATUS_REFUNDED; 7 TXN_STATUS_PARTIALLY_REFUNDED; 8 TXN_STATUS_DISPUTED. |
+| api-5-F08 | Complementado (ausente no original) | Permissions and account ownership | ACCOUNT, ou USER com o header da conta-alvo. | Use credenciais ACCOUNT da conta do recebedor original ou credenciais USER com os headers `X-ISPB` e `X-Account-Number`, selecionando uma conta pertencente a esse USER. Credenciais ACCOUNT não podem selecionar outra conta; se os headers da conta forem enviados, ambos devem estar preenchidos e corresponder à conta da credencial. Credenciais PLATFORM não são aceitas. |
+| api-5-F09 | Complementado (ausente no original) | Pre-initiation checks | Transação de crédito Pix da conta-alvo cujo status atual permite a devolução. Use o ID de liquidação do recebimento original: o `settlement_id` de um lançamento do extrato da conta com `is_credit=true` | A transação original deve ser um pagamento Pix concluído, com valor restante disponível para devolução maior que zero, e a conta-alvo deve ser a do recebedor original. Use o `settlement_id` desse pagamento no lançamento correspondente do extrato da conta com `is_credit=true` |
+| api-5-F10 | Complementado (ausente no original) | Pre-initiation checks / after Amount row | — | O valor restante disponível para devolução é o valor original menos os valores já devolvidos, os valores retornados por chargebacks e os valores reservados para devoluções pendentes. Um resultado negativo é considerado zero. |
+| api-5-F11 | Complementado (ausente no original) | Request parameters / after merchant_order_id row | — | `merchant_order_id` \| string \| Sim \| Use um ID de pedido único entre contas e operações no mesmo ambiente. IDs duplicados são retidos por 48 horas e rejeitados com o code de negócio 4001013; o endpoint não retorna novamente a resposta de sucesso original. Um erro de duplicidade não comprova que a devolução original falhou. Mantenha o ID de pedido original e verifique a operação existente antes de tentar novamente. |
+| api-5-F12 | Complementado (ausente no original) | Request parameters | Motivo da devolução | Texto explicativo opcional da devolução. Este campo não seleciona o código do motivo da devolução Pix; este endpoint inicia uma devolução solicitada pelo recebedor usando MD06. Se omitido, o texto explicativo fica vazio |
+| api-5-F13 | Complementado (ausente no original) | Behavior and handling | Após a aceitação da requisição, continue consultando o resultado da devolução e confira os lançamentos da devolução no extrato. | Após a aceitação da requisição, salve os IDs da devolução, continue consultando o resultado e confira os lançamentos da devolução no extrato. A aceitação retorna PENDING antes do bloqueio dos recursos para a devolução. Por isso, saldo disponível insuficiente pode causar a falha da devolução durante o processamento posterior. |
+| api-5-F16 | Complementado (ausente no original) | Responses / after error catalog reference | Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados. | Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados. Erros relevantes incluem 4000 quando falta `original_settlement_id`, `merchant_order_id` ou `amount`; 4002 para formato inválido do valor; 400 para regras inválidas do ID do pedido, transação original inelegível, conta bloqueada ou prazo de devolução expirado; 4001013 para ID de pedido duplicado; 4003003 quando a transação original não é encontrada; 4003005 quando o valor excede o valor restante disponível para devolução; 4004101 quando a conta que inicia a devolução não corresponde à do recebedor original; 4003016 para rejeição por controles de risco; e 501 para indisponibilidade temporária da API. Leia o `message` efetivo junto com o `code` para distinguir a causa. |
+| api-5-F17 | Corrigido (não correspondia ao código) | Funcionamento e tratamento | A devolução é iniciada pelo Payee (recebedor original), com as credenciais da conta do recebedor original. | A devolução é iniciada pelo recebedor original, com as credenciais da conta do recebedor original. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+ORDER_ID="$(date -u +%y%m%d%H%M%S)$(openssl rand -hex 3 | python3 -c 'import sys; print(str(int(sys.stdin.read().strip(),16)%1000000).zfill(6))')"
+cat > body.json <<JSON
+{
+  "original_settlement_id": "replace-with-original-settlement-id",
+  "merchant_order_id": "${ORDER_ID}",
+  "amount": "1.00"
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/refunds/pix' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${ACCOUNT_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Requisição bem-sucedida
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "settlement_refund_id": "example-settlement_refund_id",
+    "refund_id": "example-refund_id",
+    "merchant_order_id": "",
+    "txn_status": 1,
+    "error": null,
+    "result": null
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Falha na requisição ou validação
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 Erro do sistema
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

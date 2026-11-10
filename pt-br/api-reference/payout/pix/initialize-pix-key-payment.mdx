@@ -1,0 +1,199 @@
+---
+title: "Inicializar pagamento via chave Pix"
+description: "Inicialize o pagamento com a chave Pix do recebedor para obter os dados do pagamento e o ref_id."
+api: "POST /v3/transfers/pix/key-initiate"
+keywords: ["/v3/transfers/pix/key-initiate"]
+---
+
+## Funcionamento e tratamento
+
+Inicialize o pagamento com a chave Pix do recebedor para obter os dados do pagamento e o ref_id. Confira o recebedor e chame o endpoint de confirmação dentro do prazo de validade da referência. A inicialização, por si só, não indica que o pagamento foi feito. A conta do pagador deve estar ativa e habilitada para enviar pagamentos; caso contrário, a inicialização pode retornar `code` de negócio `4004008`. O acesso também depende do status ativo do usuário e das permissões para pagamentos de saída, incluindo restrições MED aplicáveis. <Badge color="blue" size="sm">Complementado · api-8-F04</Badge>
+
+Quando as informações atuais de limite Pix estão disponíveis, a inicialização verifica o limite restante da categoria CPF ou CNPJ do recebedor. O limite restante exigido é BRL 1,00 quando `amount` é omitido, ou o maior valor entre BRL 1,00 e o `amount` informado. Um limite restante insuficiente retorna `code` de negócio `4001998`. A inicialização bem-sucedida não reserva limite nem garante que a confirmação será aprovada pelos limites de pagamento. <Badge color="blue" size="sm">Complementado · api-8-F05</Badge>
+
+### Validade e contexto do pagamento em duas etapas
+
+A referência de inicialização via chave Pix é válida por 1 minuto. A referência de inicialização via QR Code é válida por 5 minutos. A inicialização e a confirmação devem usar a mesma conta do pagador. Se a referência expirar, consulte novamente a chave Pix ou interprete novamente o QR Code e confira as informações do pagamento. <Badge color="orange" size="sm">Corrigido · api-8-F12</Badge>
+
+O prazo de validade da referência de inicialização e o prazo de validade do próprio QR Code são verificados separadamente. O `ref_id` é usado para confirmar o pagamento em um prazo curto. Ele não substitui um ID permanente do pedido do comerciante nem o ID da transação.
+
+Podem existir restrições de consulta de chave Pix associadas ao documento do pagador e à chave consultada. Consultas excessivas podem retornar `code` de negócio `4004029`; aguarde antes de tentar novamente. A janela de consulta, a quantidade permitida e o período de espera dependem da configuração aplicável. Chaves inválidas ou restritas podem retornar `4001001`; chaves inativas ou excluídas podem retornar `4001096`. Leia a mensagem real para distinguir restrições relacionadas a fraude de uma chave inválida. <Badge color="blue" size="sm">Complementado · api-8-F06</Badge>
+
+## Permissões e titularidade da conta
+
+Use credenciais `ACCOUNT` para a conta vinculada, ou credenciais `USER` com os dois headers `X-ISPB` e `X-Account-Number` selecionando uma conta ativa pertencente a esse USER na hierarquia de contas permitida. Credenciais `ACCOUNT` não exigem esses headers; se informados, ambos devem corresponder à conta vinculada. Um único header de conta, um valor vazio ou uma conta divergente causa rejeição. Credenciais `PLATFORM` não são aceitas. <Badge color="blue" size="sm">Complementado · api-8-F03</Badge> As requisições devem seguir as orientações de [Ambientes e credenciais](/pt-br/environments-and-credentials).
+
+## Parâmetros da requisição
+
+<ParamField body="pix_key" type="string" required>
+Valor da chave Pix. Os espaços nas extremidades são removidos. Formatos aceitos: CPF com 11 dígitos; CNPJ com 12 caracteres alfanuméricos seguidos de 2 dígitos; telefone brasileiro no formato `^\+55\d\{10,11\}$`; e-mail no formato `^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]\{2,\}$`; ou UUID de chave EVP com versão de 1 a 5 e variante UUID válida. As letras do CNPJ são convertidas para maiúsculas. Valores não reconhecidos ou compostos apenas por espaços retornam `code` de negócio `400`. Um valor omitido ou vazio retorna `4000`. <Badge color="blue" size="sm">Complementado · api-8-F02</Badge>
+</ParamField>
+
+<ParamField body="amount" type="string">
+Valor opcional em BRL. Se omitido, vazio ou composto apenas por espaços, não há verificação de saldo na inicialização. Os espaços nas extremidades são removidos. O valor informado deve ser maior que 0 e representável exatamente com duas casas decimais. O saldo disponível é verificado. A confirmação deve usar um valor numericamente igual. A inicialização não reserva recursos. <Badge color="blue" size="sm">Complementado · api-8-F01</Badge>
+</ParamField>
+
+## Exemplo de requisição cURL
+
+O exemplo usa credenciais de nível ACCOUNT. Preencha os parâmetros reais e gere a assinatura com base no body.json final.
+
+## Campos da resposta
+
+Os caminhos dos campos partem da raiz da resposta. `[]` indica um elemento de array. Os valores monetários usam strings decimais. Os enums são interpretados conforme cada campo. A estrutura abaixo representa os dados de uma resposta de sucesso. Um valor nulo ou 0, por si só, não indica a conclusão da operação.
+
+<ResponseField name="code" type="integer">
+Código de resultado de negócio; 200 indica sucesso. Os erros de negócio são retornados neste campo, que não equivale ao código de status HTTP.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Descrição do resultado de negócio; em caso de falha, analise esta descrição junto com o campo code para identificar a causa.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Objeto de dados da resposta de sucesso; pode ser null em respostas de erro.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Horário da resposta, em timestamp Unix UTC em milissegundos.
+</ResponseField>
+
+<ResponseField name="data.ref_id" type="string">
+Referência de inicialização do pagamento, usada para confirmar o pagamento.
+</ResponseField>
+
+<ResponseField name="data.payee" type="object">
+Dados do recebedor.
+</ResponseField>
+
+<ResponseField name="data.payee.name" type="string">
+Nome.
+</ResponseField>
+
+<ResponseField name="data.payee.document_id" type="string">
+Número do documento do participante da transação, que pode ser mascarado conforme a configuração do comerciante.
+</ResponseField>
+
+<ResponseField name="data.payee.document_type" type="integer">
+Tipo de documento. Enum: 0 DOCUMENT_TYPE_UNSPECIFIED; 1 DOCUMENT_TYPE_CPF; 2 DOCUMENT_TYPE_CNPJ.
+</ResponseField>
+
+<ResponseField name="data.payee.bank_account" type="string">
+Número da conta.
+</ResponseField>
+
+<ResponseField name="data.payee.bank_account_type" type="integer">
+Tipo de conta bancária. Enum: 0 BANK_ACCOUNT_TYPE_UNSPECIFIED; 1 BANK_ACCOUNT_TYPE_CHECKING; 2 BANK_ACCOUNT_TYPE_SALARY; 3 BANK_ACCOUNT_TYPE_SAVINGS; 4 BANK_ACCOUNT_TYPE_PAYMENT; 5 BANK_ACCOUNT_TYPE_TRANSCTIONAL_PI; 7 BANK_ACCOUNT_TYPE_DEPOSIT; 6 BANK_ACCOUNT_TYPE_GUARANTEED.
+</ResponseField>
+
+<ResponseField name="data.payee.bank_branch" type="string">
+Código da agência bancária.
+</ResponseField>
+
+<ResponseField name="data.payee.bank_code" type="string">
+ISPB do banco.
+</ResponseField>
+
+<ResponseField name="data.payee.bank_name" type="string">
+Nome do banco.
+</ResponseField>
+
+<ResponseField name="data.settlement_id" type="string">
+ID da transação de liquidação.
+</ResponseField>
+
+## Respostas
+
+Consulte os exemplos de resposta pelo `code` de negócio no JSON. Verifique o status HTTP e o code de negócio separadamente. Uma resposta HTTP 200 também pode retornar um erro de negócio. <Badge color="orange" size="sm">Corrigido · api-8-F10</Badge>
+
+| `code` | Significado | Ação recomendada |
+| --- | --- | --- |
+| `200` | Requisição bem-sucedida | Verifique se `code` é `200`, leia `data.ref_id` e confira os dados do recebedor. Chame o endpoint de confirmação em até 1 minuto usando a mesma conta do pagador. A inicialização não retorna um status de pagamento nem indica que o pagamento foi feito. <Badge color="orange" size="sm">Corrigido · api-8-F11</Badge> |
+| `400` | Falha na requisição ou validação | Problema nos parâmetros. Verifique e corrija os parâmetros da requisição. |
+| `500` | Erro do sistema | Registre a resposta e confirme primeiro o resultado de negócio. |
+
+Os exemplos ilustram a estrutura da resposta. Os valores de message e do status de negócio devem ser obtidos da resposta efetiva. Para outros erros de parâmetros, permissões e serviço, consulte [Catálogo de erros](/pt-br/api-reference/error-catalog). Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados.
+
+<Tip>
+Para testar este endpoint, envie o exemplo de requisição para a Base URL do Sandbox `https://ebanking-openapi-sandbox.pagsmile.com.br` com sua AK/SK de Sandbox. Assine cada requisição conforme descrito em [Ambientes e credenciais](/pt-br/environments-and-credentials#assinatura-de-requisições-à-api).
+</Tip>
+
+
+<Accordion title="Correções em relação ao documento original (9)" icon="clipboard-check">
+Esta página foi conferida com o código-fonte da Pagsmile Open API em 2026-11-10. Cada alteração abaixo está marcada na página com um selo que mostra o seu ID.
+
+| ID | Alteração | Local | Texto do documento original | Texto atualizado |
+| --- | --- | --- | --- | --- |
+| api-8-F01 | Complementado (ausente no original) | Request parameters; new row after pix_key | — | `amount` \| string \| Não \| Valor opcional em BRL. Se omitido, vazio ou composto apenas por espaços, não há verificação de saldo na inicialização. Os espaços nas extremidades são removidos. O valor informado deve ser maior que 0 e representável exatamente com duas casas decimais. O saldo disponível é verificado. A confirmação deve usar um valor numericamente igual. A inicialização não reserva recursos. |
+| api-8-F02 | Complementado (ausente no original) | Request parameters; pix_key description cell | Valor da chave Pix | Valor da chave Pix. Os espaços nas extremidades são removidos. Formatos aceitos: CPF com 11 dígitos; CNPJ com 12 caracteres alfanuméricos seguidos de 2 dígitos; telefone brasileiro no formato `^\\+55\\d\{10,11\}$`; e-mail no formato `^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]\{2,\}$`; ou UUID de chave EVP com versão de 1 a 5 e variante UUID válida. As letras do CNPJ são convertidas para maiúsculas. Valores não reconhecidos ou compostos apenas por espaços retornam code de negócio 400. Um valor omitido ou vazio retorna 4000. |
+| api-8-F03 | Complementado (ausente no original) | Permissions and account ownership | ACCOUNT, ou USER com o header da conta-alvo. | Use credenciais ACCOUNT para a conta vinculada, ou credenciais USER com os dois headers `X-ISPB` e `X-Account-Number` selecionando uma conta ativa pertencente a esse USER na hierarquia de contas permitida. Credenciais ACCOUNT não exigem esses headers; se informados, ambos devem corresponder à conta vinculada. Um único header de conta, um valor vazio ou uma conta divergente causa rejeição. Credenciais PLATFORM não são aceitas. |
+| api-8-F04 | Complementado (ausente no original) | Behavior and handling; append eligibility paragraph | A inicialização, por si só, não indica que o pagamento foi feito. | A inicialização, por si só, não indica que o pagamento foi feito. A conta do pagador deve estar ativa e habilitada para enviar pagamentos; caso contrário, a inicialização pode retornar code de negócio 4004008. O acesso também depende do status ativo do usuário e das permissões para pagamentos de saída, incluindo restrições MED aplicáveis. |
+| api-8-F05 | Complementado (ausente no original) | Behavior and handling; append quota paragraph | A inicialização, por si só, não indica que o pagamento foi feito. | A inicialização, por si só, não indica que o pagamento foi feito. Quando as informações atuais de limite Pix estão disponíveis, a inicialização verifica o limite restante da categoria CPF ou CNPJ do recebedor. O limite restante exigido é BRL 1,00 quando amount é omitido, ou o maior valor entre BRL 1,00 e o amount informado. Um limite restante insuficiente retorna code de negócio 4001998. A inicialização bem-sucedida não reserva limite nem garante que a confirmação será aprovada pelos limites de pagamento. |
+| api-8-F06 | Complementado (ausente no original) | Behavior and handling; append lookup restriction paragraph | A inicialização, por si só, não indica que o pagamento foi feito. | A inicialização, por si só, não indica que o pagamento foi feito. Podem existir restrições de consulta de chave Pix associadas ao documento do pagador e à chave consultada. Consultas excessivas podem retornar code de negócio 4004029; aguarde antes de tentar novamente. A janela de consulta, a quantidade permitida e o período de espera dependem da configuração aplicável. Chaves inválidas ou restritas podem retornar 4001001; chaves inativas ou excluídas podem retornar 4001096. Leia a mensagem real para distinguir restrições relacionadas a fraude de uma chave inválida. |
+| api-8-F10 | Corrigido (não correspondia ao código) | Responses; Request succeeded JSON example | `{ "code": 200, "message": "success", "data": { "ref_id": "example-ref_id", "payee": { "name": "example-name", "document_id": "example-document_id", "document_type": 0, "bank_account": "example-bank_account", "bank_account_type": 0, "bank_branch": "example-bank_branch", "bank_code": "example-bank_code", "bank_name": "example-bank_name" }, "settlement_id": "example-settlement_id" }, "time": 1791792000000 }` | `{ "code": 200, "message": "success", "data": { "ref_id": "example-ref_id", "payee": { "name": "example-name", "document_id": "example-document_id", "document_type": 0, "bank_account": "example-bank_account", "bank_account_type": 0, "bank_branch": "example-bank_branch", "bank_code": "example-bank_code", "bank_name": "example-bank_name" }, "settlement_id": "example-settlement_id", "error": null, "result": null }, "time": 1791792000000 }` |
+| api-8-F11 | Corrigido (não correspondia ao código) | Responses; Request succeeded; Recommended action | Leia data e avalie o resultado do processamento conforme o status de negócio deste endpoint. | Verifique se code é 200, leia data.ref_id e confira os dados do recebedor. Chame o endpoint de confirmação em até 1 minuto usando a mesma conta do pagador. A inicialização não retorna um status de pagamento nem indica que o pagamento foi feito. |
+| api-8-F12 | Corrigido (não correspondia ao código) | Two-step payment validity and context | Se a referência expirar, interprete novamente os dados e confira as informações do pagamento. | Se a referência expirar, consulte novamente a chave Pix ou interprete novamente o QR Code e confira as informações do pagamento. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "pix_key": "replace-with-valid-pix-key"
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/transfers/pix/key-initiate' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${ACCOUNT_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Requisição bem-sucedida
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "ref_id": "example-ref_id",
+    "payee": {
+      "name": "example-name",
+      "document_id": "example-document_id",
+      "document_type": 0,
+      "bank_account": "example-bank_account",
+      "bank_account_type": 0,
+      "bank_branch": "example-bank_branch",
+      "bank_code": "example-bank_code",
+      "bank_name": "example-bank_name"
+    },
+    "settlement_id": "example-settlement_id",
+    "error": null,
+    "result": null
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Falha na requisição ou validação
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 Erro do sistema
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

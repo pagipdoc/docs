@@ -1,0 +1,133 @@
+---
+title: "Consultar status da devolução"
+description: "Consulte o status atual de processamento da devolução para acompanhar uma devolução já iniciada."
+api: "POST /v3/refunds/status/check"
+keywords: ["/v3/refunds/status/check"]
+---
+
+## Funcionamento e tratamento
+
+Consulte o status atual de processamento da devolução para acompanhar uma devolução. A conta do recebedor original que envia a devolução pode consultar o status registrado. Quando a conta do pagador original que recebe a devolução faz a consulta, qualquer devolução que não esteja concluída é informada como `5 TXN_STATUS_PROCESSING`, inclusive uma devolução com falha. A consulta pela conta que recebe a devolução informa `2 TXN_STATUS_COMPLETED` apenas depois que a conclusão é registrada. Portanto, o valor `5`, por si só, não comprova que o processamento continua avançando nem que a devolução será concluída com sucesso. Confira o resultado financeiro final com base nos detalhes da devolução e nos lançamentos do extrato. <Badge color="blue" size="sm">Complementado · api-7-F03</Badge>
+
+## Permissões e titularidade da conta
+
+As credenciais `ACCOUNT` consultam apenas a conta vinculada. Se os headers da conta-alvo forem enviados, tanto `X-ISPB` quanto `X-Account-Number` devem corresponder a essa conta. As credenciais `USER` devem enviar os dois headers para uma conta-alvo ativa dentro do seu escopo autorizado de titularidade. As credenciais `PLATFORM` não são aceitas. A conta-alvo deve ser a conta do recebedor original que envia a devolução ou a conta do pagador original que a recebe. <Badge color="blue" size="sm">Complementado · api-7-F01</Badge> As requisições devem seguir as orientações de [Ambientes e credenciais](/pt-br/environments-and-credentials).
+
+## Parâmetros da requisição
+
+<ParamField body="refund_id" type="string" required>
+Identificador da devolução, obtido em `data.refund_id` na resposta de sucesso de [Iniciar devolução Pix](/pt-br/api-reference/refunds/initiate-pix-refund) (`/v3/refunds/pix`)
+</ParamField>
+
+## Exemplo de requisição cURL
+
+O exemplo usa credenciais de nível ACCOUNT. Preencha os parâmetros reais e gere a assinatura com base no body.json final.
+
+## Campos da resposta
+
+Os caminhos dos campos partem da raiz da resposta. `[]` indica um elemento de array. Os valores monetários usam strings decimais. Os enums são interpretados conforme cada campo. A estrutura abaixo representa os dados de uma resposta de sucesso. Um valor nulo ou 0, por si só, não indica a conclusão da operação.
+
+<ResponseField name="code" type="integer">
+Código de resultado de negócio; 200 indica sucesso. Os erros de negócio são retornados neste campo, que não equivale ao código de status HTTP.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Descrição do resultado de negócio; em caso de falha, analise esta descrição junto com o campo code para identificar a causa.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Objeto de dados da resposta de sucesso; pode ser null em respostas de erro.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Horário da resposta, em timestamp Unix UTC em milissegundos.
+</ResponseField>
+
+<ResponseField name="data.refund_status" type="integer">
+Status da devolução. Este campo usa o enum compartilhado de transações: `0 TXN_STATUS_UNSPECIFIED`; `1 TXN_STATUS_PENDING`; `2 TXN_STATUS_COMPLETED`; `3 TXN_STATUS_FAILED`; `4 TXN_STATUS_CANCELLED`; `5 TXN_STATUS_PROCESSING`; `6 TXN_STATUS_REFUNDED`; `7 TXN_STATUS_PARTIALLY_REFUNDED`; `8 TXN_STATUS_DISPUTED`. Neste endpoint, os estados da devolução correspondem a `1 PENDING`, `5 PROCESSING`, `2 COMPLETED` ou `3 FAILED`; `0` é usado quando o estado não está especificado. Os valores `4`, `6`, `7` e `8` não são retornados para o ciclo de vida da devolução. Uma devolução parcial concluída também tem status `2 COMPLETED`; confira o valor nos detalhes da devolução e nos lançamentos do extrato. <Badge color="blue" size="sm">Complementado · api-7-F02</Badge>
+</ResponseField>
+
+## Respostas
+
+Consulte os exemplos de resposta pelo `code` de negócio no JSON. Verifique o status HTTP e o code de negócio separadamente. Uma resposta HTTP 200 também pode retornar um erro de negócio. <Badge color="orange" size="sm">Corrigido · api-7-F07</Badge>
+
+| `code` | Significado | Ação recomendada |
+| --- | --- | --- |
+| `200` | Requisição bem-sucedida | Leia `data` e avalie o resultado do processamento conforme o status de negócio deste endpoint. Para uma devolução em estado não final consultada pela conta que a envia, a consulta pode atualizar o status registrado. Se essa atualização não puder ser concluída, mas o registro da devolução continuar disponível para leitura, a resposta ainda poderá ter `code 200` e conter o último status registrado. Uma consulta bem-sucedida, portanto, não garante que o status mais recente do banco tenha sido obtido. Confira o resultado financeiro final com base nos detalhes da devolução e nos lançamentos do extrato. <Badge color="blue" size="sm">Complementado · api-7-F04</Badge> |
+| `400` | Falha na requisição ou validação | Problema nos parâmetros. Verifique e corrija os parâmetros da requisição. |
+| `500` | Erro do sistema | Registre a resposta e confirme primeiro o resultado de negócio. |
+
+Os exemplos ilustram a estrutura da resposta. Os valores de message e do status de negócio devem ser obtidos da resposta efetiva. Para outros erros de parâmetros, permissões e serviço, consulte [Catálogo de erros](/pt-br/api-reference/error-catalog). Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados.
+
+Neste endpoint, a ausência de `refund_id` ou um valor vazio retorna `code 4000`. Uma devolução não localizada retorna `code 4003003`; confira o identificador da devolução. Uma conta-alvo que não participa da devolução retorna `code 4004101`; confira a titularidade da conta e as credenciais. O `code 4003014` pode indicar que o registro da devolução não pôde ser lido ou que outra operação já está processando esse registro; por si só, ele não significa que a devolução falhou. Uma falha temporária na chamada de serviço pode retornar `code 501`. Corrija o identificador ou o contexto da conta quando necessário e consulte novamente a devolução existente após uma falha temporária, sem iniciar uma nova devolução. <Badge color="blue" size="sm">Complementado · api-7-F08</Badge>
+
+<Tip>
+Para testar este endpoint, envie o exemplo de requisição para a Base URL do Sandbox `https://ebanking-openapi-sandbox.pagsmile.com.br` com sua AK/SK de Sandbox. Assine cada requisição conforme descrito em [Ambientes e credenciais](/pt-br/environments-and-credentials#assinatura-de-requisições-à-api).
+</Tip>
+
+
+<Accordion title="Correções em relação ao documento original (6)" icon="clipboard-check">
+Esta página foi conferida com o código-fonte da Pagsmile Open API em 2026-11-10. Cada alteração abaixo está marcada na página com um selo que mostra o seu ID.
+
+| ID | Alteração | Local | Texto do documento original | Texto atualizado |
+| --- | --- | --- | --- | --- |
+| api-7-F01 | Complementado (ausente no original) | Permissions and account ownership | ACCOUNT, ou USER com o header da conta-alvo. | As credenciais ACCOUNT consultam apenas a conta vinculada. Se os headers da conta-alvo forem enviados, tanto `X-ISPB` quanto `X-Account-Number` devem corresponder a essa conta. As credenciais USER devem enviar os dois headers para uma conta-alvo ativa dentro do seu escopo autorizado de titularidade. As credenciais PLATFORM não são aceitas. A conta-alvo deve ser a conta do recebedor original que envia a devolução ou a conta do pagador original que a recebe. |
+| api-7-F02 | Complementado (ausente no original) | Response fields | Status da devolução. Enum: 0 TXN_STATUS_UNSPECIFIED; 1 TXN_STATUS_PENDING; 2 TXN_STATUS_COMPLETED; 3 TXN_STATUS_FAILED; 4 TXN_STATUS_CANCELLED; 5 TXN_STATUS_PROCESSING; 6 TXN_STATUS_REFUNDED; 7 TXN_STATUS_PARTIALLY_REFUNDED; 8 TXN_STATUS_DISPUTED. | Status da devolução. Este campo usa o enum compartilhado de transações: 0 TXN_STATUS_UNSPECIFIED; 1 TXN_STATUS_PENDING; 2 TXN_STATUS_COMPLETED; 3 TXN_STATUS_FAILED; 4 TXN_STATUS_CANCELLED; 5 TXN_STATUS_PROCESSING; 6 TXN_STATUS_REFUNDED; 7 TXN_STATUS_PARTIALLY_REFUNDED; 8 TXN_STATUS_DISPUTED. Neste endpoint, os estados da devolução correspondem a 1 PENDING, 5 PROCESSING, 2 COMPLETED ou 3 FAILED; 0 é usado quando o estado não está especificado. Os valores 4, 6, 7 e 8 não são retornados para o ciclo de vida da devolução. Uma devolução parcial concluída também tem status 2 COMPLETED; confira o valor nos detalhes da devolução e nos lançamentos do extrato. |
+| api-7-F03 | Complementado (ausente no original) | Behavior and handling | Consulte o status atual de processamento da devolução para acompanhar uma devolução já iniciada. Confira o resultado financeiro final com base nos detalhes da devolução e nos lançamentos do extrato. | Consulte o status atual de processamento da devolução para acompanhar uma devolução. A conta do recebedor original que envia a devolução pode consultar o status registrado. Quando a conta do pagador original que recebe a devolução faz a consulta, qualquer devolução que não esteja concluída é informada como 5 TXN_STATUS_PROCESSING, inclusive uma devolução com falha. A consulta pela conta que recebe a devolução informa 2 TXN_STATUS_COMPLETED apenas depois que a conclusão é registrada. Portanto, o valor 5, por si só, não comprova que o processamento continua avançando nem que a devolução será concluída com sucesso. Confira o resultado financeiro final com base nos detalhes da devolução e nos lançamentos do extrato. |
+| api-7-F04 | Complementado (ausente no original) | Responses / Request succeeded / Recommended action | Leia data e avalie o resultado do processamento conforme o status de negócio deste endpoint. | Leia data e avalie o resultado do processamento conforme o status de negócio deste endpoint. Para uma devolução em estado não final consultada pela conta que a envia, a consulta pode atualizar o status registrado. Se essa atualização não puder ser concluída, mas o registro da devolução continuar disponível para leitura, a resposta ainda poderá ter code 200 e conter o último status registrado. Uma consulta bem-sucedida, portanto, não garante que o status mais recente do banco tenha sido obtido. Confira o resultado financeiro final com base nos detalhes da devolução e nos lançamentos do extrato. |
+| api-7-F07 | Corrigido (não correspondia ao código) | Responses / Request succeeded / JSON example | `{ "code": 200, "message": "success", "data": { "refund_status": 0 }, "time": 1791792000000 }` | `{ "code": 200, "message": "success", "data": { "refund_status": 0, "error": null, "result": null }, "time": 1791792000000 }` |
+| api-7-F08 | Complementado (ausente no original) | Responses / endpoint-specific errors after the general example disclaimer | Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados. | Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados. Neste endpoint, a ausência de `refund_id` ou um valor vazio retorna code 4000. Uma devolução não localizada retorna code 4003003; confira o identificador da devolução. Uma conta-alvo que não participa da devolução retorna code 4004101; confira a titularidade da conta e as credenciais. O code 4003014 pode indicar que o registro da devolução não pôde ser lido ou que outra operação já está processando esse registro; por si só, ele não significa que a devolução falhou. Uma falha temporária na chamada de serviço pode retornar code 501. Corrija o identificador ou o contexto da conta quando necessário e consulte novamente a devolução existente após uma falha temporária, sem iniciar uma nova devolução. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "refund_id": "replace-with-refund-id"
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/refunds/status/check' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${ACCOUNT_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Requisição bem-sucedida
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "refund_status": 0,
+    "error": null,
+    "result": null
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Falha na requisição ou validação
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 Erro do sistema
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

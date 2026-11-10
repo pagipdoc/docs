@@ -1,0 +1,175 @@
+---
+title: "Gerar QR Code estático"
+description: "Gere um QR Code Pix estático sem valor definido para a conta-alvo. Consulte e confira cada transação de recebimento separadamente."
+api: "POST /v3/qr_code/generate/static"
+keywords: ["/v3/qr_code/generate/static"]
+---
+
+## Funcionamento e tratamento
+
+Gere um QR Code Pix estático sem valor definido para a conta-alvo. A conta deve estar com status `ACTIVE`, habilitada para receber pagamentos e sem encerramento em andamento. O tipo de conta e o documento do titular devem estar presentes e válidos. <Badge color="blue" size="sm">Complementado · api-2-F06</Badge> Consulte e confira cada transação de recebimento separadamente.
+
+A requisição de QR Code estático não inclui valor. Cada recebimento é registrado pelo ID da transação. O ID do pedido do QR Code não deve substituir o ID da transação.
+
+Em caso de erro na geração do QR Code, ausência de notificação ou crédito em conta não confirmado, veja [Cenários de erro do módulo de recebimento](/pt-br/api-reference/payin/overview).
+
+## Permissões e titularidade da conta
+
+Use credenciais `ACCOUNT` para a conta vinculada a essas credenciais, ou credenciais `USER` com os headers `X-ISPB` e `X-Account-Number` para selecionar uma conta ativa de titularidade desse `USER`, dentro da sua hierarquia válida de contas. As credenciais `ACCOUNT` não exigem esses headers; se um deles for enviado, ambos devem ter valores não vazios e corresponder à conta vinculada. Credenciais `PLATFORM` não são aceitas. <Badge color="blue" size="sm">Complementado · api-2-F05</Badge> As requisições devem seguir as orientações de [Ambientes e credenciais](/pt-br/environments-and-credentials).
+
+## Parâmetros da requisição
+
+<ParamField body="city" type="string">
+**Obrigatório:** Não (não obrigatório nesta camada). Cidade. Opcional; aceita valor vazio ou composto apenas por espaços em branco. Quando informado, os espaços em branco nas extremidades são removidos, sequências de espaços são reduzidas a um único espaço, caracteres acentuados compatíveis são convertidos para ASCII e o valor é convertido para letras maiúsculas. O valor normalizado deve conter no máximo 15 caracteres ASCII imprimíveis; valores que não podem ser representados dessa forma são rejeitados <Badge color="blue" size="sm">Complementado · api-2-F04</Badge>
+</ParamField>
+
+<ParamField body="merchant_order_id" type="string" required>
+ID do pedido do comerciante; permite apenas letras do alfabeto inglês, números, hífens e sublinhados. Os primeiros seis caracteres devem formar uma data UTC válida no formato `YYMMDD`. A data deve ter interseção com a janela de ±1 hora em relação ao horário UTC atual. Os IDs compartilham uma verificação de duplicidade de 48 horas entre contas e operações que usam IDs do pedido do comerciante; use um ID único entre suas contas e essas operações. Reutilizar um ID reservado retorna o code de negócio `4001013` com a mensagem `merchant_order_id already exists`, em vez da resposta de sucesso original. A reserva pode permanecer após uma tentativa de geração com falha. Se o resultado for desconhecido, consulte primeiro a operação original. Não reenvie com outro ID sem essa verificação <Badge color="blue" size="sm">Complementado · api-2-F07</Badge>
+</ParamField>
+
+<ParamField body="pix_key" type="string" required>
+Chave Pix EVP ativa, vinculada à conta-alvo e ao seu titular. Deve conter de 32 a 36 bytes e não pode conter `@`. O número da conta, o valor do documento do titular e o tipo de documento registrados para a chave devem corresponder aos da conta-alvo <Badge color="blue" size="sm">Complementado · api-2-F03</Badge>
+</ParamField>
+
+<ParamField body="pix_key_type" type="integer" required>
+**Obrigatório:** Sim. <Badge color="orange" size="sm">Corrigido · api-2-F01</Badge> Tipo de chave Pix. Apenas `5 EVP` é aceito para gerar QR Code estático. Os valores `0 UNSPECIFIED`, `1 CPF`, `2 CNPJ`, `3 EMAIL` e `4 PHONE` são rejeitados <Badge color="orange" size="sm">Corrigido · api-2-F02</Badge>
+</ParamField>
+
+<ParamField body="memo" type="string">
+**Obrigatório:** Não (não obrigatório nesta camada). Observação da transação
+</ParamField>
+
+## Exemplo de requisição cURL
+
+O exemplo usa credenciais de nível ACCOUNT. Preencha os parâmetros reais e gere a assinatura com base no body.json final. <Badge color="orange" size="sm">Corrigido · api-2-F10</Badge>
+
+## Campos da resposta
+
+Os caminhos dos campos partem da raiz da resposta. `[]` indica um elemento de array. Os valores monetários usam strings decimais. Os enums são interpretados conforme cada campo. A estrutura abaixo representa os dados de uma resposta de sucesso. Um valor nulo ou 0, por si só, não indica a conclusão da operação.
+
+<ResponseField name="code" type="integer">
+Código de resultado de negócio; 200 indica sucesso. Os erros de negócio são retornados neste campo, que não equivale ao código de status HTTP.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Descrição do resultado de negócio; em caso de falha, analise esta descrição junto com o campo code para identificar a causa.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Objeto de dados da resposta de sucesso; pode ser null em respostas de erro.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Horário da resposta, em timestamp Unix UTC em milissegundos.
+</ResponseField>
+
+<ResponseField name="data.payload_base64" type="string">
+Payload de pagamento do QR Code codificado em Base64.
+</ResponseField>
+
+<ResponseField name="data.payload_image_base64" type="string">
+Imagem do QR Code codificada em Base64; atualmente, o endpoint de geração não preenche este campo e retorna uma string vazia.
+</ResponseField>
+
+<ResponseField name="data.qr_code_id" type="string">
+ID do QR Code.
+</ResponseField>
+
+<ResponseField name="data.merchant_order_id" type="string">
+ID do pedido do comerciante informado pelo integrador.
+</ResponseField>
+
+## Respostas
+
+Consulte os exemplos de resposta pelo `code` de negócio no JSON. Verifique o status HTTP e o code de negócio separadamente. Uma resposta HTTP 200 também pode retornar um erro de negócio. <Badge color="orange" size="sm">Corrigido · api-2-F09</Badge>
+
+| `code` | Significado | Ação recomendada |
+| --- | --- | --- |
+| `200` | Requisição bem-sucedida | Verifique se `code` é 200 e salve `data.qr_code_id` e `data.merchant_order_id`. A geração bem-sucedida do QR Code não confirma um recebimento; consulte cada transação de recebimento separadamente. <Badge color="orange" size="sm">Corrigido · api-2-F11</Badge> |
+| `400` | Falha na requisição ou validação | Problema nos parâmetros. Verifique e corrija os parâmetros da requisição. |
+| `500` | Erro do sistema | Registre a resposta e confirme primeiro o resultado de negócio. |
+
+Os exemplos ilustram a estrutura da resposta. Os valores de message e do status de negócio devem ser obtidos da resposta efetiva. Para outros erros de parâmetros, permissões e serviço, consulte [Catálogo de erros](/pt-br/api-reference/error-catalog). Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados. A ausência de `merchant_order_id` ou um valor vazio retorna o code de negócio `4000`. A ausência de `pix_key` ou um valor vazio atualmente retorna o code de negócio `500` com a mensagem `pix_key field is required and cannot be empty`. Falhas na validação do QR Code estático retornam o code de negócio `400` com a mensagem específica da validação. Falhas no processamento ou na verificação do QR Code podem retornar o code de negócio `4003014`. Analise o code e a mensagem reais antes de decidir se uma nova tentativa é adequada. <Badge color="blue" size="sm">Complementado · api-2-F12</Badge>
+
+<Tip>
+Para testar este endpoint, envie o exemplo de requisição para a Base URL do Sandbox `https://ebanking-openapi-sandbox.pagsmile.com.br` com sua AK/SK de Sandbox. Assine cada requisição conforme descrito em [Ambientes e credenciais](/pt-br/environments-and-credentials#assinatura-de-requisições-à-api).
+</Tip>
+
+
+<Accordion title="Correções em relação ao documento original (11)" icon="clipboard-check">
+Esta página foi conferida com o código-fonte da Pagsmile Open API em 2026-11-10. Cada alteração abaixo está marcada na página com um selo que mostra o seu ID.
+
+| ID | Alteração | Local | Texto do documento original | Texto atualizado |
+| --- | --- | --- | --- | --- |
+| api-2-F01 | Corrigido (não correspondia ao código) | Request parameters / pix_key_type / Required | Não (não obrigatório nesta camada) | Sim |
+| api-2-F02 | Corrigido (não correspondia ao código) | Request parameters / pix_key_type / Format and conditions | Tipo de chave Pix. Valores: 0 UNSPECIFIED; 1 CPF; 2 CNPJ; 3 EMAIL; 4 PHONE; 5 EVP | Tipo de chave Pix. Apenas 5 EVP é aceito para gerar QR Code estático. Os valores 0 UNSPECIFIED, 1 CPF, 2 CNPJ, 3 EMAIL e 4 PHONE são rejeitados |
+| api-2-F03 | Complementado (ausente no original) | Request parameters / pix_key / Format and conditions | Valor da chave Pix | Chave Pix EVP ativa, vinculada à conta-alvo e ao seu titular. Deve conter de 32 a 36 bytes e não pode conter @. O número da conta, o valor do documento do titular e o tipo de documento registrados para a chave devem corresponder aos da conta-alvo |
+| api-2-F04 | Complementado (ausente no original) | Request parameters / city / Format and conditions | Cidade | Cidade. Opcional; aceita valor vazio ou composto apenas por espaços em branco. Quando informado, os espaços em branco nas extremidades são removidos, sequências de espaços são reduzidas a um único espaço, caracteres acentuados compatíveis são convertidos para ASCII e o valor é convertido para letras maiúsculas. O valor normalizado deve conter no máximo 15 caracteres ASCII imprimíveis; valores que não podem ser representados dessa forma são rejeitados |
+| api-2-F05 | Complementado (ausente no original) | Permissions and account ownership | ACCOUNT, ou USER com o header da conta-alvo. | Use credenciais ACCOUNT para a conta vinculada a essas credenciais, ou credenciais USER com os headers `X-ISPB` e `X-Account-Number` para selecionar uma conta ativa de titularidade desse USER, dentro da sua hierarquia válida de contas. As credenciais ACCOUNT não exigem esses headers; se um deles for enviado, ambos devem ter valores não vazios e corresponder à conta vinculada. Credenciais PLATFORM não são aceitas. |
+| api-2-F06 | Complementado (ausente no original) | Behavior and handling / account eligibility | Gere um QR Code Pix estático sem valor definido para a conta-alvo. | Gere um QR Code Pix estático sem valor definido para a conta-alvo. A conta deve estar com status ACTIVE, habilitada para receber pagamentos e sem encerramento em andamento. O tipo de conta e o documento do titular devem estar presentes e válidos. |
+| api-2-F07 | Complementado (ausente no original) | Request parameters / merchant_order_id / Format and conditions | ID do pedido do comerciante; permite apenas letras do alfabeto inglês, números, hífens e sublinhados. Os primeiros seis caracteres devem formar uma data UTC válida no formato YYMMDD. A data deve ter interseção com a janela de ±1 hora em relação ao horário UTC atual. Se o resultado for desconhecido, consulte primeiro a operação original. Não reenvie com outro ID sem essa verificação | ID do pedido do comerciante; permite apenas letras do alfabeto inglês, números, hífens e sublinhados. Os primeiros seis caracteres devem formar uma data UTC válida no formato YYMMDD. A data deve ter interseção com a janela de ±1 hora em relação ao horário UTC atual. Os IDs compartilham uma verificação de duplicidade de 48 horas entre contas e operações que usam IDs do pedido do comerciante; use um ID único entre suas contas e essas operações. Reutilizar um ID reservado retorna o code de negócio 4001013 com a mensagem merchant_order_id already exists, em vez da resposta de sucesso original. A reserva pode permanecer após uma tentativa de geração com falha. Se o resultado for desconhecido, consulte primeiro a operação original. Não reenvie com outro ID sem essa verificação |
+| api-2-F09 | Corrigido (não correspondia ao código) | Responses / Request succeeded / JSON example | `{ "code": 200, "message": "success", "data": { "payload_base64": "example-payload_base64", "payload_image_base64": "example-payload_image_base64", "qr_code_id": "example-qr_code_id", "merchant_order_id": "example-merchant_order_id" }, "time": 1791792000000 }` | `{ "code": 200, "message": "success", "data": { "payload_base64": "example-payload_base64", "payload_image_base64": "", "qr_code_id": "example-qr_code_id", "merchant_order_id": "example-merchant_order_id", "error": null }, "time": 1791792000000 }` |
+| api-2-F10 | Corrigido (não correspondia ao código) | cURL request example / ORDER_ID generation | `ORDER_ID="$(date +%y%m%d%H%M%S)$(openssl rand -hex 3 \| python3 -c 'import sys; print(str(int(sys.stdin.read().strip(),16)%1000000).zfill(6))')"` | `ORDER_ID="$(date -u +%y%m%d%H%M%S)$(openssl rand -hex 3 \| python3 -c 'import sys; print(str(int(sys.stdin.read().strip(),16)%1000000).zfill(6))')"` |
+| api-2-F11 | Corrigido (não correspondia ao código) | Responses / Request succeeded / Recommended action | Leia data e avalie o resultado do processamento conforme o status de negócio deste endpoint. | Verifique se `code` é 200 e salve `data.qr_code_id` e `data.merchant_order_id`. A geração bem-sucedida do QR Code não confirma um recebimento; consulte cada transação de recebimento separadamente. |
+| api-2-F12 | Complementado (ausente no original) | Responses / endpoint-specific validation and processing errors | Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados. | Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados. A ausência de `merchant_order_id` ou um valor vazio retorna o code de negócio 4000. A ausência de `pix_key` ou um valor vazio atualmente retorna o code de negócio 500 com a mensagem pix_key field is required and cannot be empty. Falhas na validação do QR Code estático retornam o code de negócio 400 com a mensagem específica da validação. Falhas no processamento ou na verificação do QR Code podem retornar o code de negócio 4003014. Analise o code e a mensagem reais antes de decidir se uma nova tentativa é adequada. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+ORDER_ID="$(date -u +%y%m%d%H%M%S)$(openssl rand -hex 3 | python3 -c 'import sys; print(str(int(sys.stdin.read().strip(),16)%1000000).zfill(6))')"
+cat > body.json <<JSON
+{
+  "city": "Parisianville",
+  "merchant_order_id": "${ORDER_ID}",
+  "pix_key": "fe72f067-207c-47e0-9d84-2b2a75c12b97",
+  "pix_key_type": 5,
+  "memo": "culpa in consequat in"
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/qr_code/generate/static' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${ACCOUNT_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Requisição bem-sucedida
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "payload_base64": "example-payload_base64",
+    "payload_image_base64": "",
+    "qr_code_id": "example-qr_code_id",
+    "merchant_order_id": "example-merchant_order_id",
+    "error": null
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Falha na requisição ou validação
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 Erro do sistema
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

@@ -1,0 +1,197 @@
+---
+title: "Update event subscription"
+description: "Update the callback URL or status where allowed for the event subscription. Keep the original subscription's authorization scope and target account unchanged."
+api: "POST /v3/webhooks/update"
+keywords: ["/v3/webhooks/update"]
+---
+
+## Behavior and handling
+
+Update the callback URL or status where allowed for the event subscription. If both fields are omitted, the request returns the current subscription without changing it. When both fields are provided, the callback URL is updated first and the status change is applied afterward. These changes are not atomic: an invalid status or a failure during the status change can leave the callback URL already updated. Query the subscription after an error or an unknown result before retrying. <Badge color="blue" size="sm">Added · api-29-F04</Badge> Keep the original subscription's authorization scope and target account unchanged. Reactivating a subscription requires its stored signing credential to remain valid and active. For `ACCOUNT` subscriptions, updating the callback URL or reactivating the subscription also requires the account not to be closed or undergoing closure. Setting `status` to `1` activates the subscription and clears its suspension reason; setting `status` to `2` deactivates it. <Badge color="blue" size="sm">Added · api-29-F06</Badge>
+
+## Permissions and account ownership
+
+Authorization depends on the subscription owner identity and scope. `ACCOUNT` credentials can update transaction subscriptions and `VA_ACCOUNT_KYB` subscriptions for the bound account, but cannot update `MASTER_ACCOUNT_KYB` subscriptions. `USER` credentials can update transaction subscriptions and `VA_ACCOUNT_KYB` subscriptions; provide `account_number` in the JSON body for transaction events and omit it for `VA_ACCOUNT_KYB`. `PLATFORM` credentials can update `MASTER_ACCOUNT_KYB` subscriptions and must omit `account_number`. Do not send `X-ISPB` or `X-Account-Number` with `USER` or `PLATFORM` credentials for this endpoint. See [Webhooks](/api-reference/webhooks/overview). Requests must follow [Environments & Credentials](/environments-and-credentials). <Badge color="blue" size="sm">Added · api-29-F02</Badge>
+
+## Request parameters
+
+<ParamField body="event_type" type="integer" required>
+Webhook event types: `1` `PIX_IN`; `2` `PIX_OUT`; `3` `REFUND_IN`; `4` `REFUND_OUT`; `5` `VA_ACCOUNT_KYB`; `6` `MASTER_ACCOUNT_KYB`. Use a value permitted for your credential scope. Omission or `0` is not accepted. <Badge color="blue" size="sm">Added · api-29-F01</Badge>
+</ParamField>
+
+<ParamField body="callback_url" type="string">
+If provided, the value must not be empty after trimming leading and trailing whitespace. The trimmed value replaces the callback URL. Updating this field also associates callback signing with the credential used for this request. Ensure your callback receiver can verify signatures with that credential's SK. Omitting this field leaves both the URL and signing credential unchanged. <Badge color="blue" size="sm">Added · api-29-F05</Badge>
+</ParamField>
+
+<ParamField body="status" type="integer">
+Omit this parameter to leave the status unchanged. If provided, only 1 ACTIVE (active) or 2 INACTIVE (inactive) is allowed. An explicit 0 is not accepted. Values: 1 ACTIVE; 2 INACTIVE
+</ParamField>
+
+<ParamField body="account_number" type="string">
+**Required:** Conditionally required. Trim leading and trailing whitespace first. Preserve leading zeros. Optional for ACCOUNT credentials. If provided, the value must match the bound account number. Required when USER credentials subscribe to transaction events.
+</ParamField>
+
+<ParamField body="subscription_id" type="string">
+Optional subscription identifier. Leading and trailing whitespace is removed. When provided, it selects the subscription by ID, subject to the authenticated owner check; `event_type` and `account_number` are not additional ID-matching checks. When omitted, selection uses the owner, application, and event type; `ACCOUNT` selection also uses the bound ISPB and account number. `USER` `account_number` is required for transaction events but is not used in the subscription lookup. Always provide selectors consistent with the original subscription. <Badge color="orange" size="sm">Corrected · api-29-F03</Badge>
+</ParamField>
+
+## cURL request example
+
+The example uses ACCOUNT-level credentials. Enter the actual parameters and generate the signature from the final body.json.
+
+## Response fields
+
+Field paths start at the response root. `[]` indicates an array element. Amounts use decimal strings. Enum values are defined separately for each field. The structure below describes a success response. A null value or 0 alone does not indicate that processing is complete.
+
+<ResponseField name="code" type="integer">
+Business result code. A value of 200 indicates success. Business errors are returned in this field. It is not the HTTP status code.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Business result description. On failure, use this with code to determine the cause.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Data object in a successful response. Can be null in an error response.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Response time as a UTC Unix timestamp in milliseconds.
+</ResponseField>
+
+<ResponseField name="data.webhook" type="object">
+Event subscription details.
+</ResponseField>
+
+<ResponseField name="data.webhook.webhook_id" type="string">
+Event subscription ID.
+</ResponseField>
+
+<ResponseField name="data.webhook.event_type" type="string">
+Subscribed event name as a string: `PIX_PAYMENT_IN`, `PIX_PAYMENT_OUT`, `PIX_REFUND_IN`, `PIX_REFUND_OUT`, `VA_ACCOUNT_KYB`, or `MASTER_ACCOUNT_KYB`. These correspond to request `event_type` values `1` through `6` respectively. The request uses a numeric enum, not these response strings. <Badge color="blue" size="sm">Added · api-29-F07</Badge>
+</ResponseField>
+
+<ResponseField name="data.webhook.callback_url" type="string">
+Callback URL for the subscribed event.
+</ResponseField>
+
+<ResponseField name="data.webhook.status" type="integer">
+Current business status, interpreted according to the enum listed for this field. Values: 0 BASE_STATUS_UNSPECIFIED; 1 BASE_STATUS_ACTIVE; 2 BASE_STATUS_INACTIVE.
+</ResponseField>
+
+<ResponseField name="data.webhook.created_at" type="integer">
+Creation time in UTC Unix milliseconds. Can be 0 if creation has not occurred or the time is not provided.
+</ResponseField>
+
+<ResponseField name="data.webhook.updated_at" type="integer">
+Last update time in UTC Unix milliseconds. Can be 0 if no update has occurred or the time is not provided.
+</ResponseField>
+
+<ResponseField name="data.webhook.account_number" type="string">
+Account number. The current subscription query mapping does not populate this compatibility field, so it can be empty. webhook_id provides the subscription ID.
+</ResponseField>
+
+<ResponseField name="data.webhook.subscription_id" type="string">
+Stable subscription ID. The current subscription query mapping does not populate this compatibility field, so it can be empty. webhook_id provides the subscription ID.
+</ResponseField>
+
+<ResponseField name="data.webhook.suspend_reason" type="string">
+Reason for subscription suspension. The current subscription query mapping does not populate this compatibility field, so it can be empty. webhook_id provides the subscription ID.
+</ResponseField>
+
+## Responses
+
+View response examples by the business `code` in the JSON response. Check the HTTP status and business code separately. An HTTP 200 response can also return a business error. <Badge color="orange" size="sm">Corrected · api-29-F10</Badge>
+
+| `code` | Meaning | Recommended action |
+| --- | --- | --- |
+| `200` | Request succeeded | Read data and determine the result using the business status defined for this endpoint. |
+| `400` | Request or validation failed | Parameter issue. Check and correct the request parameters. |
+| `500` | System error | Log the response and confirm the business result first. |
+
+The examples illustrate the response structure. Use the actual response for message and business status values. See [Error Catalog](/api-reference/error-catalog) for other parameter, permission, and service errors. This section does not imply that the endpoint returns only these three code values. For this endpoint, code `4000` identifies a missing `event_type`, an empty `callback_url`, or a missing `account_number` for `USER` transaction events; code `4001` identifies an invalid `status`; code `4004003` indicates permission denied; code `4004004` indicates that the subscription was not found; and code `501` indicates a temporary service failure. After any failure in a request containing both `callback_url` and `status`, query the subscription before retrying because the URL may already have changed. <Badge color="blue" size="sm">Added · api-29-F11</Badge>
+
+<Tip>
+To try this endpoint, send the request example to the Sandbox base URL `https://ebanking-openapi-sandbox.pagsmile.com.br` with your Sandbox AK/SK. Sign every request as described in [Environments & Credentials](/environments-and-credentials#api-request-signing).
+</Tip>
+
+
+<Accordion title="Corrections to the source document (9)" icon="clipboard-check">
+This page was checked against the Pagsmile Open API source code on 2026-11-10. Each change below is marked in the page with a badge that shows its ID.
+
+| ID | Change | Location | Source document text | Updated text |
+| --- | --- | --- | --- | --- |
+| api-29-F01 | Added (missing in the source) | Request parameters | Webhook event types: 1 PIX_IN; 2 PIX_OUT; 3 REFUND_IN; 4 REFUND_OUT. | Webhook event types: 1 PIX_IN; 2 PIX_OUT; 3 REFUND_IN; 4 REFUND_OUT; 5 VA_ACCOUNT_KYB; 6 MASTER_ACCOUNT_KYB. Use a value permitted for your credential scope. Omission or 0 is not accepted. |
+| api-29-F02 | Added (missing in the source) | Permissions and account ownership | Authorization depends on the subscription owner identity and scope. See Webhooks. Requests must follow Environments & Credentials. | Authorization depends on the subscription owner identity and scope. ACCOUNT credentials can update transaction subscriptions and VA_ACCOUNT_KYB subscriptions for the bound account, but cannot update MASTER_ACCOUNT_KYB subscriptions. USER credentials can update transaction subscriptions and VA_ACCOUNT_KYB subscriptions; provide account_number in the JSON body for transaction events and omit it for VA_ACCOUNT_KYB. PLATFORM credentials can update MASTER_ACCOUNT_KYB subscriptions and must omit account_number. Do not send X-ISPB or X-Account-Number with USER or PLATFORM credentials for this endpoint. See Webhooks. Requests must follow Environments & Credentials. |
+| api-29-F03 | Corrected (did not match the code) | Request parameters | Subscription identifier. It identifies the subscription together with the owner identity, event type, and account scope | Optional subscription identifier. Leading and trailing whitespace is removed. When provided, it selects the subscription by ID, subject to the authenticated owner check; event_type and account_number are not additional ID-matching checks. When omitted, selection uses the owner, application, and event type; ACCOUNT selection also uses the bound ISPB and account number. USER account_number is required for transaction events but is not used in the subscription lookup. Always provide selectors consistent with the original subscription. |
+| api-29-F04 | Added (missing in the source) | Behavior and handling | Update the callback URL or status where allowed for the event subscription. | Update the callback URL or status where allowed for the event subscription. If both fields are omitted, the request returns the current subscription without changing it. When both fields are provided, the callback URL is updated first and the status change is applied afterward. These changes are not atomic: an invalid status or a failure during the status change can leave the callback URL already updated. Query the subscription after an error or an unknown result before retrying. |
+| api-29-F05 | Added (missing in the source) | Request parameters | If provided, the value must not be empty after trimming leading and trailing whitespace | If provided, the value must not be empty after trimming leading and trailing whitespace. The trimmed value replaces the callback URL. Updating this field also associates callback signing with the credential used for this request. Ensure your callback receiver can verify signatures with that credential's SK. Omitting this field leaves both the URL and signing credential unchanged. |
+| api-29-F06 | Added (missing in the source) | Behavior and handling | Keep the original subscription's authorization scope and target account unchanged. | Keep the original subscription's authorization scope and target account unchanged. Reactivating a subscription requires its stored signing credential to remain valid and active. For ACCOUNT subscriptions, updating the callback URL or reactivating the subscription also requires the account not to be closed or undergoing closure. Setting status to 1 activates the subscription and clears its suspension reason; setting status to 2 deactivates it. |
+| api-29-F07 | Added (missing in the source) | Response fields | — | Subscribed event name as a string: PIX_PAYMENT_IN, PIX_PAYMENT_OUT, PIX_REFUND_IN, PIX_REFUND_OUT, VA_ACCOUNT_KYB, or MASTER_ACCOUNT_KYB. These correspond to request event_type values 1 through 6 respectively. The request uses a numeric enum, not these response strings. |
+| api-29-F10 | Corrected (did not match the code) | Responses — Request succeeded | `{ "code": 200, "message": "success", "data": { "webhook": { "webhook_id": "example-webhook_id", "event_type": "PIX_IN", "callback_url": "example-callback_url", "status": 0, "created_at": 0, "updated_at": 0, "account_number": "example-account_number", "subscription_id": "example-subscription_id", "suspend_reason": "example-suspend_reason" } }, "time": 1791792000000 }` | `{ "code": 200, "message": "success", "data": { "webhook": { "webhook_id": "example-subscription-id", "event_type": "PIX_PAYMENT_IN", "callback_url": "https://merchant.example.test/webhooks", "status": 1, "created_at": 1791791900000, "updated_at": 1791792000000, "account_number": "", "subscription_id": "", "suspend_reason": "" }, "error": null, "result": null }, "time": 1791792000000 }` |
+| api-29-F11 | Added (missing in the source) | Responses — error guidance | This section does not imply that the endpoint returns only these three code values. | This section does not imply that the endpoint returns only these three code values. For this endpoint, code 4000 identifies a missing event_type, an empty callback_url, or a missing account_number for USER transaction events; code 4001 identifies an invalid status; code 4004003 indicates permission denied; code 4004004 indicates that the subscription was not found; and code 501 indicates a temporary service failure. After any failure in a request containing both callback_url and status, query the subscription before retrying because the URL may already have changed. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "event_type": 1,
+  "callback_url": "https://merchant.example.test/webhooks"
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/webhooks/update' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${ACCOUNT_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Request succeeded
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "webhook": {
+      "webhook_id": "example-subscription-id",
+      "event_type": "PIX_PAYMENT_IN",
+      "callback_url": "https://merchant.example.test/webhooks",
+      "status": 1,
+      "created_at": 1791791900000,
+      "updated_at": 1791792000000,
+      "account_number": "",
+      "subscription_id": "",
+      "suspend_reason": ""
+    },
+    "error": null,
+    "result": null
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Request or validation failed
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 System error
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

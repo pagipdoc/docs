@@ -1,0 +1,340 @@
+---
+title: "Consultar detalhes do pagamento"
+description: "Consulte os detalhes de um pagamento iniciado para conferir o status da transação, o valor, o recebedor e os identificadores da operação."
+api: "POST /v3/transfers/details"
+keywords: ["/v3/transfers/details"]
+---
+
+## Funcionamento e tratamento
+
+Consulte os detalhes de um pagamento iniciado para conferir o status da transação, o valor, o recebedor e os identificadores da operação. Se a transação ainda não estiver disponível, mas o `merchant_order_id` informado identificar um pedido pendente da conta-alvo do pagador, a resposta conterá detalhes limitados: `txn_status` será `5` (`TXN_STATUS_PROCESSING`), `source_type` será `2` (`SOURCE_TYPE_API`), e `txn_id` e `merchant_order_id` serão retornados. Nessa resposta, `payee` e `payer` serão `null`, enquanto `settlement_id`, `amount`, `memo`, `debit_fee`, `currency` e `rejection_reason` serão strings vazias. Consulte novamente usando os identificadores estáveis; campos vazios não significam que o pagamento foi concluído. <Badge color="blue" size="sm">Complementado · api-13-F08</Badge>
+
+### Notificações de eventos de pagamento
+
+Os pagamentos Pix usam o evento PIX_OUT para sincronizar os resultados. Confirme os resultados de TED e transferências internas pelos detalhes da transação, pelo status e pelos lançamentos do extrato. Esta versão não oferece tipos de evento de notificação separados para TED e transferências internas.
+
+## Permissões e titularidade da conta
+
+Use credenciais `ACCOUNT` para a conta vinculada a essas credenciais, ou credenciais `USER` com os dois headers `X-ISPB` e `X-Account-Number` identificando uma conta de titularidade desse usuário. Com credenciais `ACCOUNT`, omita os dois headers da conta-alvo ou informe ambos com valores iguais aos da conta vinculada; valores vazios ou divergentes são rejeitados. Credenciais `PLATFORM` não são aceitas. O identificador do banco e o número da conta-alvo devem corresponder aos dados do pagador ou do recebedor da transação. <Badge color="blue" size="sm">Complementado · api-13-F01</Badge> As requisições devem seguir as orientações de [Ambientes e credenciais](/pt-br/environments-and-credentials).
+
+## Parâmetros da requisição
+
+<ParamField body="txn_id" type="string">
+**Obrigatório:** Pelo menos um. ID da transação, que pode ser obtido em `data.statements[0].txn_id`, no primeiro registro da resposta do extrato da conta. É obrigatório informar pelo menos um dos campos: txn_id ou settlement_id. Apenas o ID do pedido não atende a esse requisito
+</ParamField>
+
+<ParamField body="settlement_id" type="string">
+**Obrigatório:** Pelo menos um. Informe pelo menos um dos campos: `txn_id` ou `settlement_id`. Se ambos estiverem preenchidos, `txn_id` tem prioridade; `settlement_id` não é comparado com ele nem usado como alternativa se a consulta não encontrar a transação <Badge color="blue" size="sm">Complementado · api-13-F02</Badge>
+</ParamField>
+
+<ParamField body="merchant_order_id" type="string">
+**Obrigatório:** Não (não obrigatório nesta camada). ID do pedido do comerciante. Este campo não substitui a obrigatoriedade de informar `txn_id` ou `settlement_id`. Se a consulta pelo identificador não encontrar a transação, um pedido pendente correspondente pode retornar detalhes limitados com `txn_status` `5` (`TXN_STATUS_PROCESSING`); o pedido deve pertencer à conta-alvo do pagador <Badge color="blue" size="sm">Complementado · api-13-F03</Badge>
+</ParamField>
+
+<Info>
+**Origem dos parâmetros**
+
+O `txn_id` vem de `data.statements[0].txn_id`, no primeiro registro da resposta de sucesso de [Consultar extrato da conta](/pt-br/api-reference/accounts/get-account-statement) (`/v3/statements`).
+</Info>
+
+## Exemplo de requisição cURL
+
+O exemplo usa credenciais de nível ACCOUNT. Preencha os parâmetros reais e gere a assinatura com base no body.json final.
+
+## Campos da resposta
+
+Os caminhos dos campos partem da raiz da resposta. `[]` indica um elemento de array. Os valores monetários usam strings decimais. Os enums são interpretados conforme cada campo. A estrutura abaixo representa os dados de uma resposta de sucesso. Um valor nulo ou 0, por si só, não indica a conclusão da operação.
+
+<ResponseField name="code" type="integer">
+Código de resultado de negócio; 200 indica sucesso. Os erros de negócio são retornados neste campo, que não equivale ao código de status HTTP.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Descrição do resultado de negócio; em caso de falha, analise esta descrição junto com o campo code para identificar a causa.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Objeto de dados da resposta de sucesso; pode ser null em respostas de erro.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Horário da resposta, em timestamp Unix UTC em milissegundos.
+</ResponseField>
+
+<ResponseField name="data.details" type="object">
+Detalhes da transação.
+</ResponseField>
+
+<ResponseField name="data.details.payee" type="object">
+Dados do recebedor.
+</ResponseField>
+
+<ResponseField name="data.details.payee.name" type="string">
+Nome.
+</ResponseField>
+
+<ResponseField name="data.details.payee.document_id" type="string">
+Número do documento do participante da transação, que pode ser mascarado conforme a configuração do comerciante.
+</ResponseField>
+
+<ResponseField name="data.details.payee.document_type" type="integer">
+Tipo de documento. Enum: 0 DOCUMENT_TYPE_UNSPECIFIED; 1 DOCUMENT_TYPE_CPF; 2 DOCUMENT_TYPE_CNPJ.
+</ResponseField>
+
+<ResponseField name="data.details.payee.bank_account" type="string">
+Número da conta.
+</ResponseField>
+
+<ResponseField name="data.details.payee.bank_account_type" type="integer">
+Tipo de conta bancária. Enum: 0 BANK_ACCOUNT_TYPE_UNSPECIFIED; 1 BANK_ACCOUNT_TYPE_CHECKING; 2 BANK_ACCOUNT_TYPE_SALARY; 3 BANK_ACCOUNT_TYPE_SAVINGS; 4 BANK_ACCOUNT_TYPE_PAYMENT; 5 BANK_ACCOUNT_TYPE_TRANSCTIONAL_PI; 7 BANK_ACCOUNT_TYPE_DEPOSIT; 6 BANK_ACCOUNT_TYPE_GUARANTEED.
+</ResponseField>
+
+<ResponseField name="data.details.payee.bank_branch" type="string">
+Código da agência bancária.
+</ResponseField>
+
+<ResponseField name="data.details.payee.bank_code" type="string">
+ISPB do banco.
+</ResponseField>
+
+<ResponseField name="data.details.payee.bank_name" type="string">
+Nome do banco.
+</ResponseField>
+
+<ResponseField name="data.details.payer" type="object">
+Dados do pagador.
+</ResponseField>
+
+<ResponseField name="data.details.payer.name" type="string">
+Nome.
+</ResponseField>
+
+<ResponseField name="data.details.payer.document_id" type="string">
+Número do documento do participante da transação, que pode ser mascarado conforme a configuração do comerciante.
+</ResponseField>
+
+<ResponseField name="data.details.payer.document_type" type="integer">
+Tipo de documento. Enum: 0 DOCUMENT_TYPE_UNSPECIFIED; 1 DOCUMENT_TYPE_CPF; 2 DOCUMENT_TYPE_CNPJ.
+</ResponseField>
+
+<ResponseField name="data.details.payer.bank_account" type="string">
+Número da conta.
+</ResponseField>
+
+<ResponseField name="data.details.payer.bank_account_type" type="integer">
+Tipo de conta bancária. Enum: 0 BANK_ACCOUNT_TYPE_UNSPECIFIED; 1 BANK_ACCOUNT_TYPE_CHECKING; 2 BANK_ACCOUNT_TYPE_SALARY; 3 BANK_ACCOUNT_TYPE_SAVINGS; 4 BANK_ACCOUNT_TYPE_PAYMENT; 5 BANK_ACCOUNT_TYPE_TRANSCTIONAL_PI; 7 BANK_ACCOUNT_TYPE_DEPOSIT; 6 BANK_ACCOUNT_TYPE_GUARANTEED.
+</ResponseField>
+
+<ResponseField name="data.details.payer.bank_branch" type="string">
+Código da agência bancária.
+</ResponseField>
+
+<ResponseField name="data.details.payer.bank_code" type="string">
+ISPB do banco.
+</ResponseField>
+
+<ResponseField name="data.details.payer.bank_name" type="string">
+Nome do banco.
+</ResponseField>
+
+<ResponseField name="data.details.txn_id" type="string">
+ID da transação.
+</ResponseField>
+
+<ResponseField name="data.details.settlement_id" type="string">
+ID da transação de liquidação. Para TED, o valor fica vazio até a conclusão da liquidação. Também pode estar vazio em uma resposta limitada de processamento. <Badge color="blue" size="sm">Complementado · api-13-F04</Badge>
+</ResponseField>
+
+<ResponseField name="data.details.merchant_order_id" type="string">
+ID do pedido do comerciante informado pelo integrador.
+</ResponseField>
+
+<ResponseField name="data.details.txn_status" type="integer">
+Status da transação. Enum: 0 TXN_STATUS_UNSPECIFIED; 1 TXN_STATUS_PENDING; 2 TXN_STATUS_COMPLETED; 3 TXN_STATUS_FAILED; 4 TXN_STATUS_CANCELLED; 5 TXN_STATUS_PROCESSING; 6 TXN_STATUS_REFUNDED; 7 TXN_STATUS_PARTIALLY_REFUNDED; 8 TXN_STATUS_DISPUTED.
+</ResponseField>
+
+<ResponseField name="data.details.source_type" type="integer">
+Tipo de origem. Enum: 0 SOURCE_TYPE_UNSPECIFIED; 1 SOURCE_TYPE_APP; 2 SOURCE_TYPE_API; 3 SOURCE_TYPE_SCHEDULE; 4 SOURCE_TYPE_BATCH.
+</ResponseField>
+
+<ResponseField name="data.details.amount" type="string">
+Valor da transação, como string decimal.
+</ResponseField>
+
+<ResponseField name="data.details.memo" type="string">
+Observação da transação.
+</ResponseField>
+
+<ResponseField name="data.details.credit_fee" type="string">
+Tarifa do recebedor, como string decimal. Atualmente, este endpoint não preenche o campo: string vazia.
+</ResponseField>
+
+<ResponseField name="data.details.debit_fee" type="string">
+Tarifa do pagador, string decimal.
+</ResponseField>
+
+<ResponseField name="data.details.currency" type="string">
+Moeda.
+</ResponseField>
+
+<ResponseField name="data.details.rejection_reason" type="string">
+Motivo da rejeição ou falha da transação.
+</ResponseField>
+
+<ResponseField name="data.details.created_at" type="integer">
+Data e hora de criação, em timestamp Unix UTC em milissegundos. Pode ser 0 se a criação não tiver ocorrido ou se a data e hora não forem informadas. Este endpoint não preenche o campo: 0.
+</ResponseField>
+
+<ResponseField name="data.details.completed_at" type="integer">
+Data e hora de conclusão. Pode ser 0 se a conclusão ainda não tiver ocorrido. Timestamp Unix UTC em milissegundos, que pode ser 0 se a conclusão não tiver ocorrido ou se a data e hora não forem informadas. Este endpoint não preenche o campo: 0.
+</ResponseField>
+
+<ResponseField name="data.details.pix_details" type="object">
+Dados exclusivos de transações Pix. Atualmente, este endpoint não preenche o campo: null.
+</ResponseField>
+
+<ResponseField name="data.details.pix_details.pix_key" type="string">
+Valor da chave Pix.
+</ResponseField>
+
+<ResponseField name="data.details.pix_details.pix_key_type" type="integer">
+Tipo de chave Pix. Enum: 0 PIX_KEY_TYPE_UNSPECIFIED; 1 PIX_KEY_TYPE_CPF; 2 PIX_KEY_TYPE_CNPJ; 3 PIX_KEY_TYPE_EMAIL; 4 PIX_KEY_TYPE_PHONE; 5 PIX_KEY_TYPE_EVP.
+</ResponseField>
+
+<ResponseField name="data.details.pix_details.qr_code_id" type="string">
+ID do QR Code.
+</ResponseField>
+
+<ResponseField name="data.details.ted_details" type="object">
+Dados exclusivos de transações TED. Atualmente, este endpoint não preenche o campo: null.
+</ResponseField>
+
+<ResponseField name="data.details.ted_details.spb_request_id" type="string">
+ID da requisição SPB da transação TED.
+</ResponseField>
+
+<ResponseField name="data.details.original_settlement_id" type="string">
+ID da transação de liquidação original. Atualmente, este endpoint não preenche o campo: string vazia.
+</ResponseField>
+
+## Respostas
+
+Consulte os exemplos de resposta pelo `code` de negócio no JSON. Verifique o status HTTP e o code de negócio separadamente. Uma resposta HTTP 200 também pode retornar um erro de negócio. <Badge color="orange" size="sm">Corrigido · api-13-F10</Badge>
+
+| `code` | Significado | Ação recomendada |
+| --- | --- | --- |
+| `200` | Requisição bem-sucedida | Leia data e avalie o resultado do processamento conforme o status de negócio deste endpoint. |
+| `400` | Falha na requisição ou validação | Problema nos parâmetros. Verifique e corrija os parâmetros da requisição. |
+| `500` | Erro do sistema | Registre a resposta e confirme primeiro o resultado de negócio. |
+
+O exemplo de sucesso deve corresponder à tabela de campos da resposta: `credit_fee` e `original_settlement_id` são strings vazias, e `pix_details` e `ted_details` são `null` neste endpoint. <Badge color="orange" size="sm">Corrigido · api-13-F11</Badge> Os valores de message e do status de negócio devem ser obtidos da resposta efetiva. Para outros erros de parâmetros, permissões e serviço, consulte [Catálogo de erros](/pt-br/api-reference/error-catalog). Nesta consulta, o `code` `4000` indica que nem `txn_id` nem `settlement_id` foi informado; o `code` `4003003` indica que nenhum detalhe da transação foi encontrado, inclusive nenhum pedido pendente correspondente; e o `code` `4004101` indica que a conta-alvo não está autorizada a acessar a transação ou o pedido pendente. O `code` `4003014` pode indicar uma falha ao consultar os detalhes da transação e, por si só, não significa que o pagamento falhou. O `code` `501` indica indisponibilidade temporária do serviço. Verifique separadamente a mensagem retornada e o status da transação. <Badge color="blue" size="sm">Complementado · api-13-F09</Badge> Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados.
+
+<Tip>
+Para testar este endpoint, envie o exemplo de requisição para a Base URL do Sandbox `https://ebanking-openapi-sandbox.pagsmile.com.br` com sua AK/SK de Sandbox. Assine cada requisição conforme descrito em [Ambientes e credenciais](/pt-br/environments-and-credentials#assinatura-de-requisições-à-api).
+</Tip>
+
+
+<Accordion title="Correções em relação ao documento original (8)" icon="clipboard-check">
+Esta página foi conferida com o código-fonte da Pagsmile Open API em 2026-11-10. Cada alteração abaixo está marcada na página com um selo que mostra o seu ID.
+
+| ID | Alteração | Local | Texto do documento original | Texto atualizado |
+| --- | --- | --- | --- | --- |
+| api-13-F01 | Complementado (ausente no original) | Permissions and account ownership | ACCOUNT, ou USER com o header da conta-alvo. | Use credenciais ACCOUNT para a conta vinculada a essas credenciais, ou credenciais USER com os dois headers `X-ISPB` e `X-Account-Number` identificando uma conta de titularidade desse usuário. Com credenciais ACCOUNT, omita os dois headers da conta-alvo ou informe ambos com valores iguais aos da conta vinculada; valores vazios ou divergentes são rejeitados. Credenciais PLATFORM não são aceitas. O identificador do banco e o número da conta-alvo devem corresponder aos dados do pagador ou do recebedor da transação. |
+| api-13-F02 | Complementado (ausente no original) | Request parameters | Informe pelo menos um dos campos: txn_id ou settlement_id | Informe pelo menos um dos campos: txn_id ou settlement_id. Se ambos estiverem preenchidos, txn_id tem prioridade; settlement_id não é comparado com ele nem usado como alternativa se a consulta não encontrar a transação |
+| api-13-F03 | Complementado (ausente no original) | Request parameters | ID do pedido do comerciante | ID do pedido do comerciante. Este campo não substitui a obrigatoriedade de informar txn_id ou settlement_id. Se a consulta pelo identificador não encontrar a transação, um pedido pendente correspondente pode retornar detalhes limitados com txn_status 5 (TXN_STATUS_PROCESSING); o pedido deve pertencer à conta-alvo do pagador |
+| api-13-F04 | Complementado (ausente no original) | Response fields | ID da transação de liquidação. | ID da transação de liquidação. Para TED, o valor fica vazio até a conclusão da liquidação. Também pode estar vazio em uma resposta limitada de processamento. |
+| api-13-F08 | Complementado (ausente no original) | Behavior and handling | Consulte os detalhes de um pagamento iniciado para conferir o status da transação, o valor, o recebedor e os identificadores da operação. | Consulte os detalhes de um pagamento iniciado para conferir o status da transação, o valor, o recebedor e os identificadores da operação. Se a transação ainda não estiver disponível, mas o merchant_order_id informado identificar um pedido pendente da conta-alvo do pagador, a resposta conterá detalhes limitados: txn_status será 5 (TXN_STATUS_PROCESSING), source_type será 2 (SOURCE_TYPE_API), e txn_id e merchant_order_id serão retornados. Nessa resposta, payee e payer serão null, enquanto settlement_id, amount, memo, debit_fee, currency e rejection_reason serão strings vazias. Consulte novamente usando os identificadores estáveis; campos vazios não significam que o pagamento foi concluído. |
+| api-13-F09 | Complementado (ausente no original) | Responses / error handling | Para outros erros de parâmetros, permissões e serviço, consulte Catálogo de erros. | Para outros erros de parâmetros, permissões e serviço, consulte Catálogo de erros. Nesta consulta, o code 4000 indica que nem txn_id nem settlement_id foi informado; o code 4003003 indica que nenhum detalhe da transação foi encontrado, inclusive nenhum pedido pendente correspondente; e o code 4004101 indica que a conta-alvo não está autorizada a acessar a transação ou o pedido pendente. O code 4003014 pode indicar uma falha ao consultar os detalhes da transação e, por si só, não significa que o pagamento falhou. O code 501 indica indisponibilidade temporária do serviço. Verifique separadamente a mensagem retornada e o status da transação. |
+| api-13-F10 | Corrigido (não correspondia ao código) | Responses / Request succeeded JSON example | `{ "code": 200, "message": "success", "data": { "details": { "payee": {}, "payer": {}, "txn_id": "example-txn_id", "settlement_id": "example-settlement_id", "merchant_order_id": "example-merchant_order_id", "txn_status": 0, "source_type": 0, "amount": "10.00", "memo": "example-memo", "credit_fee": "example-credit_fee", "debit_fee": "example-debit_fee", "currency": "BRL", "rejection_reason": "example-rejection_reason", "created_at": 0, "completed_at": 0, "pix_details": {}, "ted_details": {}, "original_settlement_id": "example-original_settlement_id" } }, "time": 1791792000000 }` | `{ "code": 200, "message": "success", "data": { "details": { "payee": { "name": "Recebedor de exemplo", "document_id": "123****8901", "document_type": 1, "bank_account": "00012345", "bank_account_type": 1, "bank_branch": "0001", "bank_code": "12345678", "bank_name": "Banco do recebedor de exemplo" }, "payer": { "name": "Pagador de exemplo", "document_id": "987****4321", "document_type": 1, "bank_account": "00098765", "bank_account_type": 4, "bank_branch": "0001", "bank_code": "87654321", "bank_name": "Banco do pagador de exemplo" }, "txn_id": "example-txn_id", "settlement_id": "example-settlement_id", "merchant_order_id": "example-merchant_order_id", "txn_status": 2, "source_type": 2, "amount": "10.00", "memo": "Pagamento de exemplo", "credit_fee": "", "debit_fee": "0.00", "currency": "BRL", "rejection_reason": "", "created_at": 0, "completed_at": 0, "pix_details": null, "ted_details": null, "original_settlement_id": "" }, "error": null, "result": null }, "time": 1791792000000 }` |
+| api-13-F11 | Corrigido (não correspondia ao código) | Response fields versus success example | Os exemplos ilustram a estrutura da resposta. | O exemplo de sucesso deve corresponder à tabela de campos da resposta: credit_fee e original_settlement_id são strings vazias, e pix_details e ted_details são null neste endpoint. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "txn_id": "replace-with-transaction-id"
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/transfers/details' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${ACCOUNT_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Requisição bem-sucedida
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "details": {
+      "payee": {
+        "name": "Recebedor de exemplo",
+        "document_id": "123****8901",
+        "document_type": 1,
+        "bank_account": "00012345",
+        "bank_account_type": 1,
+        "bank_branch": "0001",
+        "bank_code": "12345678",
+        "bank_name": "Banco do recebedor de exemplo"
+      },
+      "payer": {
+        "name": "Pagador de exemplo",
+        "document_id": "987****4321",
+        "document_type": 1,
+        "bank_account": "00098765",
+        "bank_account_type": 4,
+        "bank_branch": "0001",
+        "bank_code": "87654321",
+        "bank_name": "Banco do pagador de exemplo"
+      },
+      "txn_id": "example-txn_id",
+      "settlement_id": "example-settlement_id",
+      "merchant_order_id": "example-merchant_order_id",
+      "txn_status": 2,
+      "source_type": 2,
+      "amount": "10.00",
+      "memo": "Pagamento de exemplo",
+      "credit_fee": "",
+      "debit_fee": "0.00",
+      "currency": "BRL",
+      "rejection_reason": "",
+      "created_at": 0,
+      "completed_at": 0,
+      "pix_details": null,
+      "ted_details": null,
+      "original_settlement_id": ""
+    },
+    "error": null,
+    "result": null
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Falha na requisição ou validação
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 Erro do sistema
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

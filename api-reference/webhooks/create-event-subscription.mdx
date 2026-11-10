@@ -1,0 +1,167 @@
+---
+title: "Create event subscription"
+description: "Configure callback URLs for incoming payment, outgoing payment, and refund events."
+api: "POST /v3/webhooks/create"
+keywords: ["/v3/webhooks/create"]
+---
+
+## Behavior and handling
+
+Configure callback URLs for incoming payment, outgoing payment, and refund events. For the same subscription owner, app, and event type, creating an existing active subscription returns business code `4001013`. `ACCOUNT` subscriptions are identified by the bound ISPB and account number; `USER` subscriptions are identified by the `USER` and do not vary by `account_number`; `PLATFORM` subscriptions are identified by the platform tenant. For `ACCOUNT` and `USER` credentials, creating an existing inactive subscription reactivates it and replaces its callback URL while preserving its `webhook_id` and original `created_at`. For `PLATFORM` credentials, creation returns `4001013` even if the existing subscription is inactive; update the existing subscription instead. <Badge color="blue" size="sm">Added · api-27-F06</Badge>
+
+Select the event and account scope first, then configure the callback URL. See the parameter table for event types and applicable credential scopes.
+
+## Permissions and account ownership
+
+Authorization depends on the subscription owner identity and scope. For this endpoint, omit `X-ISPB` and `X-Account-Number` when using `USER` or `PLATFORM` credentials, including explicitly empty headers. For `USER` transaction subscriptions, provide the required `account_number` in the JSON body instead. <Badge color="blue" size="sm">Added · api-27-F03</Badge> See [Webhooks](/api-reference/webhooks/overview). Requests must follow [Environments & Credentials](/environments-and-credentials). With `ACCOUNT` credentials, a subscription cannot be created or reactivated while the bound account is closed or undergoing closure. <Badge color="blue" size="sm">Added · api-27-F04</Badge>
+
+## Request parameters
+
+<ParamField body="event_type" type="integer" required>
+Webhook event types: `1 PIX_IN`; `2 PIX_OUT`; `3 REFUND_IN`; `4 REFUND_OUT`; `5 VA_ACCOUNT_KYB`; `6 MASTER_ACCOUNT_KYB`. `ACCOUNT` and `USER` credentials can use values 1–5. `PLATFORM` credentials can use only value `6`. Value `0` is not accepted for creation. <Badge color="blue" size="sm">Added · api-27-F01</Badge>
+</ParamField>
+
+<ParamField body="callback_url" type="string" required>
+Webhook callback URL. Leading and trailing whitespace is removed; the value must be nonempty after trimming. Use your actual HTTPS callback endpoint. Creation does not confirm that the URL is reachable. <Badge color="blue" size="sm">Added · api-27-F05</Badge>
+</ParamField>
+
+<ParamField body="account_number" type="string">
+**Required:** Conditionally required. Trim leading and trailing whitespace first. Preserve leading zeros. Optional for `ACCOUNT` credentials; if provided, it must match the bound account number. Required when `USER` credentials subscribe to transaction events. For `USER` transaction subscriptions, this field is currently required for request validation but does not create an account-specific subscription: the subscription is identified by the `USER`, app, and event type. Omit this field for `USER` event `5` and `PLATFORM` event `6`; a nonempty value is rejected. <Badge color="blue" size="sm">Added · api-27-F02</Badge>
+</ParamField>
+
+## cURL request example
+
+The example uses ACCOUNT-level credentials. Enter the actual parameters and generate the signature from the final body.json.
+
+## Response fields
+
+Field paths start at the response root. `[]` indicates an array element. Amounts use decimal strings. Enum values are defined separately for each field. The structure below describes a success response. A null value or 0 alone does not indicate that processing is complete.
+
+<ResponseField name="code" type="integer">
+Business result code. A value of 200 indicates success. Business errors are returned in this field. It is not the HTTP status code.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Business result description. On failure, use this with code to determine the cause.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Data object in a successful response. Can be null in an error response.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Response time as a UTC Unix timestamp in milliseconds.
+</ResponseField>
+
+<ResponseField name="data.webhook_id" type="string">
+Event subscription ID.
+</ResponseField>
+
+<ResponseField name="data.event_type" type="integer">
+Subscription or timeline event type. Enum values: 0 WEBHOOK_EVENT_TYPE_UNSPECIFIED; 1 WEBHOOK_EVENT_TYPE_PIX_IN; 2 WEBHOOK_EVENT_TYPE_PIX_OUT; 3 WEBHOOK_EVENT_TYPE_REFUND_IN; 4 WEBHOOK_EVENT_TYPE_REFUND_OUT; 5 WEBHOOK_EVENT_TYPE_VA_ACCOUNT_KYB; 6 WEBHOOK_EVENT_TYPE_MASTER_ACCOUNT_KYB.
+</ResponseField>
+
+<ResponseField name="data.callback_url" type="string">
+Callback URL for the subscribed event.
+</ResponseField>
+
+<ResponseField name="data.status" type="integer">
+Current subscription status. Values: `0 BASE_STATUS_UNSPECIFIED`; `1 BASE_STATUS_ACTIVE`; `2 BASE_STATUS_INACTIVE`. A successful creation or reactivation returns `1 BASE_STATUS_ACTIVE`. <Badge color="blue" size="sm">Added · api-27-F07</Badge>
+</ResponseField>
+
+<ResponseField name="data.created_at" type="integer">
+Creation time in UTC Unix milliseconds. A successful new subscription is already created. Reactivating an existing subscription preserves its original creation timestamp. A value of `0` does not mean that creation is pending. <Badge color="orange" size="sm">Corrected · api-27-F08</Badge>
+</ResponseField>
+
+## Responses
+
+View response examples by the business `code` in the JSON response. Check the HTTP status and business code separately. A malformed JSON body can return HTTP `400` with a text error instead of the JSON response envelope; check the response content type before parsing JSON. <Badge color="blue" size="sm">Added · api-27-F13</Badge> An HTTP 200 response can also return a business error.
+
+| `code` | Meaning | Recommended action |
+| --- | --- | --- |
+| `200` | Request succeeded | Read data and determine the result using the business status defined for this endpoint. |
+| `400` | Request or validation failed | Parameter issue. Check and correct the request parameters. |
+| `500` | System error | Log the response and confirm the business result first. |
+
+The examples illustrate the response structure. Use the actual response for message and business status values. <Badge color="orange" size="sm">Corrected · api-27-F11</Badge> See [Error Catalog](/api-reference/error-catalog) for other parameter, permission, and service errors. For this endpoint, important business codes include `4000` for a missing `event_type`, `callback_url`, or required `USER` `account_number`; `4004003` for a credential/event/account scope mismatch; `4010` for an invalid subscription signing credential; `4001013` for an existing subscription conflict; and `501` when the subscription service is unavailable. <Badge color="blue" size="sm">Added · api-27-F12</Badge> This section does not imply that the endpoint returns only these three code values.
+
+<Tip>
+To try this endpoint, send the request example to the Sandbox base URL `https://ebanking-openapi-sandbox.pagsmile.com.br` with your Sandbox AK/SK. Sign every request as described in [Environments & Credentials](/environments-and-credentials#api-request-signing).
+</Tip>
+
+
+<Accordion title="Corrections to the source document (11)" icon="clipboard-check">
+This page was checked against the Pagsmile Open API source code on 2026-11-10. Each change below is marked in the page with a badge that shows its ID.
+
+| ID | Change | Location | Source document text | Updated text |
+| --- | --- | --- | --- | --- |
+| api-27-F01 | Added (missing in the source) | Request parameters | Webhook event types: 1 PIX_IN; 2 PIX_OUT; 3 REFUND_IN; 4 REFUND_OUT. | Webhook event types: 1 PIX_IN; 2 PIX_OUT; 3 REFUND_IN; 4 REFUND_OUT; 5 VA_ACCOUNT_KYB; 6 MASTER_ACCOUNT_KYB. ACCOUNT and USER credentials can use values 1–5. PLATFORM credentials can use only value 6. Value 0 is not accepted for creation. |
+| api-27-F02 | Added (missing in the source) | Request parameters | Trim leading and trailing whitespace first. Preserve leading zeros. Optional for ACCOUNT credentials. If provided, the value must match the bound account number. Required when USER credentials subscribe to transaction events. | Trim leading and trailing whitespace first. Preserve leading zeros. Optional for ACCOUNT credentials; if provided, it must match the bound account number. Required when USER credentials subscribe to transaction events. For USER transaction subscriptions, this field is currently required for request validation but does not create an account-specific subscription: the subscription is identified by the USER, app, and event type. Omit this field for USER event 5 and PLATFORM event 6; a nonempty value is rejected. |
+| api-27-F03 | Added (missing in the source) | Permissions and account ownership | Authorization depends on the subscription owner identity and scope. | Authorization depends on the subscription owner identity and scope. For this endpoint, omit X-ISPB and X-Account-Number when using USER or PLATFORM credentials, including explicitly empty headers. For USER transaction subscriptions, provide the required account_number in the JSON body instead. |
+| api-27-F04 | Added (missing in the source) | Permissions and account ownership | Requests must follow Environments & Credentials. | Requests must follow Environments & Credentials. With ACCOUNT credentials, a subscription cannot be created or reactivated while the bound account is closed or undergoing closure. |
+| api-27-F05 | Added (missing in the source) | Request parameters | Webhook callback URL | Webhook callback URL. Leading and trailing whitespace is removed; the value must be nonempty after trimming. Use your actual HTTPS callback endpoint. Creation does not confirm that the URL is reachable. |
+| api-27-F06 | Added (missing in the source) | Behavior and handling | Configure callback URLs for incoming payment, outgoing payment, and refund events. | Configure callback URLs for incoming payment, outgoing payment, and refund events. For the same subscription owner, app, and event type, creating an existing active subscription returns business code 4001013. ACCOUNT subscriptions are identified by the bound ISPB and account number; USER subscriptions are identified by the USER and do not vary by account_number; PLATFORM subscriptions are identified by the platform tenant. For ACCOUNT and USER credentials, creating an existing inactive subscription reactivates it and replaces its callback URL while preserving its webhook_id and original created_at. For PLATFORM credentials, creation returns 4001013 even if the existing subscription is inactive; update the existing subscription instead. |
+| api-27-F07 | Added (missing in the source) | Response fields | Current business status, interpreted according to the enum listed for this field. Values: 0 BASE_STATUS_UNSPECIFIED; 1 BASE_STATUS_ACTIVE; 2 BASE_STATUS_INACTIVE. | Current subscription status. Values: 0 BASE_STATUS_UNSPECIFIED; 1 BASE_STATUS_ACTIVE; 2 BASE_STATUS_INACTIVE. A successful creation or reactivation returns 1 BASE_STATUS_ACTIVE. |
+| api-27-F08 | Corrected (did not match the code) | Response fields | Creation time in UTC Unix milliseconds. Can be 0 if creation has not occurred or the time is not provided. | Creation time in UTC Unix milliseconds. A successful new subscription is already created. Reactivating an existing subscription preserves its original creation timestamp. A value of 0 does not mean that creation is pending. |
+| api-27-F11 | Corrected (did not match the code) | Responses / Request succeeded | `{ "code": 200, "message": "success", "data": { "webhook_id": "example-webhook_id", "event_type": 1, "callback_url": "example-callback_url", "status": 0, "created_at": 0 }, "time": 1791792000000 }` | `{ "code": 200, "message": "success", "data": { "webhook_id": "example-webhook_id", "event_type": 1, "callback_url": "https://merchant.example.test/webhooks", "status": 1, "created_at": 1791792000000, "error": null, "result": null }, "time": 1791792000000 }` |
+| api-27-F12 | Added (missing in the source) | Responses | See Error Catalog for other parameter, permission, and service errors. | See Error Catalog for other parameter, permission, and service errors. For this endpoint, important business codes include 4000 for a missing event_type, callback_url, or required USER account_number; 4004003 for a credential/event/account scope mismatch; 4010 for an invalid subscription signing credential; 4001013 for an existing subscription conflict; and 501 when the subscription service is unavailable. |
+| api-27-F13 | Added (missing in the source) | Responses | Check the HTTP status and business code separately. | Check the HTTP status and business code separately. A malformed JSON body can return HTTP 400 with a text error instead of the JSON response envelope; check the response content type before parsing JSON. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "event_type": 1,
+  "callback_url": "https://merchant.example.test/webhooks"
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/webhooks/create' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${ACCOUNT_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Request succeeded
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "webhook_id": "example-webhook_id",
+    "event_type": 1,
+    "callback_url": "https://merchant.example.test/webhooks",
+    "status": 1,
+    "created_at": 1791792000000,
+    "error": null,
+    "result": null
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Request or validation failed
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 System error
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

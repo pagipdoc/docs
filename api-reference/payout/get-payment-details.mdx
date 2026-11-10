@@ -1,0 +1,340 @@
+---
+title: "Get payment details"
+description: "Query the details of an initiated payment to verify the transaction status, amount, payee, and business identifiers."
+api: "POST /v3/transfers/details"
+keywords: ["/v3/transfers/details"]
+---
+
+## Behavior and handling
+
+Query the details of an initiated payment to verify the transaction status, amount, payee, and business identifiers. If the transaction is not yet available but the supplied `merchant_order_id` identifies a pending order for the target payer account, the response contains limited details: `txn_status` is `5` (`TXN_STATUS_PROCESSING`), `source_type` is `2` (`SOURCE_TYPE_API`), and `txn_id` and `merchant_order_id` are returned. In that response, `payee` and `payer` are `null`, while `settlement_id`, `amount`, `memo`, `debit_fee`, `currency`, and `rejection_reason` are empty strings. Query again using the stable identifiers; empty fields do not mean the payment is complete. <Badge color="blue" size="sm">Added · api-13-F08</Badge>
+
+### Payment event notifications
+
+Pix payments use PIX_OUT events to synchronize results. Confirm TED and internal transfer results through transaction details, status, and account statement entries. This version does not provide separate notification event types for TED or internal transfers.
+
+## Permissions and account ownership
+
+Use `ACCOUNT` credentials for the account bound to those credentials, or `USER` credentials with both `X-ISPB` and `X-Account-Number` identifying an account owned by that user. With `ACCOUNT` credentials, omit both target headers or provide both with values matching the bound account; empty or mismatched values are rejected. `PLATFORM` credentials are not accepted. The target account must match either the payer's or the payee's bank identifier and account number for the transaction. <Badge color="blue" size="sm">Added · api-13-F01</Badge> Requests must follow [Environments & Credentials](/environments-and-credentials).
+
+## Request parameters
+
+<ParamField body="txn_id" type="string">
+**Required:** At least one. Transaction ID, which can be taken from `data.statements[0].txn_id` in the first record of the account statement response. You must provide at least one of txn_id or settlement_id. An order ID alone does not satisfy this requirement
+</ParamField>
+
+<ParamField body="settlement_id" type="string">
+**Required:** At least one. Provide at least one of `txn_id` or `settlement_id`. If both are nonempty, `txn_id` takes precedence; `settlement_id` is not checked against it and is not tried as a fallback if that lookup finds no transaction <Badge color="blue" size="sm">Added · api-13-F02</Badge>
+</ParamField>
+
+<ParamField body="merchant_order_id" type="string">
+**Required:** No (not enforced at this layer). Merchant order ID. This field does not replace the requirement to provide `txn_id` or `settlement_id`. If the identifier lookup finds no transaction, a matching pending order can return limited details with `txn_status` `5` (`TXN_STATUS_PROCESSING`); the order must belong to the target payer account <Badge color="blue" size="sm">Added · api-13-F03</Badge>
+</ParamField>
+
+<Info>
+**Parameter sources**
+
+`txn_id` comes from `data.statements[0].txn_id` in the first record of a successful [Get account statement](/api-reference/accounts/get-account-statement) (`/v3/statements`) response.
+</Info>
+
+## cURL request example
+
+The example uses ACCOUNT-level credentials. Enter the actual parameters and generate the signature from the final body.json.
+
+## Response fields
+
+Field paths start at the response root. `[]` indicates an array element. Amounts use decimal strings. Enum values are defined separately for each field. The structure below describes a success response. A null value or 0 alone does not indicate that processing is complete.
+
+<ResponseField name="code" type="integer">
+Business result code. A value of 200 indicates success. Business errors are returned in this field. It is not the HTTP status code.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Business result description. On failure, use this with code to determine the cause.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Data object in a successful response. Can be null in an error response.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Response time as a UTC Unix timestamp in milliseconds.
+</ResponseField>
+
+<ResponseField name="data.details" type="object">
+Transaction details.
+</ResponseField>
+
+<ResponseField name="data.details.payee" type="object">
+Payee details.
+</ResponseField>
+
+<ResponseField name="data.details.payee.name" type="string">
+Name.
+</ResponseField>
+
+<ResponseField name="data.details.payee.document_id" type="string">
+Transaction participant's document number. It may be masked based on the merchant's configuration.
+</ResponseField>
+
+<ResponseField name="data.details.payee.document_type" type="integer">
+Document type. Enum: 0 DOCUMENT_TYPE_UNSPECIFIED; 1 DOCUMENT_TYPE_CPF; 2 DOCUMENT_TYPE_CNPJ.
+</ResponseField>
+
+<ResponseField name="data.details.payee.bank_account" type="string">
+Account number.
+</ResponseField>
+
+<ResponseField name="data.details.payee.bank_account_type" type="integer">
+Bank account type. Enum: 0 BANK_ACCOUNT_TYPE_UNSPECIFIED; 1 BANK_ACCOUNT_TYPE_CHECKING; 2 BANK_ACCOUNT_TYPE_SALARY; 3 BANK_ACCOUNT_TYPE_SAVINGS; 4 BANK_ACCOUNT_TYPE_PAYMENT; 5 BANK_ACCOUNT_TYPE_TRANSCTIONAL_PI; 7 BANK_ACCOUNT_TYPE_DEPOSIT; 6 BANK_ACCOUNT_TYPE_GUARANTEED.
+</ResponseField>
+
+<ResponseField name="data.details.payee.bank_branch" type="string">
+Bank branch code.
+</ResponseField>
+
+<ResponseField name="data.details.payee.bank_code" type="string">
+Bank ISPB.
+</ResponseField>
+
+<ResponseField name="data.details.payee.bank_name" type="string">
+Bank name.
+</ResponseField>
+
+<ResponseField name="data.details.payer" type="object">
+Payer details.
+</ResponseField>
+
+<ResponseField name="data.details.payer.name" type="string">
+Name.
+</ResponseField>
+
+<ResponseField name="data.details.payer.document_id" type="string">
+Transaction participant's document number. It may be masked based on the merchant's configuration.
+</ResponseField>
+
+<ResponseField name="data.details.payer.document_type" type="integer">
+Document type. Enum: 0 DOCUMENT_TYPE_UNSPECIFIED; 1 DOCUMENT_TYPE_CPF; 2 DOCUMENT_TYPE_CNPJ.
+</ResponseField>
+
+<ResponseField name="data.details.payer.bank_account" type="string">
+Account number.
+</ResponseField>
+
+<ResponseField name="data.details.payer.bank_account_type" type="integer">
+Bank account type. Enum: 0 BANK_ACCOUNT_TYPE_UNSPECIFIED; 1 BANK_ACCOUNT_TYPE_CHECKING; 2 BANK_ACCOUNT_TYPE_SALARY; 3 BANK_ACCOUNT_TYPE_SAVINGS; 4 BANK_ACCOUNT_TYPE_PAYMENT; 5 BANK_ACCOUNT_TYPE_TRANSCTIONAL_PI; 7 BANK_ACCOUNT_TYPE_DEPOSIT; 6 BANK_ACCOUNT_TYPE_GUARANTEED.
+</ResponseField>
+
+<ResponseField name="data.details.payer.bank_branch" type="string">
+Bank branch code.
+</ResponseField>
+
+<ResponseField name="data.details.payer.bank_code" type="string">
+Bank ISPB.
+</ResponseField>
+
+<ResponseField name="data.details.payer.bank_name" type="string">
+Bank name.
+</ResponseField>
+
+<ResponseField name="data.details.txn_id" type="string">
+Transaction ID.
+</ResponseField>
+
+<ResponseField name="data.details.settlement_id" type="string">
+Settlement transaction ID. For TED, this value is empty until settlement is complete. It can also be empty in a limited processing response. <Badge color="blue" size="sm">Added · api-13-F04</Badge>
+</ResponseField>
+
+<ResponseField name="data.details.merchant_order_id" type="string">
+Caller's merchant order ID.
+</ResponseField>
+
+<ResponseField name="data.details.txn_status" type="integer">
+Transaction status. Enum: 0 TXN_STATUS_UNSPECIFIED; 1 TXN_STATUS_PENDING; 2 TXN_STATUS_COMPLETED; 3 TXN_STATUS_FAILED; 4 TXN_STATUS_CANCELLED; 5 TXN_STATUS_PROCESSING; 6 TXN_STATUS_REFUNDED; 7 TXN_STATUS_PARTIALLY_REFUNDED; 8 TXN_STATUS_DISPUTED.
+</ResponseField>
+
+<ResponseField name="data.details.source_type" type="integer">
+Source type. Enum: 0 SOURCE_TYPE_UNSPECIFIED; 1 SOURCE_TYPE_APP; 2 SOURCE_TYPE_API; 3 SOURCE_TYPE_SCHEDULE; 4 SOURCE_TYPE_BATCH.
+</ResponseField>
+
+<ResponseField name="data.details.amount" type="string">
+Transaction amount as a decimal string.
+</ResponseField>
+
+<ResponseField name="data.details.memo" type="string">
+Transaction note.
+</ResponseField>
+
+<ResponseField name="data.details.credit_fee" type="string">
+Credit-side fee, as a decimal string. This endpoint does not populate this field: empty string.
+</ResponseField>
+
+<ResponseField name="data.details.debit_fee" type="string">
+Debit-side fee, decimal string.
+</ResponseField>
+
+<ResponseField name="data.details.currency" type="string">
+Currency.
+</ResponseField>
+
+<ResponseField name="data.details.rejection_reason" type="string">
+Transaction rejection or failure reason.
+</ResponseField>
+
+<ResponseField name="data.details.created_at" type="integer">
+Creation time, as a UTC Unix timestamp in milliseconds. Can be 0 if creation has not occurred or the time is not provided. This endpoint does not populate this field: 0.
+</ResponseField>
+
+<ResponseField name="data.details.completed_at" type="integer">
+Completion time. Can be 0 if completion has not occurred. UTC Unix timestamp in milliseconds; can be 0 if completion has not occurred or the time is not provided. This endpoint does not populate this field: 0.
+</ResponseField>
+
+<ResponseField name="data.details.pix_details" type="object">
+Pix-specific transaction details. This endpoint does not populate this field: null.
+</ResponseField>
+
+<ResponseField name="data.details.pix_details.pix_key" type="string">
+Pix key value.
+</ResponseField>
+
+<ResponseField name="data.details.pix_details.pix_key_type" type="integer">
+Pix key type. Enum: 0 PIX_KEY_TYPE_UNSPECIFIED; 1 PIX_KEY_TYPE_CPF; 2 PIX_KEY_TYPE_CNPJ; 3 PIX_KEY_TYPE_EMAIL; 4 PIX_KEY_TYPE_PHONE; 5 PIX_KEY_TYPE_EVP.
+</ResponseField>
+
+<ResponseField name="data.details.pix_details.qr_code_id" type="string">
+QR code ID.
+</ResponseField>
+
+<ResponseField name="data.details.ted_details" type="object">
+TED-specific transaction details. This endpoint does not populate this field: null.
+</ResponseField>
+
+<ResponseField name="data.details.ted_details.spb_request_id" type="string">
+SPB request ID for the TED transaction.
+</ResponseField>
+
+<ResponseField name="data.details.original_settlement_id" type="string">
+Original transaction's settlement transaction ID. This endpoint does not populate this field: empty string.
+</ResponseField>
+
+## Responses
+
+View response examples by the business `code` in the JSON response. Check the HTTP status and business code separately. An HTTP 200 response can also return a business error. <Badge color="orange" size="sm">Corrected · api-13-F10</Badge>
+
+| `code` | Meaning | Recommended action |
+| --- | --- | --- |
+| `200` | Request succeeded | Read data and determine the result using the business status defined for this endpoint. |
+| `400` | Request or validation failed | Parameter issue. Check and correct the request parameters. |
+| `500` | System error | Log the response and confirm the business result first. |
+
+The success example must match the response fields table: `credit_fee` and `original_settlement_id` are empty strings, and `pix_details` and `ted_details` are `null` for this endpoint. <Badge color="orange" size="sm">Corrected · api-13-F11</Badge> Use the actual response for message and business status values. See [Error Catalog](/api-reference/error-catalog) for other parameter, permission, and service errors. For this query, code `4000` means neither `txn_id` nor `settlement_id` was provided; code `4003003` means no transaction details were found, including no matching pending order; and code `4004101` means the target account is not authorized to access the transaction or pending order. Code `4003014` can indicate a failure while retrieving transaction details and does not, by itself, mean the payment failed. Code `501` indicates temporary service unavailability. Check the returned message and transaction status separately. <Badge color="blue" size="sm">Added · api-13-F09</Badge> This section does not imply that the endpoint returns only these three code values.
+
+<Tip>
+To try this endpoint, send the request example to the Sandbox base URL `https://ebanking-openapi-sandbox.pagsmile.com.br` with your Sandbox AK/SK. Sign every request as described in [Environments & Credentials](/environments-and-credentials#api-request-signing).
+</Tip>
+
+
+<Accordion title="Corrections to the source document (8)" icon="clipboard-check">
+This page was checked against the Pagsmile Open API source code on 2026-11-10. Each change below is marked in the page with a badge that shows its ID.
+
+| ID | Change | Location | Source document text | Updated text |
+| --- | --- | --- | --- | --- |
+| api-13-F01 | Added (missing in the source) | Permissions and account ownership | ACCOUNT, or USER with the target account header. | Use ACCOUNT credentials for the account bound to those credentials, or USER credentials with both `X-ISPB` and `X-Account-Number` identifying an account owned by that user. With ACCOUNT credentials, omit both target headers or provide both with values matching the bound account; empty or mismatched values are rejected. PLATFORM credentials are not accepted. The target account must match either the payer's or the payee's bank identifier and account number for the transaction. |
+| api-13-F02 | Added (missing in the source) | Request parameters | Provide at least one of txn_id or settlement_id | Provide at least one of txn_id or settlement_id. If both are nonempty, txn_id takes precedence; settlement_id is not checked against it and is not tried as a fallback if that lookup finds no transaction |
+| api-13-F03 | Added (missing in the source) | Request parameters | Merchant order ID | Merchant order ID. This field does not replace the requirement to provide txn_id or settlement_id. If the identifier lookup finds no transaction, a matching pending order can return limited details with txn_status 5 (TXN_STATUS_PROCESSING); the order must belong to the target payer account |
+| api-13-F04 | Added (missing in the source) | Response fields | Settlement transaction ID. | Settlement transaction ID. For TED, this value is empty until settlement is complete. It can also be empty in a limited processing response. |
+| api-13-F08 | Added (missing in the source) | Behavior and handling | Query the details of an initiated payment to verify the transaction status, amount, payee, and business identifiers. | Query the details of an initiated payment to verify the transaction status, amount, payee, and business identifiers. If the transaction is not yet available but the supplied merchant_order_id identifies a pending order for the target payer account, the response contains limited details: txn_status is 5 (TXN_STATUS_PROCESSING), source_type is 2 (SOURCE_TYPE_API), and txn_id and merchant_order_id are returned. In that response, payee and payer are null, while settlement_id, amount, memo, debit_fee, currency, and rejection_reason are empty strings. Query again using the stable identifiers; empty fields do not mean the payment is complete. |
+| api-13-F09 | Added (missing in the source) | Responses / error handling | See Error Catalog for other parameter, permission, and service errors. | See Error Catalog for other parameter, permission, and service errors. For this query, code 4000 means neither txn_id nor settlement_id was provided; code 4003003 means no transaction details were found, including no matching pending order; and code 4004101 means the target account is not authorized to access the transaction or pending order. Code 4003014 can indicate a failure while retrieving transaction details and does not, by itself, mean the payment failed. Code 501 indicates temporary service unavailability. Check the returned message and transaction status separately. |
+| api-13-F10 | Corrected (did not match the code) | Responses / Request succeeded JSON example | `{ "code": 200, "message": "success", "data": { "details": { "payee": {}, "payer": {}, "txn_id": "example-txn_id", "settlement_id": "example-settlement_id", "merchant_order_id": "example-merchant_order_id", "txn_status": 0, "source_type": 0, "amount": "10.00", "memo": "example-memo", "credit_fee": "example-credit_fee", "debit_fee": "example-debit_fee", "currency": "BRL", "rejection_reason": "example-rejection_reason", "created_at": 0, "completed_at": 0, "pix_details": {}, "ted_details": {}, "original_settlement_id": "example-original_settlement_id" } }, "time": 1791792000000 }` | `{ "code": 200, "message": "success", "data": { "details": { "payee": { "name": "Example Payee", "document_id": "123****8901", "document_type": 1, "bank_account": "00012345", "bank_account_type": 1, "bank_branch": "0001", "bank_code": "12345678", "bank_name": "Example Payee Bank" }, "payer": { "name": "Example Payer", "document_id": "987****4321", "document_type": 1, "bank_account": "00098765", "bank_account_type": 4, "bank_branch": "0001", "bank_code": "87654321", "bank_name": "Example Payer Bank" }, "txn_id": "example-txn_id", "settlement_id": "example-settlement_id", "merchant_order_id": "example-merchant_order_id", "txn_status": 2, "source_type": 2, "amount": "10.00", "memo": "Example payment", "credit_fee": "", "debit_fee": "0.00", "currency": "BRL", "rejection_reason": "", "created_at": 0, "completed_at": 0, "pix_details": null, "ted_details": null, "original_settlement_id": "" }, "error": null, "result": null }, "time": 1791792000000 }` |
+| api-13-F11 | Corrected (did not match the code) | Response fields versus success example | The examples illustrate the response structure. | The success example must match the response fields table: credit_fee and original_settlement_id are empty strings, and pix_details and ted_details are null for this endpoint. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "txn_id": "replace-with-transaction-id"
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/transfers/details' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${ACCOUNT_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Request succeeded
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "details": {
+      "payee": {
+        "name": "Example Payee",
+        "document_id": "123****8901",
+        "document_type": 1,
+        "bank_account": "00012345",
+        "bank_account_type": 1,
+        "bank_branch": "0001",
+        "bank_code": "12345678",
+        "bank_name": "Example Payee Bank"
+      },
+      "payer": {
+        "name": "Example Payer",
+        "document_id": "987****4321",
+        "document_type": 1,
+        "bank_account": "00098765",
+        "bank_account_type": 4,
+        "bank_branch": "0001",
+        "bank_code": "87654321",
+        "bank_name": "Example Payer Bank"
+      },
+      "txn_id": "example-txn_id",
+      "settlement_id": "example-settlement_id",
+      "merchant_order_id": "example-merchant_order_id",
+      "txn_status": 2,
+      "source_type": 2,
+      "amount": "10.00",
+      "memo": "Example payment",
+      "credit_fee": "",
+      "debit_fee": "0.00",
+      "currency": "BRL",
+      "rejection_reason": "",
+      "created_at": 0,
+      "completed_at": 0,
+      "pix_details": null,
+      "ted_details": null,
+      "original_settlement_id": ""
+    },
+    "error": null,
+    "result": null
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Request or validation failed
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 System error
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

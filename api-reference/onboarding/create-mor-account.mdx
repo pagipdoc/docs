@@ -1,0 +1,179 @@
+---
+title: "Create MOR operating account"
+description: "Create an MOR operating account that reuses its parent MA's approved compliance information."
+api: "POST /v3/onboarding/managed_accounts/create"
+keywords: ["/v3/onboarding/managed_accounts/create"]
+---
+
+## Behavior and handling
+
+Create an MOR operating account that reuses its parent MA's approved compliance information.
+
+## Permissions and account ownership
+
+Use the parent MA's USER credentials without a bank account header. The owning user must have the managed account feature enabled and exactly one valid MA with ACTIVE status. The MA must have a matching ACTIVE bank account that is not undergoing closure, plus approved compliance information with valid identity documents and approval evidence available for reuse. <Badge color="blue" size="sm">Added · create-mor-F07</Badge> Requests must follow [Environments & Credentials](/environments-and-credentials).
+
+Request parameters
+
+<ParamField body="reference_id" type="string" required>
+Must not be empty after trimming leading and trailing whitespace. Generate and save a unique value for each new account opening request; UUID format is not enforced. Keep `reference_id` and the original request values unchanged for technical retries, including `trading_name` and `notification_email`. Reusing a reference for a different request can return business code `4001013` <Badge color="blue" size="sm">Added · create-mor-F03</Badge>
+</ParamField>
+
+<ParamField body="model" type="integer" required>
+Fixed at 1 (MOR)
+</ParamField>
+
+<ParamField body="trading_name" type="string">
+Public-facing trade name. For MOR, omit `compliance_mode`, `compliance_payload`, `provider_session_info`, `return_url`, and `linked_account`. A nonzero compliance mode, a compliance or provider-session object, a nonblank return URL, or any linked-account object is rejected with business code `4001` <Badge color="blue" size="sm">Added · create-mor-F01</Badge>
+</ParamField>
+
+<ParamField body="notification_email" type="string">
+Notification email address; the Open API layer does not currently validate email format. Trim leading and trailing whitespace before submission
+</ParamField>
+
+## cURL request example
+
+The example shows only the request structure. Replace `reference_id`, `trading_name`, and `notification_email` with values for your Sandbox account opening request; MOR does not accept identity document details or verification identifiers in this request. <Badge color="orange" size="sm">Corrected · create-mor-F02</Badge> First, calculate the signature using the raw bytes of the same body.json file. You must still confirm the account opening status after the request is accepted.
+
+## Response fields
+
+Field paths start at the response root. `[]` indicates an array element. Amounts use decimal strings. Enum values are defined separately for each field. The structure below describes a success response. A null value or 0 alone does not indicate that processing is complete.
+
+<ResponseField name="code" type="integer">
+Business result code. A value of 200 indicates success. Business errors are returned in this field. It is not the HTTP status code.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Business result description. On failure, use this with code to determine the cause.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Data object in a successful response. Can be null in an error response.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Response time as a UTC Unix timestamp in milliseconds.
+</ResponseField>
+
+<ResponseField name="data.reference_id" type="string">
+Resource reference ID supplied by the caller when creating the managed account.
+</ResponseField>
+
+<ResponseField name="data.model" type="integer">
+Managed account model. Enum: 0 VA_ACCOUNT_MODEL_UNSPECIFIED; 1 VA_ACCOUNT_MODEL_MOR; 2 VA_ACCOUNT_MODEL_VA; 3 VA_ACCOUNT_MODEL_PA.
+</ResponseField>
+
+<ResponseField name="data.status" type="integer">
+Current business status, interpreted using the enum values listed for this field. Enum: 0 MANAGED_ACCOUNT_STATUS_V3_UNSPECIFIED; 1 MANAGED_ACCOUNT_STATUS_V3_PENDING; 2 MANAGED_ACCOUNT_STATUS_V3_ACTIVE; 3 MANAGED_ACCOUNT_STATUS_V3_FROZEN; 4 MANAGED_ACCOUNT_STATUS_V3_CLOSED; 5 MANAGED_ACCOUNT_STATUS_V3_REJECTED; 6 MANAGED_ACCOUNT_STATUS_V3_EXPIRED; 7 MANAGED_ACCOUNT_STATUS_V3_PENDING_SUBMISSION.
+</ResponseField>
+
+<ResponseField name="data.verification_url" type="string">
+Identity verification URL. Can be empty if external verification is not required or the URL has not yet been generated.
+</ResponseField>
+
+## Responses
+
+View response examples by the business `code` in the JSON response. Check the HTTP status and business code separately. An HTTP 200 response can also return a business error. <Badge color="orange" size="sm">Corrected · create-mor-F12</Badge>
+
+| `code` | Meaning | Recommended action |
+| --- | --- | --- |
+| `200` | Request succeeded | Read data to confirm reference_id and the account opening status. A successful API call does not mean the account is ready to use. |
+| `400` | Request or validation failed | Parameter issue. Check and correct the request parameters. |
+| `500` | System error | Log the response and confirm the business result first. |
+| `4004004` | Account opening fee not configured | Contact the support team to configure the account opening fee, then retry with the same `reference_id` and original request values. An MOR request can reserve its reference and account opening record before the fee is confirmed, even when the API returns an error with `data: null`. Do not create a new reference to retry the same account opening request. Confirm the account opening status before treating the account as ready to use. <Badge color="blue" size="sm">Added · create-mor-F08</Badge> HTTP 200 indicates that a response was returned. Business code 4004004 indicates that this account opening call failed. |
+
+The examples illustrate the response structure. Use the actual response for message and business status values. For account opening fee failures, business code `4001999` indicates insufficient balance; add funds to the parent MA's bank account and retry with the same `reference_id`. Code `4001013` indicates a conflicting reuse of the reference. Code `400` can indicate invalid fee configuration, and code `501` can indicate unavailable configuration or an unconfirmed fee result; use `message` to distinguish these conditions. Contact support for missing or invalid configuration, and keep the same reference and original request values when recovering an unconfirmed fee result. See [Error Catalog](/api-reference/error-catalog) for other parameter, permission, and service errors. <Badge color="blue" size="sm">Added · create-mor-F09</Badge> This section does not imply that the endpoint returns only these four code values. <Badge color="orange" size="sm">Corrected · create-mor-F13</Badge>
+
+## Sandbox access example
+
+Use the actual response as the source of truth for transaction or resource information, processing status, and error information.
+
+`X-Client-ID` uses the AK you enter. The timestamp, nonce, request body hash, and signature are generated automatically. SK is used only for local signing. It is not included in the request or stored. Previewing does not send a request. The access button submits a real request. If the result is unknown, query first. Requests are not retried automatically. Browser access must meet Sandbox CORS, IP, and credential requirements.
+
+<Tip>
+To try this endpoint, send the request example to the Sandbox base URL `https://ebanking-openapi-sandbox.pagsmile.com.br` with your Sandbox AK/SK. Sign every request as described in [Environments & Credentials](/environments-and-credentials#api-request-signing).
+</Tip>
+
+
+<Accordion title="Corrections to the source document (8)" icon="clipboard-check">
+This page was checked against the Pagsmile Open API source code on 2026-11-10. Each change below is marked in the page with a badge that shows its ID.
+
+| ID | Change | Location | Source document text | Updated text |
+| --- | --- | --- | --- | --- |
+| create-mor-F01 | Added (missing in the source) | Request parameters / trading_name description | Public-facing trade name; do not submit a corporate compliance information object | Public-facing trade name. For MOR, omit `compliance_mode`, `compliance_payload`, `provider_session_info`, `return_url`, and `linked_account`. A nonzero compliance mode, a compliance or provider-session object, a nonblank return URL, or any linked-account object is rejected with business code 4001 |
+| create-mor-F02 | Corrected (did not match the code) | cURL request example / introductory paragraph | You must replace the identity document details and verification identifiers with actual information usable in Sandbox. | Replace `reference_id`, `trading_name`, and `notification_email` with values for your Sandbox account opening request; MOR does not accept identity document details or verification identifiers in this request. |
+| create-mor-F03 | Added (missing in the source) | Request parameters / reference_id description | Must not be empty after trimming leading and trailing whitespace. Generate and save the value; the code does not enforce UUID format. Keep the value unchanged for technical retries of the same account opening request | Must not be empty after trimming leading and trailing whitespace. Generate and save a unique value for each new account opening request; UUID format is not enforced. Keep `reference_id` and the original request values unchanged for technical retries, including `trading_name` and `notification_email`. Reusing a reference for a different request can return business code 4001013 |
+| create-mor-F07 | Added (missing in the source) | Permissions and account ownership | The owning user must have the managed account feature enabled and exactly one valid MA with ACTIVE status. | The owning user must have the managed account feature enabled and exactly one valid MA with ACTIVE status. The MA must have a matching ACTIVE bank account that is not undergoing closure, plus approved compliance information with valid identity documents and approval evidence available for reuse. |
+| create-mor-F08 | Added (missing in the source) | Responses / Account opening fee configuration not found / Recommended action | Contact the support team to configure the account opening fee, then submit the account opening request again. | Contact the support team to configure the account opening fee, then retry with the same `reference_id` and original request values. An MOR request can reserve its reference and account opening record before the fee is confirmed, even when the API returns an error with `data: null`. Do not create a new reference to retry the same account opening request. Confirm the account opening status before treating the account as ready to use. |
+| create-mor-F09 | Added (missing in the source) | Responses / Error Catalog link | See Error Catalog for other parameter, permission, and service errors. | For account opening fee failures, business code 4001999 indicates insufficient balance; add funds to the parent MA's bank account and retry with the same `reference_id`. Code 4001013 indicates a conflicting reuse of the reference. Code 400 can indicate invalid fee configuration, and code 501 can indicate unavailable configuration or an unconfirmed fee result; use `message` to distinguish these conditions. Contact support for missing or invalid configuration, and keep the same reference and original request values when recovering an unconfirmed fee result. See Error Catalog for other parameter, permission, and service errors. |
+| create-mor-F12 | Corrected (did not match the code) | Responses / Request succeeded / JSON example | `{ "code": 200, "message": "success", "data": { "reference_id": "mor-demo-001", "model": 1, "status": 1 }, "time": 1791792000000 }` | `{ "code": 200, "message": "success", "data": { "reference_id": "mor-demo-001", "model": 1, "status": 1, "verification_url": "", "error": null, "result": null }, "time": 1791792000000 }` |
+| create-mor-F13 | Corrected (did not match the code) | Responses / final paragraph | This section does not imply that the endpoint returns only these three code values. | This section does not imply that the endpoint returns only these four code values. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "reference_id": "mor-demo-001",
+  "model": 1,
+  "trading_name": "Demo Company",
+  "notification_email": "contact@example.test"
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/onboarding/managed_accounts/create' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${USER_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Request succeeded
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "reference_id": "mor-demo-001",
+    "model": 1,
+    "status": 1,
+    "verification_url": "",
+    "error": null,
+    "result": null
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Request or validation failed
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 System error
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 4004004 Account opening fee not configured
+{
+  "code": 4004004,
+  "message": "Account creation fee configuration was not found. Please contact support.",
+  "data": null,
+  "time": 1792381001926
+}
+```
+</ResponseExample>

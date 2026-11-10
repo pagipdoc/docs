@@ -1,0 +1,244 @@
+---
+title: "Listar casos MED"
+description: "Consulte a lista de casos MED dentro do escopo de autorização. Localize o caso e abra a página de detalhes para conferir o andamento."
+api: "POST /v3/med/list"
+keywords: ["/v3/med/list"]
+---
+
+## Funcionamento e tratamento
+
+Consulte os casos MED criados pelo pagador para a conta autorizada. A lista não inclui casos originados de notificações do lado do recebedor nem casos criados pelo fluxo administrativo. Os resultados são ordenados pela data e hora de abertura, do mais recente para o mais antigo. <Badge color="blue" size="sm">Complementado · api-18-F07</Badge> Localize o caso e abra a página de detalhes para conferir o andamento.
+
+## Permissões e titularidade da conta
+
+Use credenciais `ACCOUNT` para a conta vinculada, ou credenciais `USER` com `X-ISPB` e `X-Account-Number` para uma conta de titularidade desse `USER` e dentro de sua hierarquia autorizada de contas. Credenciais `PLATFORM` não são aceitas. Com credenciais `ACCOUNT`, omita ambos os headers da conta-alvo ou envie ambos com os valores da conta vinculada; headers parciais, vazios ou divergentes são rejeitados. <Badge color="blue" size="sm">Complementado · api-18-F13</Badge> As requisições devem seguir as orientações de [Ambientes e credenciais](/pt-br/environments-and-credentials).
+
+## Parâmetros da requisição
+
+<ParamField body="page" type="integer">
+**Obrigatório:** Não (não obrigatório nesta camada). Número da página, começando em 1. O padrão é 1 quando o campo é omitido ou recebe 0 ou um valor negativo. <Badge color="blue" size="sm">Complementado · api-18-F02</Badge>
+</ParamField>
+
+<ParamField body="page_size" type="integer">
+**Obrigatório:** Não (não obrigatório nesta camada). Itens solicitados por página. O padrão é 20 quando o campo é omitido ou recebe 0 ou um valor negativo. Valores acima de 100 são aceitos, mas a consulta usa 100. Use valores de 1 a 100 para manter os metadados de paginação consistentes. <Badge color="blue" size="sm">Complementado · api-18-F03</Badge>
+</ParamField>
+
+<ParamField body="case_id" type="string">
+**Obrigatório:** Não (não obrigatório nesta camada). ID do caso MED
+</ParamField>
+
+<ParamField body="funds_recovery_id" type="string">
+**Obrigatório:** Não (não obrigatório nesta camada). ID da recuperação de recursos
+</ParamField>
+
+<ParamField body="dict_funds_recovery_id" type="string">
+**Obrigatório:** Não (não obrigatório nesta camada). ID da recuperação de recursos no DICT
+</ParamField>
+
+<ParamField body="end_to_end_id" type="string">
+**Obrigatório:** Não (não obrigatório nesta camada). Identificador fim a fim do Pix original
+</ParamField>
+
+<ParamField body="status" type="integer">
+**Obrigatório:** Não (não obrigatório nesta camada). Status do recurso, interpretado conforme os valores de enum do objeto. Valores: 0 UNSPECIFIED; 1 CREATED; 2 TRACKED; 3 AWAITING_ANALYSIS; 4 ANALYZED; 5 RETURN_PROCESSING; 6 COMPLETED; 7 CANCELLED; 8 FAILED
+</ParamField>
+
+<ParamField body="original_fraud_situation" type="integer">
+**Obrigatório:** Não (não obrigatório nesta camada). Enum da situação de fraude original. Valores: 0 UNSPECIFIED; 1 SCAM; 2 ACCOUNT_TAKEOVER; 3 COERCION; 4 SOCIAL_ENGINEERING; 5 OTHER; 6 UNKNOWN
+</ParamField>
+
+<ParamField body="flow_type" type="integer">
+**Obrigatório:** Não (não obrigatório nesta camada). Tipo de processo MED. Valores: 0 UNSPECIFIED; 1 AUTOMATED; 2 MANUAL
+</ParamField>
+
+<ParamField body="start_time" type="integer">
+**Obrigatório:** Não (não obrigatório nesta camada). Limite inferior inclusivo para a data e hora de abertura do caso, em timestamp Unix UTC em milissegundos. Quando omitido, igual a 0 ou negativo, este filtro não é aplicado. <Badge color="blue" size="sm">Complementado · api-18-F05</Badge>
+</ParamField>
+
+<ParamField body="end_time" type="integer">
+**Obrigatório:** Não (não obrigatório nesta camada). Limite superior inclusivo para a data e hora de abertura do caso, em timestamp Unix UTC em milissegundos. Quando omitido, igual a 0 ou negativo, este filtro não é aplicado. <Badge color="blue" size="sm">Complementado · api-18-F06</Badge>
+</ParamField>
+
+Os filtros são combinados com AND. Campos de identificador não vazios usam correspondência exata; campos omitidos ou strings vazias não aplicam esse filtro. Omita `status`, `original_fraud_situation` ou `flow_type` para não filtrar o respectivo enum. O valor `0` explícito filtra por `UNSPECIFIED`; não significa todos os valores. <Badge color="blue" size="sm">Complementado · api-18-F08</Badge>
+
+## Exemplo de requisição cURL
+
+O exemplo usa credenciais de nível ACCOUNT. Preencha os parâmetros reais e gere a assinatura com base no body.json final.
+
+## Campos da resposta
+
+Os caminhos dos campos partem da raiz da resposta. `[]` indica um elemento de array. Os valores monetários usam strings decimais. Os enums são interpretados conforme cada campo. A estrutura abaixo representa os dados de uma resposta de sucesso. Um valor nulo ou 0, por si só, não indica a conclusão da operação.
+
+<ResponseField name="code" type="integer">
+Código de resultado de negócio; 200 indica sucesso. Os erros de negócio são retornados neste campo, que não equivale ao código de status HTTP.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Descrição do resultado de negócio; em caso de falha, analise esta descrição junto com o campo code para identificar a causa.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Objeto de dados da resposta de sucesso; pode ser null em respostas de erro.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Horário da resposta, em timestamp Unix UTC em milissegundos.
+</ResponseField>
+
+<ResponseField name="data.items" type="array">
+Lista de resultados da consulta.
+</ResponseField>
+
+<ResponseField name="data.items[].case_id" type="string">
+ID do caso MED.
+</ResponseField>
+
+<ResponseField name="data.items[].funds_recovery_id" type="string">
+Identificador da operação de recuperação de recursos.
+</ResponseField>
+
+<ResponseField name="data.items[].dict_funds_recovery_id" type="string">
+Identificador da recuperação de recursos no DICT.
+</ResponseField>
+
+<ResponseField name="data.items[].root_end_to_end_id" type="string">
+Identificador fim a fim da transação Pix original.
+</ResponseField>
+
+<ResponseField name="data.items[].amount" type="string">
+Valor solicitado para recuperação de recursos, como string decimal. Não corresponde ao valor da transação original nem ao valor efetivamente devolvido. <Badge color="orange" size="sm">Corrigido · api-18-F01</Badge>
+</ResponseField>
+
+<ResponseField name="data.items[].status" type="integer">
+Status de negócio atual, interpretado conforme os valores de enum listados neste campo. Enum: 0 MED_CASE_STATUS_UNSPECIFIED; 1 MED_CASE_STATUS_CREATED; 2 MED_CASE_STATUS_TRACKED; 3 MED_CASE_STATUS_AWAITING_ANALYSIS; 4 MED_CASE_STATUS_ANALYZED; 5 MED_CASE_STATUS_RETURN_PROCESSING; 6 MED_CASE_STATUS_COMPLETED; 7 MED_CASE_STATUS_CANCELLED; 8 MED_CASE_STATUS_FAILED.
+</ResponseField>
+
+<ResponseField name="data.items[].status_display" type="string">
+Texto de exibição do status de negócio.
+</ResponseField>
+
+<ResponseField name="data.items[].opened_at" type="integer">
+Data e hora de abertura do caso, em timestamp Unix UTC em milissegundos. Pode ser 0 se a abertura não tiver ocorrido ou se a data e hora não tiverem sido informadas.
+</ResponseField>
+
+<ResponseField name="data.items[].can_cancel" type="boolean">
+Indica se o caso pode ser cancelado no momento.
+</ResponseField>
+
+<ResponseField name="data.items[].transaction_id" type="string">
+ID da transação.
+</ResponseField>
+
+<ResponseField name="data.page" type="object">
+Informações de paginação.
+</ResponseField>
+
+<ResponseField name="data.page.page" type="integer">
+Informações de paginação.
+</ResponseField>
+
+<ResponseField name="data.page.total" type="integer">
+Número total de registros.
+</ResponseField>
+
+<ResponseField name="data.page.page_size" type="integer">
+Tamanho de página solicitado, ou 20 quando omitido ou não positivo. Este valor pode ultrapassar 100, embora a consulta retorne no máximo 100 itens. Envie `page_size` de 1 a 100. <Badge color="orange" size="sm">Corrigido · api-18-F04</Badge>
+</ResponseField>
+
+<ResponseField name="data.page.total_pages" type="integer">
+Número total de páginas.
+</ResponseField>
+
+## Respostas
+
+Consulte os exemplos de resposta pelo `code` de negócio no JSON. Verifique o status HTTP e o code de negócio separadamente. Uma resposta HTTP 200 também pode retornar um erro de negócio. <Badge color="orange" size="sm">Corrigido · api-18-F12</Badge>
+
+| `code` | Significado | Ação recomendada |
+| --- | --- | --- |
+| `200` | Requisição bem-sucedida | Leia data e avalie o resultado do processamento conforme o status de negócio deste endpoint. |
+| `400` | Falha na requisição ou validação | Problema nos parâmetros. Verifique e corrija os parâmetros da requisição. |
+| `500` | Erro do sistema | Registre a resposta e confirme primeiro o resultado de negócio. |
+
+Os exemplos ilustram a estrutura da resposta. Os valores de message e do status de negócio devem ser obtidos da resposta efetiva. Para outros erros de parâmetros, permissões e serviço, consulte [Catálogo de erros](/pt-br/api-reference/error-catalog). Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados.
+
+<Tip>
+Para testar este endpoint, envie o exemplo de requisição para a Base URL do Sandbox `https://ebanking-openapi-sandbox.pagsmile.com.br` com sua AK/SK de Sandbox. Assine cada requisição conforme descrito em [Ambientes e credenciais](/pt-br/environments-and-credentials#assinatura-de-requisições-à-api).
+</Tip>
+
+
+<Accordion title="Correções em relação ao documento original (10)" icon="clipboard-check">
+Esta página foi conferida com o código-fonte da Pagsmile Open API em 2026-11-10. Cada alteração abaixo está marcada na página com um selo que mostra o seu ID.
+
+| ID | Alteração | Local | Texto do documento original | Texto atualizado |
+| --- | --- | --- | --- | --- |
+| api-18-F01 | Corrigido (não correspondia ao código) | Response fields | Valor da transação, como string decimal. | Valor solicitado para recuperação de recursos, como string decimal. Não corresponde ao valor da transação original nem ao valor efetivamente devolvido. |
+| api-18-F02 | Complementado (ausente no original) | Request parameters / page description | Condições de paginação/número da página, diferenciados pelo tipo | Número da página, começando em 1. O padrão é 1 quando o campo é omitido ou recebe 0 ou um valor negativo. |
+| api-18-F03 | Complementado (ausente no original) | Request parameters / page_size description | Itens por página | Itens solicitados por página. O padrão é 20 quando o campo é omitido ou recebe 0 ou um valor negativo. Valores acima de 100 são aceitos, mas a consulta usa 100. Use valores de 1 a 100 para manter os metadados de paginação consistentes. |
+| api-18-F04 | Corrigido (não correspondia ao código) | Response fields | Número de registros por página. | Tamanho de página solicitado, ou 20 quando omitido ou não positivo. Este valor pode ultrapassar 100, embora a consulta retorne no máximo 100 itens. Envie page_size de 1 a 100. |
+| api-18-F05 | Complementado (ausente no original) | Request parameters / start_time description | Data e hora de início do filtro | Limite inferior inclusivo para a data e hora de abertura do caso, em timestamp Unix UTC em milissegundos. Quando omitido, igual a 0 ou negativo, este filtro não é aplicado. |
+| api-18-F06 | Complementado (ausente no original) | Request parameters / end_time description | Data e hora de fim do filtro | Limite superior inclusivo para a data e hora de abertura do caso, em timestamp Unix UTC em milissegundos. Quando omitido, igual a 0 ou negativo, este filtro não é aplicado. |
+| api-18-F07 | Complementado (ausente no original) | Behavior and handling / scope and ordering | Consulte a lista de casos MED dentro do escopo de autorização. | Consulte os casos MED criados pelo pagador para a conta autorizada. A lista não inclui casos originados de notificações do lado do recebedor nem casos criados pelo fluxo administrativo. Os resultados são ordenados pela data e hora de abertura, do mais recente para o mais antigo. |
+| api-18-F08 | Complementado (ausente no original) | Request parameters / note after table | — | Os filtros são combinados com AND. Campos de identificador não vazios usam correspondência exata; campos omitidos ou strings vazias não aplicam esse filtro. Omita status, original_fraud_situation ou flow_type para não filtrar o respectivo enum. O valor 0 explícito filtra por UNSPECIFIED; não significa todos os valores. |
+| api-18-F12 | Corrigido (não correspondia ao código) | Responses / Request succeeded JSON example | `{ "code": 200, "message": "success", "data": { "items": [], "page": { "page": 0, "page_size": 0, "total": 0, "total_pages": 0 } }, "time": 1791792000000 }` | `{ "code": 200, "message": "success", "data": { "items": [], "page": { "page": 1, "page_size": 20, "total": 0, "total_pages": 0 }, "error": null, "result": null }, "time": 1791792000000 }` |
+| api-18-F13 | Complementado (ausente no original) | Permissions and account ownership | ACCOUNT, ou USER com o header da conta-alvo. | Use credenciais ACCOUNT para a conta vinculada, ou credenciais USER com X-ISPB e X-Account-Number para uma conta de titularidade desse USER e dentro de sua hierarquia autorizada de contas. Credenciais PLATFORM não são aceitas. Com credenciais ACCOUNT, omita ambos os headers da conta-alvo ou envie ambos com os valores da conta vinculada; headers parciais, vazios ou divergentes são rejeitados. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "page": 1,
+  "page_size": 20
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/med/list' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${ACCOUNT_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Requisição bem-sucedida
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "items": [],
+    "page": {
+      "page": 1,
+      "page_size": 20,
+      "total": 0,
+      "total_pages": 0
+    },
+    "error": null,
+    "result": null
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Falha na requisição ou validação
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 Erro do sistema
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

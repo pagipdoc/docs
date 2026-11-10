@@ -1,0 +1,245 @@
+---
+title: "List infraction reports"
+description: "List infraction reports within your authorization scope to find reports and associated tasks."
+api: "POST /v3/infractions/list"
+keywords: ["/v3/infractions/list"]
+---
+
+## Behavior and handling
+
+List infraction reports and their associated tasks for transactions received by the authorized target account. Results match the receiving account's ownership, ISPB, and account number. Reports for other accounts in the same MED case are excluded. Results are ordered by creation time, newest first. <Badge color="blue" size="sm">Added · api-21-F01</Badge>
+
+## Permissions and account ownership
+
+Use ACCOUNT credentials for their bound account, or USER credentials with both `X-ISPB` and `X-Account-Number`. The USER must own the target account and its account hierarchy. With ACCOUNT credentials, omit both target-account headers or provide both with values matching the bound account. PLATFORM credentials are not accepted. USER credentials can also query an eligible closed account within the same ownership scope. <Badge color="blue" size="sm">Added · api-21-F02</Badge> Requests must follow [Environments & Credentials](/environments-and-credentials).
+
+## Request parameters
+
+<ParamField body="page" type="integer">
+**Required:** No (not enforced at this layer). Page number, starting at 1. Defaults to 1 when omitted or set to 0 or a negative value. <Badge color="blue" size="sm">Added · api-21-F03</Badge>
+</ParamField>
+
+<ParamField body="page_size" type="integer">
+**Required:** No (not enforced at this layer). Items per page. Defaults to 20 when omitted or set to 0 or a negative value. The query is limited to 100 items per page. Use values from 1 to 100: a larger positive value is still reported in `data.page.page_size`, even though the query uses 100, and `total_pages` is calculated from that reported value. <Badge color="blue" size="sm">Added · api-21-F04</Badge>
+</ParamField>
+
+<ParamField body="status" type="integer">
+**Required:** No (not enforced at this layer). Filter by infraction task status. Omit this field to include all statuses; supplying 0 filters for `UNSPECIFIED`. Values: 0 `UNSPECIFIED`; 1 `RECEIVED`; 2 `BLOCKING_PENDING`; 3 `BLOCKED`; 4 `ANALYSIS_PENDING`; 5 `CLOSED_AGREED`; 6 `CLOSED_DISAGREED`; 7 `CANCELLED`; 8 `FAILED` <Badge color="blue" size="sm">Added · api-21-F05</Badge>
+</ParamField>
+
+<ParamField body="start_time" type="integer">
+**Required:** No (not enforced at this layer). Inclusive lower bound for the infraction task's creation time, as a UTC Unix timestamp in milliseconds. Omitted, 0, or negative values do not apply this lower bound. <Badge color="blue" size="sm">Added · api-21-F06</Badge>
+</ParamField>
+
+<ParamField body="end_time" type="integer">
+**Required:** No (not enforced at this layer). Inclusive upper bound for the infraction task's creation time, as a UTC Unix timestamp in milliseconds. Omitted, 0, or negative values do not apply this upper bound. If both bounds are positive and `start_time` exceeds `end_time`, the query returns no matching records. <Badge color="blue" size="sm">Added · api-21-F07</Badge>
+</ParamField>
+
+<ParamField body="case_id" type="string">
+**Required:** No (not enforced at this layer). MED case ID
+</ParamField>
+
+<ParamField body="infraction_report_id" type="string">
+**Required:** No (not enforced at this layer). Provider report ID
+</ParamField>
+
+<ParamField body="connected_transaction_id" type="string">
+**Required:** No (not enforced at this layer). Associated transaction ID
+</ParamField>
+
+## cURL request example
+
+The example uses ACCOUNT-level credentials. Enter the actual parameters and generate the signature from the final body.json.
+
+## Response fields
+
+Field paths start at the response root. `[]` indicates an array element. Amounts use decimal strings. Enum values are defined separately for each field. The structure below describes a success response. A null value or 0 alone does not indicate that processing is complete.
+
+<ResponseField name="code" type="integer">
+Business result code. A value of 200 indicates success. Business errors are returned in this field. It is not the HTTP status code.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Business result description. On failure, use this with code to determine the cause.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Data object in a successful response. Can be null in an error response.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Response time as a UTC Unix timestamp in milliseconds.
+</ResponseField>
+
+<ResponseField name="data.items" type="array">
+List of query results.
+</ResponseField>
+
+<ResponseField name="data.items[].infraction_id" type="string">
+Infraction task ID; use this value to query infraction report details. It is distinct from `infraction_report_id`, which identifies the provider's report. <Badge color="orange" size="sm">Corrected · api-21-F10</Badge>
+</ResponseField>
+
+<ResponseField name="data.items[].connected_transaction_id" type="string">
+Associated transaction ID.
+</ResponseField>
+
+<ResponseField name="data.items[].account" type="string">
+Account number of the receiving account associated with the infraction report. <Badge color="orange" size="sm">Corrected · api-21-F08</Badge>
+</ResponseField>
+
+<ResponseField name="data.items[].status" type="integer">
+Current business status, interpreted according to the enum listed for this field. Enum: 0 MED_INFRACTION_TASK_STATUS_UNSPECIFIED; 1 MED_INFRACTION_TASK_STATUS_RECEIVED; 2 MED_INFRACTION_TASK_STATUS_BLOCKING_PENDING; 3 MED_INFRACTION_TASK_STATUS_BLOCKED; 4 MED_INFRACTION_TASK_STATUS_ANALYSIS_PENDING; 5 MED_INFRACTION_TASK_STATUS_CLOSED_AGREED; 6 MED_INFRACTION_TASK_STATUS_CLOSED_DISAGREED; 7 MED_INFRACTION_TASK_STATUS_CANCELLED; 8 MED_INFRACTION_TASK_STATUS_FAILED.
+</ResponseField>
+
+<ResponseField name="data.items[].status_display" type="string">
+Display text for the business status.
+</ResponseField>
+
+<ResponseField name="data.items[].amount" type="string">
+Amount requested in the infraction report, as a decimal string. It is not necessarily the original transaction amount or the amount actually blocked or returned. <Badge color="orange" size="sm">Corrected · api-21-F09</Badge>
+</ResponseField>
+
+<ResponseField name="data.items[].created_time" type="integer">
+Creation time in UTC Unix milliseconds. Can be 0 if creation has not occurred or the time is not provided.
+</ResponseField>
+
+<ResponseField name="data.items[].updated_time" type="integer">
+Last update time in UTC Unix milliseconds. Can be 0 if no update has occurred or the time is not provided.
+</ResponseField>
+
+<ResponseField name="data.items[].case_id" type="string">
+MED case ID.
+</ResponseField>
+
+<ResponseField name="data.items[].infraction_report_id" type="string">
+Infraction report business ID.
+</ResponseField>
+
+<ResponseField name="data.page" type="object">
+Pagination information.
+</ResponseField>
+
+<ResponseField name="data.page.page" type="integer">
+Pagination information.
+</ResponseField>
+
+<ResponseField name="data.page.total" type="integer">
+Total number of records.
+</ResponseField>
+
+<ResponseField name="data.page.page_size" type="integer">
+Number of records per page.
+</ResponseField>
+
+<ResponseField name="data.page.total_pages" type="integer">
+Total number of pages.
+</ResponseField>
+
+## Responses
+
+View response examples by the business `code` in the JSON response. Check the HTTP status and business code separately. An HTTP 200 response can also return a business error. Malformed JSON or an incompatible JSON field type can instead return HTTP 400 with a plain-text error body. Check the HTTP status and response Content-Type before parsing the JSON business response. <Badge color="blue" size="sm">Added · api-21-F16</Badge>
+
+| `code` | Meaning | Recommended action |
+| --- | --- | --- |
+| `200` | Request succeeded | Read data and determine the result using the business status defined for this endpoint. |
+| `400` | Request or validation failed | Parameter issue. Check and correct the request parameters. |
+| `500` | System error | Log the response and confirm the business result first. |
+
+The examples illustrate the response structure. Use the actual response for message and business status values. See [Error Catalog](/api-reference/error-catalog) for other parameter, permission, and service errors. This section does not imply that the endpoint returns only these three code values. <Badge color="orange" size="sm">Corrected · api-21-F14</Badge>
+
+<Tip>
+To try this endpoint, send the request example to the Sandbox base URL `https://ebanking-openapi-sandbox.pagsmile.com.br` with your Sandbox AK/SK. Sign every request as described in [Environments & Credentials](/environments-and-credentials#api-request-signing).
+</Tip>
+
+
+<Accordion title="Corrections to the source document (12)" icon="clipboard-check">
+This page was checked against the Pagsmile Open API source code on 2026-11-10. Each change below is marked in the page with a badge that shows its ID.
+
+| ID | Change | Location | Source document text | Updated text |
+| --- | --- | --- | --- | --- |
+| api-21-F01 | Added (missing in the source) | Behavior and handling | List infraction reports within your authorization scope to find reports and associated tasks. | List infraction reports and their associated tasks for transactions received by the authorized target account. Results match the receiving account's ownership, ISPB, and account number. Reports for other accounts in the same MED case are excluded. Results are ordered by creation time, newest first. |
+| api-21-F02 | Added (missing in the source) | Permissions and account ownership | ACCOUNT, or USER with the target account header. | Use ACCOUNT credentials for their bound account, or USER credentials with both `X-ISPB` and `X-Account-Number`. The USER must own the target account and its account hierarchy. With ACCOUNT credentials, omit both target-account headers or provide both with values matching the bound account. PLATFORM credentials are not accepted. USER credentials can also query an eligible closed account within the same ownership scope. |
+| api-21-F03 | Added (missing in the source) | Request parameters | Pagination conditions/page number, distinguished by type | Page number, starting at 1. Defaults to 1 when omitted or set to 0 or a negative value. |
+| api-21-F04 | Added (missing in the source) | Request parameters | Items per page | Items per page. Defaults to 20 when omitted or set to 0 or a negative value. The query is limited to 100 items per page. Use values from 1 to 100: a larger positive value is still reported in `data.page.page_size`, even though the query uses 100, and `total_pages` is calculated from that reported value. |
+| api-21-F05 | Added (missing in the source) | Request parameters | Resource status, interpreted according to the object's enum. Values: 0 UNSPECIFIED; 1 RECEIVED; 2 BLOCKING_PENDING; 3 BLOCKED; 4 ANALYSIS_PENDING; 5 CLOSED_AGREED; 6 CLOSED_DISAGREED; 7 CANCELLED; 8 FAILED | Filter by infraction task status. Omit this field to include all statuses; supplying 0 filters for UNSPECIFIED. Values: 0 UNSPECIFIED; 1 RECEIVED; 2 BLOCKING_PENDING; 3 BLOCKED; 4 ANALYSIS_PENDING; 5 CLOSED_AGREED; 6 CLOSED_DISAGREED; 7 CANCELLED; 8 FAILED |
+| api-21-F06 | Added (missing in the source) | Request parameters | Filter start time | Inclusive lower bound for the infraction task's creation time, as a UTC Unix timestamp in milliseconds. Omitted, 0, or negative values do not apply this lower bound. |
+| api-21-F07 | Added (missing in the source) | Request parameters | Filter end time | Inclusive upper bound for the infraction task's creation time, as a UTC Unix timestamp in milliseconds. Omitted, 0, or negative values do not apply this upper bound. If both bounds are positive and `start_time` exceeds `end_time`, the query returns no matching records. |
+| api-21-F08 | Corrected (did not match the code) | Response fields | Bank account details. | Account number of the receiving account associated with the infraction report. |
+| api-21-F09 | Corrected (did not match the code) | Response fields | Transaction amount as a decimal string. | Amount requested in the infraction report, as a decimal string. It is not necessarily the original transaction amount or the amount actually blocked or returned. |
+| api-21-F10 | Corrected (did not match the code) | Response fields | Infraction report ID; used to query infraction report details. | Infraction task ID; use this value to query infraction report details. It is distinct from `infraction_report_id`, which identifies the provider's report. |
+| api-21-F14 | Corrected (did not match the code) | Responses / Request succeeded example | "page": \{ "page": 0, "page_size": 0, "total": 0, "total_pages": 0 \} | "page": \{ "page": 1, "page_size": 20, "total": 1, "total_pages": 1 \}, "error": null, "result": null |
+| api-21-F16 | Added (missing in the source) | Responses | An HTTP 200 response can also return a business error. | An HTTP 200 response can also return a business error. Malformed JSON or an incompatible JSON field type can instead return HTTP 400 with a plain-text error body. Check the HTTP status and response Content-Type before parsing the JSON business response. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "page": 1,
+  "page_size": 20
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/infractions/list' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${ACCOUNT_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Request succeeded
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "items": [
+      {
+        "infraction_id": "infraction_01a0c7f5-8617-58c0-5566-e3c4a839c37b",
+        "connected_transaction_id": "TX20260922062827438N0003C211C4AE",
+        "account": "55641152",
+        "status": 5,
+        "status_display": "INFRACTION_REPORT_STATUS_CLOSED",
+        "amount": "203.00000000",
+        "created_time": 1790061157075,
+        "updated_time": 1790061378233,
+        "case_id": "med_case_1790061113863921625",
+        "infraction_report_id": "01a0c7f5-8617-58c0-5566-e3c4a839c37b"
+      }
+    ],
+    "page": {
+      "page": 1,
+      "page_size": 20,
+      "total": 1,
+      "total_pages": 1
+    },
+    "error": null,
+    "result": null
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Request or validation failed
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 System error
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

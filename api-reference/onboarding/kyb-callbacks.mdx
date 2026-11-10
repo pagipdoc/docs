@@ -1,0 +1,94 @@
+---
+title: "KYB callbacks"
+description: "Receive compliance review status changes for MOR, VA, and PA managed accounts."
+---
+
+## Behavior and handling
+
+Receive compliance review status changes for MOR, VA, and PA managed accounts when their compliance result updates are accepted. MOR accounts that reuse the parent MA's approved compliance records do not start a new provider review and do not receive a new KYB result callback merely because the account is created. <Badge color="blue" size="sm">Added · kyb-webhooks-F07</Badge> A callback is scheduled only when the current compliance session accepts the result update. Duplicate provider events and stale state regressions do not generate new deliveries.
+
+## Events and scopes
+
+| Event | Subscription owner identity | Entity under review | Owner identifier |
+| --- | --- | --- | --- |
+| `VA_ACCOUNT_KYB` | USER | `VA_MOR`, `VA`, `PA` | `user_id` |
+
+Managed account KYB events use `user_id` to identify the owning USER. Delivery requires an active USER-owned subscription for `VA_ACCOUNT_KYB` that matches this `user_id` and has a callback URL and signing credential. A pending delivery is canceled if the subscription is deactivated or its revision, application, callback URL, signing credential, owner, or event no longer matches the configuration selected for that delivery. <Badge color="blue" size="sm">Added · kyb-webhooks-F08</Badge> ACCOUNT-owned webhook configurations do not participate in KYB delivery.
+
+## Compliance status and account status
+
+`status` is the compliance status. Possible values are `PENDING`, `PENDING_SUBMISSION`, `APPROVED`, `REJECTED`, `EXPIRED`, `CREATION_FAILED`, `REVIEWING`, `ERROR`, or `FORCE_APPROVED`, without the `COMPLIANCE_STATUS_` prefix.
+
+The compliance status `APPROVED` cannot be mapped directly to the account status `ACTIVE`. Update your compliance records after receiving the notification. To confirm whether the account is usable, query the current status of the account resource.
+
+## Payload fields
+
+Empty optional fields are omitted. The delivery pipeline requires non-empty values for `session_id`, `status`, `provider`, and `provider_event_id`.
+
+| Field | JSON type | Meaning |
+| --- | --- | --- |
+| `delivery_id` | string | Stable delivery ID for this subscription. Can be used for receiver-side deduplication |
+| `request_id` | string | Request ID for compliance result processing |
+| `session_id` | string | Compliance session ID |
+| `event_type` | string | Event name from the table above |
+| `subject_type` | string | Type of entity under review |
+| `merchant_id` | string | Identifier of the merchant under review |
+| `webhook_owner_merchant_id` | string | Merchant identifier of the direct parent that created the managed account, when available. This is not the USER subscription owner; use `user_id` to identify that owner <Badge color="blue" size="sm">Added · kyb-webhooks-F05</Badge> |
+| `user_id` | string | USER owner identifier for managed account events |
+| `bank_code` | string | Bank code or ISPB, when available |
+| `bank_account` | string | Account number of the entity under review, when available |
+| `creator_bank_account` | string | Creator's account number, when available |
+| `master_bank_account` | string | Account number of the ultimate parent MA, when available. For a PA created under a VA, this can differ from `creator_bank_account` <Badge color="blue" size="sm">Added · kyb-webhooks-F04</Badge> |
+| `reference_id` | string | Caller's identity association number, when available |
+| `status` | string | Compliance status in this notification |
+| `provider` | string | Public compliance provider identifier. Always `PAGSMILE_COMPLIANCE` <Badge color="orange" size="sm">Corrected · kyb-webhooks-F01</Badge> |
+| `provider_event_id` | string | Provider event ID |
+| `provider_case_id` | string | Provider case ID (optional) |
+| `provider_profile_id` | string | Provider profile identifier (optional) |
+| `provider_session_id` | string | Provider session identifier (optional) |
+| `result_code` | string | Public result code. Always present. Possible values: `PENDING`, `PENDING_SUBMISSION`, `REVIEWING`, `READY_FOR_REVIEW`, `APPROVED`, `REJECTED`, `EXPIRED`, `ERROR`, `UNKNOWN`, `FORCE_APPROVED`, `RESUBMIT_REQUIRED`, or `CREATION_FAILED`. An empty or unsupported code is returned as `UNKNOWN`. These result codes are separate from the `status` values <Badge color="orange" size="sm">Corrected · kyb-webhooks-F02</Badge> |
+| `error_reason` | string | Public failure reason. For `ERROR`, `REJECTED`, or `CREATION_FAILED`, the value is `Address verification document is required.` or `Verification could not be completed. Please contact support.`. Omitted for other delivered statuses <Badge color="blue" size="sm">Added · kyb-webhooks-F06</Badge> |
+| `raw_result_ref` | string | Reference to the stored raw result (optional) |
+| `verification_result_ref` | string | Verification result reference (optional) |
+| `business_profile_ref` | string | Business information reference (optional) |
+| `occurred_at` | number | Unix timestamp in milliseconds |
+
+## USER callback examples
+
+The following examples show the structure. All identifiers are sample values. <Badge color="orange" size="sm">Corrected · kyb-webhooks-F03</Badge>
+
+```json
+{
+  "delivery_id": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "request_id": "request_demo_001",
+  "session_id": "compliance_session_demo_001",
+  "event_type": "VA_ACCOUNT_KYB",
+  "subject_type": "VA",
+  "merchant_id": "merchant_demo_va_001",
+  "webhook_owner_merchant_id": "merchant_demo_parent_001",
+  "user_id": "user_demo_001",
+  "bank_code": "12345678",
+  "bank_account": "00012345",
+  "reference_id": "account_reference_demo_001",
+  "status": "APPROVED",
+  "provider": "PAGSMILE_COMPLIANCE",
+  "provider_event_id": "provider_event_demo_001",
+  "result_code": "APPROVED",
+  "occurred_at": 1710000000123
+}
+```
+
+<Accordion title="Corrections to the source document (8)" icon="clipboard-check">
+This page was checked against the Pagsmile Open API source code on 2026-11-10. Each change below is marked in the page with a badge that shows its ID.
+
+| ID | Change | Location | Source document text | Updated text |
+| --- | --- | --- | --- | --- |
+| kyb-webhooks-F01 | Corrected (did not match the code) | Payload fields | Compliance provider name in uppercase | Public compliance provider identifier. Always `PAGSMILE_COMPLIANCE` |
+| kyb-webhooks-F02 | Corrected (did not match the code) | Payload fields | Provider or business result code (optional) | Public result code. Always present. Possible values: `PENDING`, `PENDING_SUBMISSION`, `REVIEWING`, `READY_FOR_REVIEW`, `APPROVED`, `REJECTED`, `EXPIRED`, `ERROR`, `UNKNOWN`, `FORCE_APPROVED`, `RESUBMIT_REQUIRED`, or `CREATION_FAILED`. An empty or unsupported code is returned as `UNKNOWN`. These result codes are separate from the `status` values |
+| kyb-webhooks-F03 | Corrected (did not match the code) | USER callback examples | `{ "delivery_id": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "request_id": "request_demo_001", "session_id": "compliance_session_demo_001", "event_type": "VA_ACCOUNT_KYB", "subject_type": "VA", "merchant_id": "merchant_demo_va_001", "user_id": "user_demo_001", "bank_code": "12345678", "bank_account": "00012345", "reference_id": "account_reference_demo_001", "status": "APPROVED", "provider": "AIPRISE", "provider_event_id": "provider_event_demo_001", "occurred_at": 1710000000123 }` | `{ "delivery_id": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "request_id": "request_demo_001", "session_id": "compliance_session_demo_001", "event_type": "VA_ACCOUNT_KYB", "subject_type": "VA", "merchant_id": "merchant_demo_va_001", "webhook_owner_merchant_id": "merchant_demo_parent_001", "user_id": "user_demo_001", "bank_code": "12345678", "bank_account": "00012345", "reference_id": "account_reference_demo_001", "status": "APPROVED", "provider": "PAGSMILE_COMPLIANCE", "provider_event_id": "provider_event_demo_001", "result_code": "APPROVED", "occurred_at": 1710000000123 }` |
+| kyb-webhooks-F04 | Added (missing in the source) | Payload fields; insert after creator_bank_account | — | `master_bank_account` \| string \| No \| Account number of the ultimate parent MA, when available. For a PA created under a VA, this can differ from `creator_bank_account` |
+| kyb-webhooks-F05 | Added (missing in the source) | Payload fields; insert after merchant_id | — | `webhook_owner_merchant_id` \| string \| No \| Merchant identifier of the direct parent that created the managed account, when available. This is not the USER subscription owner; use `user_id` to identify that owner |
+| kyb-webhooks-F06 | Added (missing in the source) | Payload fields; insert after result_code | — | `error_reason` \| string \| No \| Public failure reason. For `ERROR`, `REJECTED`, or `CREATION_FAILED`, the value is `Address verification document is required.` or `Verification could not be completed. Please contact support.`. Omitted for other delivered statuses |
+| kyb-webhooks-F07 | Added (missing in the source) | Behavior and handling; append caveat to the opening sentence | Receive compliance review status changes for MOR, VA, and PA managed accounts. | Receive compliance review status changes for MOR, VA, and PA managed accounts when their compliance result updates are accepted. MOR accounts that reuse the parent MA's approved compliance records do not start a new provider review and do not receive a new KYB result callback merely because the account is created. |
+| kyb-webhooks-F08 | Added (missing in the source) | Events and scopes; append subscription prerequisites to the USER-owner sentence | Managed account KYB events use `user_id` to identify the owning USER. | Managed account KYB events use `user_id` to identify the owning USER. Delivery requires an active USER-owned subscription for `VA_ACCOUNT_KYB` that matches this `user_id` and has a callback URL and signing credential. A pending delivery is canceled if the subscription is deactivated or its revision, application, callback URL, signing credential, owner, or event no longer matches the configuration selected for that delivery. |
+</Accordion>

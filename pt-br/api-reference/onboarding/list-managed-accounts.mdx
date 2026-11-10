@@ -1,0 +1,263 @@
+---
+title: "Listar contas gerenciadas"
+description: "Consulte a lista de contas gerenciadas visíveis para o USER atual. É possível filtrar por modelo de conta, status ou CPF/CNPJ e paginar os resultados."
+api: "POST /v3/onboarding/managed_accounts/list"
+keywords: ["/v3/onboarding/managed_accounts/list"]
+---
+
+## Funcionamento e tratamento
+
+Consulte a lista de contas gerenciadas visíveis para o USER atual. É possível filtrar por modelo de conta, status ou CPF/CNPJ e paginar os resultados. Os filtros por modelo e status são aplicados antes da paginação. Os filtros por CPF/CNPJ e visibilidade das contas são aplicados depois, à página selecionada. Por isso, uma página pode conter menos contas que `page_size` ou estar vazia mesmo quando há correspondências em outras páginas. Os totais de paginação correspondem aos registros anteriores a esses últimos filtros; não encerre a paginação apenas porque `managed_accounts` está vazio. <Badge color="blue" size="sm">Complementado · api-38-F07</Badge>
+
+## Permissões e titularidade da conta
+
+USER, sem os headers `X-ISPB` ou `X-Account-Number`, inclusive headers explicitamente vazios. O USER deve ter exatamente uma conta master com status `ACTIVE` e dados bancários correspondentes a uma conta bancária com status `ACTIVE`; caso contrário, a requisição retorna o `code` de negócio `4004003` (Permission denied). MOR e VA devem pertencer diretamente a essa conta master. A PA deve pertencer a essa conta master ou a uma VA com status `ACTIVE` diretamente vinculada a ela. A conta bancária da conta superior direta também deve ter status `ACTIVE` e dados correspondentes. <Badge color="blue" size="sm">Complementado · api-38-F06</Badge> As requisições devem seguir as orientações de [Ambientes e credenciais](/pt-br/environments-and-credentials).
+
+## Parâmetros da requisição
+
+Todos os parâmetros são opcionais. Omita os campos de filtro para não filtrar. É possível informar apenas page para paginação.
+
+<ParamField body="model" type="integer">
+**Obrigatório:** Não (não obrigatório nesta camada). Modelo de conta gerenciada. Valores: `1` MOR; `2` VA; `3` PA. Omita este campo para não filtrar por modelo. O valor `0` informado explicitamente ou qualquer outro valor retorna o `code` de negócio `4001` (Invalid model value). <Badge color="blue" size="sm">Complementado · api-38-F03</Badge>
+</ParamField>
+
+<ParamField body="status" type="integer">
+**Obrigatório:** Não (não obrigatório nesta camada). Filtro de status da conta gerenciada. Valores: `1` PENDING; `2` ACTIVE; `3` FROZEN; `4` CLOSED; `5` REJECTED; `6` EXPIRED. Omita este campo para não filtrar por status. Os valores `0` e `7` e quaisquer outros valores retornam o `code` de negócio `4001` (Invalid status value). <Badge color="blue" size="sm">Complementado · api-38-F04</Badge>
+</ParamField>
+
+<ParamField body="tax_id" type="string">
+**Obrigatório:** Não (não obrigatório nesta camada). CPF/CNPJ da pessoa ou empresa. Deve corresponder exatamente ao número do documento de conformidade, sem diferenciar maiúsculas de minúsculas e ignorando espaços nas extremidades. A pontuação do documento não é removida. Um valor vazio ou composto apenas por espaços não aplica filtro por CPF/CNPJ. <Badge color="blue" size="sm">Complementado · api-38-F05</Badge>
+</ParamField>
+
+<ParamField body="page" type="object">
+**Obrigatório:** Não (não obrigatório nesta camada). Condições de paginação/número da página, diferenciados pelo tipo
+</ParamField>
+
+<ParamField body="page.page" type="integer">
+↳ **Obrigatório:** Não. Número da página, a partir de 1. Inteiro de 32 bits com sinal, opcional; valores omitidos ou inferiores a 1 usam a página 1. <Badge color="blue" size="sm">Complementado · api-38-F01</Badge>
+</ParamField>
+
+<ParamField body="page.page_size" type="integer">
+↳ **Obrigatório:** Não. Tamanho da página. Inteiro de 32 bits com sinal, opcional; valores omitidos ou inferiores a 1 usam 10. Valores acima de 100 são reduzidos para 100. <Badge color="blue" size="sm">Complementado · api-38-F02</Badge>
+</ParamField>
+
+## Exemplo de requisição cURL
+
+O exemplo usa credenciais de nível USER. Preencha os parâmetros reais e gere a assinatura com base no body.json final.
+
+## Campos da resposta
+
+Os caminhos dos campos partem da raiz da resposta. `[]` indica um elemento de array. Os valores monetários usam strings decimais. Os enums são interpretados conforme cada campo. A estrutura abaixo representa os dados de uma resposta de sucesso. Um valor nulo ou 0, por si só, não indica a conclusão da operação.
+
+<ResponseField name="code" type="integer">
+Código de resultado de negócio; 200 indica sucesso. Os erros de negócio são retornados neste campo, que não equivale ao código de status HTTP.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Descrição do resultado de negócio; em caso de falha, analise esta descrição junto com o campo code para identificar a causa.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Objeto de dados da resposta de sucesso; pode ser null em respostas de erro.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Horário da resposta, em timestamp Unix UTC em milissegundos.
+</ResponseField>
+
+<ResponseField name="data.managed_accounts" type="array">
+Lista de contas gerenciadas retornadas pela consulta.
+</ResponseField>
+
+<ResponseField name="data.managed_accounts[].reference_id" type="string">
+ID de referência do recurso fornecido pelo solicitante ao criar a conta gerenciada.
+</ResponseField>
+
+<ResponseField name="data.managed_accounts[].account_holder_document" type="string">
+Número do CPF/CNPJ do titular legal da conta.
+</ResponseField>
+
+<ResponseField name="data.managed_accounts[].account_holder_name" type="string">
+Nome do titular legal da conta, obtido do nome legal nos dados de conformidade. Fica vazio quando não há dados.
+</ResponseField>
+
+<ResponseField name="data.managed_accounts[].document_type" type="string">
+String do tipo de documento: CPF ou CNPJ.
+</ResponseField>
+
+<ResponseField name="data.managed_accounts[].model" type="integer">
+Modelo de conta gerenciada. Enum: 0 VA_ACCOUNT_MODEL_UNSPECIFIED; 1 VA_ACCOUNT_MODEL_MOR; 2 VA_ACCOUNT_MODEL_VA; 3 VA_ACCOUNT_MODEL_PA.
+</ResponseField>
+
+<ResponseField name="data.managed_accounts[].status" type="integer">
+Status atual da conta gerenciada. Enum: `0` `MANAGED_ACCOUNT_STATUS_V3_UNSPECIFIED`; `1` `MANAGED_ACCOUNT_STATUS_V3_PENDING`; `2` `MANAGED_ACCOUNT_STATUS_V3_ACTIVE`; `3` `MANAGED_ACCOUNT_STATUS_V3_FROZEN`; `4` `MANAGED_ACCOUNT_STATUS_V3_CLOSED`; `5` `MANAGED_ACCOUNT_STATUS_V3_REJECTED`; `6` `MANAGED_ACCOUNT_STATUS_V3_EXPIRED`; `7` `MANAGED_ACCOUNT_STATUS_V3_PENDING_SUBMISSION`. O valor `7` está definido no contrato, mas atualmente não é retornado por este endpoint; um status de conta sem correspondência retorna `0`. Verifique `compliance_status` separadamente para identificar `COMPLIANCE_STATUS_V3_PENDING_SUBMISSION=2`. <Badge color="blue" size="sm">Complementado · api-38-F09</Badge>
+</ResponseField>
+
+<ResponseField name="data.managed_accounts[].compliance_status" type="integer">
+Status de conformidade KYC/KYB. Enum: 0 COMPLIANCE_STATUS_V3_UNSPECIFIED; 1 COMPLIANCE_STATUS_V3_PENDING; 2 COMPLIANCE_STATUS_V3_PENDING_SUBMISSION; 3 COMPLIANCE_STATUS_V3_APPROVED; 4 COMPLIANCE_STATUS_V3_REJECTED; 5 COMPLIANCE_STATUS_V3_EXPIRED; 6 COMPLIANCE_STATUS_V3_CREATION_FAILED; 7 COMPLIANCE_STATUS_V3_REVIEWING; 8 COMPLIANCE_STATUS_V3_ERROR; 9 COMPLIANCE_STATUS_V3_FORCE_APPROVED.
+</ResponseField>
+
+<ResponseField name="data.managed_accounts[].compliance_session_id" type="string">
+ID do processo de conformidade vinculado.
+</ResponseField>
+
+<ResponseField name="data.managed_accounts[].trading_name" type="string">
+Nome fantasia.
+</ResponseField>
+
+<ResponseField name="data.managed_accounts[].notification_email" type="string">
+E-mail para notificações da conta.
+</ResponseField>
+
+<ResponseField name="data.managed_accounts[].created_at" type="integer">
+Data e hora de criação, em timestamp Unix UTC em milissegundos. Pode ser 0 se a criação não ocorreu ou se a data e hora não foram informadas.
+</ResponseField>
+
+<ResponseField name="data.managed_accounts[].updated_at" type="integer">
+Data e hora da última atualização, em timestamp Unix UTC em milissegundos. Pode ser 0 se não houve atualização ou se a data e hora não foram informadas.
+</ResponseField>
+
+<ResponseField name="data.managed_accounts[].activated_at" type="integer">
+Data e hora da aprovação de conformidade da conta. É 0 enquanto não houver aprovação. Timestamp Unix UTC em milissegundos, que pode ser 0 se o evento não ocorreu ou se a data e hora não foram informadas.
+</ResponseField>
+
+<ResponseField name="data.managed_accounts[].account" type="object">
+Dados da conta bancária do próprio recurso. Podem estar vazios se a conta ainda não foi aberta.
+</ResponseField>
+
+<ResponseField name="data.managed_accounts[].account.ispb" type="string">
+Código ISPB do banco.
+</ResponseField>
+
+<ResponseField name="data.managed_accounts[].account.account_number" type="string">
+Número da conta.
+</ResponseField>
+
+<ResponseField name="data.managed_accounts[].linked_account" type="object">
+Dados da conta superior direta da PA. Vazio para MOR/VA. <Badge color="orange" size="sm">Corrigido · api-38-F15</Badge>
+</ResponseField>
+
+<ResponseField name="data.managed_accounts[].linked_account.ispb" type="string">
+Código ISPB do banco.
+</ResponseField>
+
+<ResponseField name="data.managed_accounts[].linked_account.account_number" type="string">
+Número da conta.
+</ResponseField>
+
+<ResponseField name="data.page" type="object">
+Informações de paginação.
+</ResponseField>
+
+<ResponseField name="data.page.page" type="integer">
+Informações de paginação.
+</ResponseField>
+
+<ResponseField name="data.page.total" type="integer">
+Número de registros do USER que correspondem aos filtros por modelo e status, antes dos filtros de visibilidade de contas gerenciadas e CPF/CNPJ. Se `model` for omitido, a contagem pode incluir a conta master. O total pode superar o número de contas gerenciadas retornadas em todas as páginas. <Badge color="orange" size="sm">Corrigido · api-38-F08</Badge>
+</ResponseField>
+
+<ResponseField name="data.page.page_size" type="integer">
+Número de registros por página.
+</ResponseField>
+
+<ResponseField name="data.page.total_pages" type="integer">
+Número total de páginas, calculado a partir do número de registros do USER que correspondem aos filtros por modelo e status, antes dos filtros de visibilidade de contas gerenciadas e CPF/CNPJ. Se `model` for omitido, a contagem pode incluir a conta master. O total pode superar o número de contas gerenciadas retornadas em todas as páginas. <Badge color="orange" size="sm">Corrigido · api-38-F08</Badge>
+</ResponseField>
+
+## Respostas
+
+Consulte os exemplos de resposta pelo `code` de negócio no JSON. Verifique o status HTTP e o code de negócio separadamente. Uma resposta HTTP 200 também pode retornar um erro de negócio. <Badge color="orange" size="sm">Corrigido · api-38-F14</Badge>
+
+| `code` | Significado | Ação recomendada |
+| --- | --- | --- |
+| `200` | Requisição bem-sucedida | Leia data e avalie o resultado do processamento conforme o status de negócio deste endpoint. |
+| `400` | Falha na requisição ou validação | Problema nos parâmetros. Verifique e corrija os parâmetros da requisição. |
+| `500` | Erro do sistema | Registre a resposta e confirme primeiro o resultado de negócio. |
+
+Os exemplos ilustram a estrutura da resposta. Os valores de message e do status de negócio devem ser obtidos da resposta efetiva. Para outros erros de parâmetros, permissões e serviço, consulte [Catálogo de erros](/pt-br/api-reference/error-catalog). Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados.
+
+<Tip>
+Para testar este endpoint, envie o exemplo de requisição para a Base URL do Sandbox `https://ebanking-openapi-sandbox.pagsmile.com.br` com sua AK/SK de Sandbox. Assine cada requisição conforme descrito em [Ambientes e credenciais](/pt-br/environments-and-credentials#assinatura-de-requisições-à-api).
+</Tip>
+
+
+<Accordion title="Correções em relação ao documento original (11)" icon="clipboard-check">
+Esta página foi conferida com o código-fonte da Pagsmile Open API em 2026-11-10. Cada alteração abaixo está marcada na página com um selo que mostra o seu ID.
+
+| ID | Alteração | Local | Texto do documento original | Texto atualizado |
+| --- | --- | --- | --- | --- |
+| api-38-F01 | Complementado (ausente no original) | Request parameters / page.page | Preencha com os dados reais do negócio; a validade depende das validações no servidor e nos sistemas subsequentes | Número da página, a partir de 1. Inteiro de 32 bits com sinal, opcional; valores omitidos ou inferiores a 1 usam a página 1. |
+| api-38-F02 | Complementado (ausente no original) | Request parameters / page.page_size | Tamanho da página; consulte os limites de cada endpoint nas condições desta página | Tamanho da página. Inteiro de 32 bits com sinal, opcional; valores omitidos ou inferiores a 1 usam 10. Valores acima de 100 são reduzidos para 100. |
+| api-38-F03 | Complementado (ausente no original) | Request parameters / model | Tipo de conta gerenciada. Valores: 1 MOR; 2 VA; 3 PA | Modelo de conta gerenciada. Valores: 1 MOR; 2 VA; 3 PA. Omita este campo para não filtrar por modelo. O valor 0 informado explicitamente ou qualquer outro valor retorna o code de negócio 4001 (Invalid model value). |
+| api-38-F04 | Complementado (ausente no original) | Request parameters / status | Status do recurso, interpretado conforme o enum do objeto. Valores: 1 PENDING; 2 ACTIVE; 3 FROZEN; 4 CLOSED; 5 REJECTED; 6 EXPIRED | Filtro de status da conta gerenciada. Valores: 1 PENDING; 2 ACTIVE; 3 FROZEN; 4 CLOSED; 5 REJECTED; 6 EXPIRED. Omita este campo para não filtrar por status. Os valores 0 e 7 e quaisquer outros valores retornam o code de negócio 4001 (Invalid status value). |
+| api-38-F05 | Complementado (ausente no original) | Request parameters / tax_id | CPF/CNPJ da pessoa ou empresa | CPF/CNPJ da pessoa ou empresa. Deve corresponder exatamente ao número do documento de conformidade, sem diferenciar maiúsculas de minúsculas e ignorando espaços nas extremidades. A pontuação do documento não é removida. Um valor vazio ou composto apenas por espaços não aplica filtro por CPF/CNPJ. |
+| api-38-F06 | Complementado (ausente no original) | Permissions and account ownership | USER, sem header de conta. | USER, sem os headers X-ISPB ou X-Account-Number, inclusive headers explicitamente vazios. O USER deve ter exatamente uma conta master com status ACTIVE e dados bancários correspondentes a uma conta bancária com status ACTIVE; caso contrário, a requisição retorna o code de negócio 4004003 (Permission denied). MOR e VA devem pertencer diretamente a essa conta master. A PA deve pertencer a essa conta master ou a uma VA com status ACTIVE diretamente vinculada a ela. A conta bancária da conta superior direta também deve ter status ACTIVE e dados correspondentes. |
+| api-38-F07 | Complementado (ausente no original) | Behavior and handling | É possível filtrar por modelo de conta, status ou CPF/CNPJ e paginar os resultados. | É possível filtrar por modelo de conta, status ou CPF/CNPJ e paginar os resultados. Os filtros por modelo e status são aplicados antes da paginação. Os filtros por CPF/CNPJ e visibilidade das contas são aplicados depois, à página selecionada. Por isso, uma página pode conter menos contas que page_size ou estar vazia mesmo quando há correspondências em outras páginas. Os totais de paginação correspondem aos registros anteriores a esses últimos filtros; não encerre a paginação apenas porque managed_accounts está vazio. |
+| api-38-F08 | Corrigido (não correspondia ao código) | Response fields / data.page.total | Número total de registros. | Número de registros do USER que correspondem aos filtros por modelo e status, antes dos filtros de visibilidade de contas gerenciadas e CPF/CNPJ. Se model for omitido, a contagem pode incluir a conta master. O total pode superar o número de contas gerenciadas retornadas em todas as páginas. |
+| api-38-F09 | Complementado (ausente no original) | Response fields / data.managed_accounts[].status | Status de negócio atual, interpretado conforme os valores do enum listados neste campo. Enum: 0 MANAGED_ACCOUNT_STATUS_V3_UNSPECIFIED; 1 MANAGED_ACCOUNT_STATUS_V3_PENDING; 2 MANAGED_ACCOUNT_STATUS_V3_ACTIVE; 3 MANAGED_ACCOUNT_STATUS_V3_FROZEN; 4 MANAGED_ACCOUNT_STATUS_V3_CLOSED; 5 MANAGED_ACCOUNT_STATUS_V3_REJECTED; 6 MANAGED_ACCOUNT_STATUS_V3_EXPIRED; 7 MANAGED_ACCOUNT_STATUS_V3_PENDING_SUBMISSION. | Status atual da conta gerenciada. Enum: 0 MANAGED_ACCOUNT_STATUS_V3_UNSPECIFIED; 1 MANAGED_ACCOUNT_STATUS_V3_PENDING; 2 MANAGED_ACCOUNT_STATUS_V3_ACTIVE; 3 MANAGED_ACCOUNT_STATUS_V3_FROZEN; 4 MANAGED_ACCOUNT_STATUS_V3_CLOSED; 5 MANAGED_ACCOUNT_STATUS_V3_REJECTED; 6 MANAGED_ACCOUNT_STATUS_V3_EXPIRED; 7 MANAGED_ACCOUNT_STATUS_V3_PENDING_SUBMISSION. O valor 7 está definido no contrato, mas atualmente não é retornado por este endpoint; um status de conta sem correspondência retorna 0. Verifique compliance_status separadamente para identificar COMPLIANCE_STATUS_V3_PENDING_SUBMISSION=2. |
+| api-38-F14 | Corrigido (não correspondia ao código) | Responses / 200 example | `{ "code": 200, "message": "success", "data": { "managed_accounts": [], "page": { "page": 0, "page_size": 0, "total": 0, "total_pages": 0 } }, "time": 1791792000000 }` | `{ "code": 200, "message": "success", "data": { "managed_accounts": [], "page": { "page": 1, "page_size": 20, "total": 1, "total_pages": 1 }, "error": null, "result": null }, "time": 1791792000000 }` |
+| api-38-F15 | Corrigido (não correspondia ao código) | Response fields / data.managed_accounts[].linked_account | Dados da conta-pai direta da PA. Vazio para MOR/VA. | Dados da conta superior direta da PA. Vazio para MOR/VA. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "page": {
+    "page": 1,
+    "page_size": 20
+  }
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/onboarding/managed_accounts/list' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${USER_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Requisição bem-sucedida
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "managed_accounts": [],
+    "page": {
+      "page": 1,
+      "page_size": 20,
+      "total": 1,
+      "total_pages": 1
+    },
+    "error": null,
+    "result": null
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Falha na requisição ou validação
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 Erro do sistema
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

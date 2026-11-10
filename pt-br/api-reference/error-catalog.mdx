@@ -1,0 +1,111 @@
+---
+title: "Catálogo de erros"
+description: "Registre separadamente o status HTTP e o code de negócio do JSON."
+---
+
+## Avaliação da resposta
+
+Registre separadamente o status HTTP e o code de negócio do JSON. Ao receber uma resposta JSON normal, o `code=200` no nível externo indica que a requisição à API foi bem-sucedida. Outros valores de code indicam falha. HTTP 200, por si só, não indica sucesso na operação de negócio. O status final de pagamentos, devoluções e aberturas de conta ainda deve ser conferido nos respectivos endpoints. Use `message` para exibição ou investigação, não como critério estável de decisão.
+
+| Cenário | Ação |
+| --- | --- |
+| HTTP 200, code=200 no nível externo | Leia data e confira o status da operação de negócio |
+| HTTP 200, code diferente de 200 no nível externo | Trate o erro de negócio conforme os códigos abaixo |
+| Erro em formato não JSON ou em texto simples | Trate separadamente os erros de formato da resposta e de transporte |
+| Timeout ou interrupção da conexão | Resultado desconhecido: consulte primeiro a operação original |
+
+## Sucesso
+
+| code | Significado | O que verificar |
+| --- | --- | --- |
+| `200` | Sucesso | Leia data; confira o status de conclusão da operação conforme o endpoint. |
+
+## Parâmetros da requisição
+
+| code | Significado | O que verificar |
+| --- | --- | --- |
+| `400` | Falha na requisição ou validação | Confira os parâmetros do endpoint. Se a criação de conta gerenciada informar que o envio para verificação de conformidade foi rejeitado, a tarifa de criação da conta não foi cobrada. Corrija a requisição e tente novamente com um novo `reference_id`; isso difere de uma nova tentativa técnica após o código `504`. <Badge color="blue" size="sm">Complementado · error-catalog-F09</Badge> |
+| `4000` | Campo obrigatório ausente | Inclua os campos ausentes. |
+| `4001` | Valor do campo inválido | Confira os valores permitidos. |
+| `4002` | Formato do campo inválido | Confira o formato e o tipo JSON. |
+| `4003` | Campo fora do intervalo permitido | Confira os intervalos permitidos para valores monetários, horários e valores numéricos. |
+| `4001011 / 4001012` | Requisição expirada/intervalo de tempo inválido | Confira o horário da requisição e o intervalo permitido. |
+
+## Autenticação e permissões
+
+| code | Significado | O que verificar |
+| --- | --- | --- |
+| `4003008` | Autenticação necessária | Verifique a autenticação do endpoint e a conta-alvo. |
+| `4004003` | Permissões insuficientes/capacidade de devolução via MED indisponível | Verifique as permissões exigidas pelo endpoint. Para MED, verifique também a capacidade de devolução. Se um pagamento for restringido por recuperação via MED, verifique o status do MED e o saldo disponível da conta. <Badge color="blue" size="sm">Complementado · error-catalog-F11</Badge> |
+| `4004101` | Autorização necessária | Verifique a identidade associada às credenciais. |
+| `4004102` | Header ou metadados da requisição inválidos | Verifique os headers obrigatórios e seus formatos. |
+| `4004103` | IP de origem fora da lista de permissões | Confirme a configuração do IP de saída. |
+| `4004104` | O hash do corpo da requisição não corresponde | Calcule o hash com base nos bytes brutos efetivamente enviados. |
+| `4004105` | Timestamp inválido ou expirado | Use o timestamp Unix em milissegundos e sincronize o relógio. A documentação oficial informa uma janela de aceitação de 5 minutos. |
+| `4004106` | Nonce inválido ou já utilizado | Gere um novo `nonce` para cada requisição, inclusive nas novas tentativas após falhas de autenticação. Os nonces são registrados separadamente para cada AK por 10 minutos e podem ser consumidos mesmo quando a assinatura ou as permissões são rejeitadas. <Badge color="blue" size="sm">Complementado · error-catalog-F06</Badge> |
+| `4004107` | A assinatura não corresponde | Verifique a SK, a string a ser assinada e a requisição original. |
+| `401` | Usuário inválido | Verifique o usuário e o contexto das credenciais. |
+| `4010 / 4011 / 4012` | Falha na autenticação/token inválido/token expirado | Verifique a autenticação exigida pelo endpoint. Esses nomes não indicam que a v3 oferece suporte a OAuth. A v3 continua usando assinaturas HMAC. |
+
+## Contas e conformidade
+
+| code | Significado | O que verificar |
+| --- | --- | --- |
+| `4001092` | Status de KYC/KYB inválido ou incompleto | Verifique o status de conformidade. |
+| `4002003` | Dados ou solicitação já cadastrados | Consulte o registro existente. |
+| `4004004` | Recurso inexistente | Verifique o identificador e o escopo da conta. |
+| `4004008 / 4004010` | Conta inativa ou sem permissão para enviar pagamentos/conta inexistente <Badge color="orange" size="sm">Corrigido · error-catalog-F03</Badge> | Verifique a conta-alvo e seu status. |
+
+## Chaves Pix e QR Codes
+
+| code | Significado | O que verificar |
+| --- | --- | --- |
+| `4001001` | Chave Pix inválida ou restrição relacionada a fraude associada ao usuário, à conta ou à chave Pix <Badge color="blue" size="sm">Complementado · error-catalog-F07</Badge> | Verifique o valor e o tipo da chave Pix. |
+| `4001010` | QR Code inválido | Verifique o conteúdo completo do QR Code. |
+| `4001014 / 4001015` | QR Code já utilizado/expirado | Consulte o status do QR Code. |
+| `4001090` | Chave Pix já vinculada | Consulte o vínculo existente. |
+| `4001094` | Chave Pix vinculada por terceiros | Verifique a titularidade. |
+| `4001096` | Chave Pix inativa ou excluída | Selecione uma chave Pix válida. |
+
+## Pagamentos e devoluções
+
+| code | Significado | O que verificar |
+| --- | --- | --- |
+| `4001002 / 4001003` | Conta/tipo de conta inválido | Verifique o número da conta e o tipo. |
+| `4001004` | Valor ou limite de valor inválido | Verifique o formato do valor e o limite. |
+| `4001013` | Requisição já processada ou duplicada | Consulte primeiro a operação original. |
+| `4001093` | Não é permitido pagar a si próprio | Verifique o pagador e o recebedor. |
+| `4001998 / 4001999` | Limite excedido/saldo insuficiente | Verifique o limite e o saldo disponível. |
+| `4003003` | Detalhes da transação inexistentes | Verifique o ID da transação e a conta. |
+| `4003005` | Falha no processamento da devolução ou valor recusado | Verifique a transação original, o valor restante disponível para devolução e o status da devolução. |
+| `4003012` | Falha na validação Pix | Verifique as condições de validação do endpoint. |
+| `4003014` | Falha no processamento do pagamento | Consulte primeiro o resultado do pagamento. |
+| `4003016` | Falha na verificação de risco ou AML | Entre em contato com o suporte de integração para análise. |
+
+## Limitação de requisições e status do serviço
+
+| code | Significado | O que verificar |
+| --- | --- | --- |
+| `4004029` | Muitas requisições | Reduza a frequência das requisições e decida se deve tentar novamente conforme as condições do endpoint. |
+| `500` | Erro do sistema | Registre a resposta e confirme primeiro o resultado de negócio. |
+| `501 / 502 / 503` | Serviço indisponível/banco ocupado/sem suporte no momento | Verifique o status do serviço e o resultado da operação original. |
+| `504` | Verificação de conformidade temporariamente indisponível | Na criação de conta gerenciada, não foi possível confirmar o resultado do envio para verificação de conformidade e a tarifa de criação da conta não foi cobrada. Tente novamente com o mesmo `reference_id` e gere novamente os dados de assinatura. Não adicione `request_id` a essa requisição. <Badge color="orange" size="sm">Corrigido · error-catalog-F01</Badge> |
+
+## Novas tentativas e solução de problemas
+
+Corrija primeiro os parâmetros, a assinatura, as permissões ou as condições da conta. Em caso de timeout, requisição duplicada ou falha no pagamento, consulte a operação original antes de decidir se deve reenviar. Você não deve reenviar com outro número de pedido apenas por não ter recebido uma resposta. Nas novas tentativas técnicas, siga as regras do endpoint para os identificadores de negócio. A cada assinatura, gere novamente o timestamp, o nonce e o hash do corpo da requisição.
+
+Ao receber um código de erro desconhecido, registre o ambiente, o caminho do endpoint, o horário da requisição, o status HTTP, code, message, o identificador do recurso e a resposta com dados sensíveis mascarados. Entre em contato com o suporte de integração.
+
+<Accordion title="Correções em relação ao documento original (6)" icon="clipboard-check">
+Esta página foi conferida com o código-fonte da Pagsmile Open API em 2026-11-10. Cada alteração abaixo está marcada na página com um selo que mostra o seu ID.
+
+| ID | Alteração | Local | Texto do documento original | Texto atualizado |
+| --- | --- | --- | --- | --- |
+| error-catalog-F01 | Corrigido (não correspondia ao código) | Rate limiting and service status | Nas novas tentativas técnicas dos endpoints aplicáveis, mantenha request_id e gere novamente os dados de assinatura. Não adicione request_id a endpoints que não definem esse campo. | Na criação de conta gerenciada, não foi possível confirmar o resultado do envio para verificação de conformidade e a tarifa de criação da conta não foi cobrada. Tente novamente com o mesmo reference_id e gere novamente os dados de assinatura. Não adicione request_id a essa requisição. |
+| error-catalog-F03 | Corrigido (não correspondia ao código) | Accounts and compliance | Conta não ativada/conta inexistente | Conta inativa ou sem permissão para enviar pagamentos/conta inexistente |
+| error-catalog-F06 | Complementado (ausente no original) | Authentication and permissions | Gere um novo nonce para cada requisição. | Gere um novo nonce para cada requisição, inclusive nas novas tentativas após falhas de autenticação. Os nonces são registrados separadamente para cada AK por 10 minutos e podem ser consumidos mesmo quando a assinatura ou as permissões são rejeitadas. |
+| error-catalog-F07 | Complementado (ausente no original) | Pix keys and QR codes | Chave Pix inválida | Chave Pix inválida ou restrição relacionada a fraude associada ao usuário, à conta ou à chave Pix |
+| error-catalog-F09 | Complementado (ausente no original) | Request parameters | Confira os parâmetros do endpoint. | Confira os parâmetros do endpoint. Se a criação de conta gerenciada informar que o envio para verificação de conformidade foi rejeitado, a tarifa de criação da conta não foi cobrada. Corrija a requisição e tente novamente com um novo reference_id; isso difere de uma nova tentativa técnica após o código 504. |
+| error-catalog-F11 | Complementado (ausente no original) | Authentication and permissions | Verifique as permissões exigidas pelo endpoint. Para MED, verifique também a capacidade de devolução. | Verifique as permissões exigidas pelo endpoint. Para MED, verifique também a capacidade de devolução. Se um pagamento for restringido por recuperação via MED, verifique o status do MED e o saldo disponível da conta. |
+</Accordion>

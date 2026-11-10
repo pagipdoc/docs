@@ -1,0 +1,332 @@
+---
+title: "Consultar detalhes do QR Code"
+description: "Consulte os dados pelo ID do QR Code e confira a associação entre o QR Code e o pedido do comerciante."
+api: "POST /v3/qr_code/details"
+keywords: ["/v3/qr_code/details"]
+---
+
+## Funcionamento e tratamento
+
+Consulte os dados pelo ID do QR Code e confira a associação entre o QR Code e o pedido do comerciante. Este endpoint não substitui a consulta à transação de recebimento.
+
+## Permissões e titularidade da conta
+
+Use credenciais `ACCOUNT` para a conta vinculada, ou credenciais `USER` com `X-ISPB` e `X-Account-Number` para uma conta autorizada pertencente a esse `USER`. Credenciais `PLATFORM` não são aceitas. Com credenciais `ACCOUNT`, omita os dois headers de conta ou envie ambos com valores correspondentes à conta vinculada. O QR Code deve pertencer à conta selecionada; caso contrário, a resposta retorna o code de negócio `4004004` com a mensagem `QR code not found`. As requisições devem seguir as orientações de [Ambientes e credenciais](/pt-br/environments-and-credentials). <Badge color="blue" size="sm">Complementado · api-3-F02</Badge>
+
+## Parâmetros da requisição
+
+<ParamField body="qr_code_id" type="string" required>
+ID do QR Code; obtido em `data.qr_code_id` na resposta de geração do QR Code. Use o ID sem alterações e sem espaços nas extremidades. Ele deve conter 25 ou 26 caracteres: um prefixo de oito dígitos com data e hora UTC válidas no formato `YYMMDDHH`, seguido de 17 ou 18 caracteres hexadecimais (0–9, a–f ou A–F). <Badge color="blue" size="sm">Complementado · api-3-F01</Badge>
+</ParamField>
+
+<Info>
+**Origem dos parâmetros**
+
+O campo `qr_code_id` deve conter o ID de um QR Code existente. Primeiro, chame [Gerar QR Code dinâmico](/pt-br/api-reference/payin/generate-dynamic-qr-code) ou [Gerar QR Code estático](/pt-br/api-reference/payin/generate-static-qr-code). Depois, copie `data.qr_code_id` da resposta.
+</Info>
+
+## Campos da resposta
+
+Os caminhos dos campos partem da raiz da resposta. `[]` indica um elemento de array. Os valores monetários usam strings decimais. Os enums são interpretados conforme cada campo. A estrutura abaixo representa os dados de uma resposta de sucesso. Um valor nulo ou 0, por si só, não indica a conclusão da operação.
+
+<ResponseField name="code" type="integer">
+Código de resultado de negócio; 200 indica sucesso. Os erros de negócio são retornados neste campo, que não equivale ao código de status HTTP.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Descrição do resultado de negócio; em caso de falha, analise esta descrição junto com o campo code para identificar a causa.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Objeto de dados da resposta de sucesso; pode ser null em respostas de erro.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Horário da resposta, em timestamp Unix UTC em milissegundos.
+</ResponseField>
+
+<ResponseField name="data.qr_code_id" type="string">
+ID do QR Code.
+</ResponseField>
+
+<ResponseField name="data.merchant_order_id" type="string">
+ID do pedido do comerciante informado pelo integrador.
+</ResponseField>
+
+<ResponseField name="data.is_paid" type="boolean">
+Indica se o QR Code já foi pago. A implementação atual exige que o pagamento esteja concluído e que exista uma transação recente.
+</ResponseField>
+
+<ResponseField name="data.qr_code_type" type="integer">
+Tipo de QR Code. Enum: 0 QRCODE_TYPE_UNSPECIFIED; 1 QRCODE_TYPE_NOT_SET; 11 QRCODE_TYPE_STATIC; 12 QRCODE_TYPE_DYNAMIC_INSTANT_PAYMENT; 13 QRCODE_TYPE_DYNAMIC_EXPIRE_PAYMENT; 14 QRCODE_TYPE_COMPOSITE_PAYMENT.
+</ResponseField>
+
+<ResponseField name="data.last_txn" type="object">
+A transação concluída mais recente associada ao QR Code, ordenada pelo horário de início. É retornada somente quando o status de pagamento do QR Code está concluído e o recebedor da transação corresponde à conta selecionada. Pode ser `null` quando essas condições não são atendidas ou nenhuma transação concluída correspondente é encontrada. A consulta abrange transações iniciadas desde 24 horas antes da hora de criação UTC codificada no ID do QR Code até o momento atual. <Badge color="orange" size="sm">Corrigido · api-3-F03</Badge>
+</ResponseField>
+
+<ResponseField name="data.last_txn.payee" type="object">
+Dados do recebedor.
+</ResponseField>
+
+<ResponseField name="data.last_txn.payee.name" type="string">
+Nome.
+</ResponseField>
+
+<ResponseField name="data.last_txn.payee.document_id" type="string">
+Número do documento do participante da transação, que pode ser mascarado conforme a configuração do comerciante.
+</ResponseField>
+
+<ResponseField name="data.last_txn.payee.document_type" type="integer">
+Tipo de documento. Enum: 0 DOCUMENT_TYPE_UNSPECIFIED; 1 DOCUMENT_TYPE_CPF; 2 DOCUMENT_TYPE_CNPJ.
+</ResponseField>
+
+<ResponseField name="data.last_txn.payee.bank_account" type="string">
+Número da conta.
+</ResponseField>
+
+<ResponseField name="data.last_txn.payee.bank_account_type" type="integer">
+Tipo de conta bancária. Enum: 0 BANK_ACCOUNT_TYPE_UNSPECIFIED; 1 BANK_ACCOUNT_TYPE_CHECKING; 2 BANK_ACCOUNT_TYPE_SALARY; 3 BANK_ACCOUNT_TYPE_SAVINGS; 4 BANK_ACCOUNT_TYPE_PAYMENT; 5 BANK_ACCOUNT_TYPE_TRANSCTIONAL_PI; 7 BANK_ACCOUNT_TYPE_DEPOSIT; 6 BANK_ACCOUNT_TYPE_GUARANTEED.
+</ResponseField>
+
+<ResponseField name="data.last_txn.payee.bank_branch" type="string">
+Código da agência bancária.
+</ResponseField>
+
+<ResponseField name="data.last_txn.payee.bank_code" type="string">
+ISPB do banco.
+</ResponseField>
+
+<ResponseField name="data.last_txn.payee.bank_name" type="string">
+Nome do banco.
+</ResponseField>
+
+<ResponseField name="data.last_txn.payer" type="object">
+Dados do pagador.
+</ResponseField>
+
+<ResponseField name="data.last_txn.payer.name" type="string">
+Nome.
+</ResponseField>
+
+<ResponseField name="data.last_txn.payer.document_id" type="string">
+Número do documento do participante da transação, que pode ser mascarado conforme a configuração do comerciante.
+</ResponseField>
+
+<ResponseField name="data.last_txn.payer.document_type" type="integer">
+Tipo de documento. Enum: 0 DOCUMENT_TYPE_UNSPECIFIED; 1 DOCUMENT_TYPE_CPF; 2 DOCUMENT_TYPE_CNPJ.
+</ResponseField>
+
+<ResponseField name="data.last_txn.payer.bank_account" type="string">
+Número da conta.
+</ResponseField>
+
+<ResponseField name="data.last_txn.payer.bank_account_type" type="integer">
+Tipo de conta bancária. Enum: 0 BANK_ACCOUNT_TYPE_UNSPECIFIED; 1 BANK_ACCOUNT_TYPE_CHECKING; 2 BANK_ACCOUNT_TYPE_SALARY; 3 BANK_ACCOUNT_TYPE_SAVINGS; 4 BANK_ACCOUNT_TYPE_PAYMENT; 5 BANK_ACCOUNT_TYPE_TRANSCTIONAL_PI; 7 BANK_ACCOUNT_TYPE_DEPOSIT; 6 BANK_ACCOUNT_TYPE_GUARANTEED.
+</ResponseField>
+
+<ResponseField name="data.last_txn.payer.bank_branch" type="string">
+Código da agência bancária.
+</ResponseField>
+
+<ResponseField name="data.last_txn.payer.bank_code" type="string">
+ISPB do banco.
+</ResponseField>
+
+<ResponseField name="data.last_txn.payer.bank_name" type="string">
+Nome do banco.
+</ResponseField>
+
+<ResponseField name="data.last_txn.txn_id" type="string">
+ID da transação.
+</ResponseField>
+
+<ResponseField name="data.last_txn.settlement_id" type="string">
+ID da transação de liquidação.
+</ResponseField>
+
+<ResponseField name="data.last_txn.merchant_order_id" type="string">
+ID do pedido do comerciante informado por quem chama a API. Atualmente, este endpoint não preenche o campo: string vazia.
+</ResponseField>
+
+<ResponseField name="data.last_txn.txn_status" type="integer">
+Status da transação. Enum: 0 TXN_STATUS_UNSPECIFIED; 1 TXN_STATUS_PENDING; 2 TXN_STATUS_COMPLETED; 3 TXN_STATUS_FAILED; 4 TXN_STATUS_CANCELLED; 5 TXN_STATUS_PROCESSING; 6 TXN_STATUS_REFUNDED; 7 TXN_STATUS_PARTIALLY_REFUNDED; 8 TXN_STATUS_DISPUTED.
+</ResponseField>
+
+<ResponseField name="data.last_txn.source_type" type="integer">
+Tipo de origem. Enum: 0 SOURCE_TYPE_UNSPECIFIED; 1 SOURCE_TYPE_APP; 2 SOURCE_TYPE_API; 3 SOURCE_TYPE_SCHEDULE; 4 SOURCE_TYPE_BATCH. Atualmente, este endpoint não preenche o campo: 0.
+</ResponseField>
+
+<ResponseField name="data.last_txn.amount" type="string">
+Valor da transação, como string decimal.
+</ResponseField>
+
+<ResponseField name="data.last_txn.memo" type="string">
+Observação da transação. Atualmente, este endpoint não preenche o campo: string vazia.
+</ResponseField>
+
+<ResponseField name="data.last_txn.credit_fee" type="string">
+Tarifa do recebedor, como string decimal. Atualmente, este endpoint não preenche o campo: string vazia.
+</ResponseField>
+
+<ResponseField name="data.last_txn.debit_fee" type="string">
+Tarifa do pagador, como string decimal. Atualmente, este endpoint não preenche o campo: string vazia.
+</ResponseField>
+
+<ResponseField name="data.last_txn.currency" type="string">
+Moeda.
+</ResponseField>
+
+<ResponseField name="data.last_txn.rejection_reason" type="string">
+Motivo da rejeição ou falha da transação. Atualmente, este endpoint não preenche o campo: string vazia.
+</ResponseField>
+
+<ResponseField name="data.last_txn.created_at" type="integer">
+Data e hora de criação, em timestamp Unix UTC em milissegundos. Pode ser 0 se a criação não ocorreu ou se a data e hora não foram informadas.
+</ResponseField>
+
+<ResponseField name="data.last_txn.completed_at" type="integer">
+Horário de conclusão. Pode ser 0 se a conclusão ainda não tiver ocorrido. Timestamp Unix em milissegundos, em UTC. Pode ser 0 se a conclusão ainda não tiver ocorrido ou se o horário não for informado.
+</ResponseField>
+
+<ResponseField name="data.last_txn.pix_details" type="object">
+Dados exclusivos de transações Pix. Atualmente, este endpoint não preenche o campo: null.
+</ResponseField>
+
+<ResponseField name="data.last_txn.pix_details.pix_key" type="string">
+Valor da chave Pix.
+</ResponseField>
+
+<ResponseField name="data.last_txn.pix_details.pix_key_type" type="integer">
+Tipo de chave Pix. Enum: 0 PIX_KEY_TYPE_UNSPECIFIED; 1 PIX_KEY_TYPE_CPF; 2 PIX_KEY_TYPE_CNPJ; 3 PIX_KEY_TYPE_EMAIL; 4 PIX_KEY_TYPE_PHONE; 5 PIX_KEY_TYPE_EVP.
+</ResponseField>
+
+<ResponseField name="data.last_txn.pix_details.qr_code_id" type="string">
+ID do QR Code.
+</ResponseField>
+
+<ResponseField name="data.last_txn.ted_details" type="object">
+Dados exclusivos de transações TED. Atualmente, este endpoint não preenche o campo: null.
+</ResponseField>
+
+<ResponseField name="data.last_txn.ted_details.spb_request_id" type="string">
+ID da requisição SPB da transação TED.
+</ResponseField>
+
+<ResponseField name="data.last_txn.original_settlement_id" type="string">
+ID da transação de liquidação original. Atualmente, este endpoint não preenche o campo: string vazia.
+</ResponseField>
+
+<ResponseField name="data.qr_code_memo" type="string">
+Observação do QR Code.
+</ResponseField>
+
+<ResponseField name="data.qr_code_payload_base64" type="string">
+Payload de pagamento do QR Code codificado em Base64.
+</ResponseField>
+
+<ResponseField name="data.created_at" type="integer">
+Data e hora de criação, em timestamp Unix UTC em milissegundos. Pode ser 0 se a criação não ocorreu ou se a data e hora não foram informadas.
+</ResponseField>
+
+## Exemplo de requisição cURL
+
+O exemplo usa credenciais de nível ACCOUNT. Preencha os parâmetros reais e gere a assinatura com base no body.json final.
+
+## Respostas
+
+Consulte os exemplos de resposta pelo `code` de negócio no JSON. Verifique o status HTTP e o code de negócio separadamente. <Badge color="orange" size="sm">Corrigido · api-3-F04</Badge>
+
+Uma resposta HTTP 200 também pode retornar um erro de negócio. Se o corpo não puder ser decodificado como JSON, inclusive por um tipo de campo incompatível, a requisição poderá retornar HTTP 400 com um erro em texto simples; não presuma que todo corpo de erro seja JSON. <Badge color="blue" size="sm">Complementado · api-3-F07</Badge>
+
+| `code` | Significado | Ação recomendada |
+| --- | --- | --- |
+| `200` | Requisição bem-sucedida | Leia data e avalie o resultado do processamento conforme o status de negócio deste endpoint. |
+| `400` | Falha na requisição ou validação | Problema nos parâmetros. Verifique e corrija os parâmetros da requisição. |
+| `500` | Erro do sistema | Registre a resposta e confirme primeiro o resultado de negócio. |
+
+Os exemplos ilustram a estrutura da resposta. Os valores de `message` e do status de negócio devem ser obtidos da resposta efetiva. Para outros erros de parâmetros, permissões e serviço, consulte [Catálogo de erros](/pt-br/api-reference/error-catalog). Esta seção não indica que o endpoint retorna apenas os três valores de `code` apresentados. Neste endpoint, `qr_code_id` ausente ou vazio retorna `4000` (`Field qr_code_id is required`); um ID de QR Code com formato inválido retorna `400` (`qr_code_id is invalid`); e um QR Code inexistente ou que não pertence à conta selecionada retorna `4004004` (`QR code not found`). Uma falha na consulta do QR Code ou da transação associada pode retornar `4003014`, com uma mensagem que identifica a consulta que falhou. Uma conexão temporariamente indisponível pode retornar `501`. As mensagens podem depender do idioma da resposta; use o valor real de `message`. <Badge color="blue" size="sm">Complementado · api-3-F06</Badge>
+
+## Exemplo de acesso ao Sandbox
+
+Considere a resposta real como referência para os dados da transação ou do recurso, o status do processamento e as informações de erro.
+
+`X-Client-ID` usa a AK informada. O timestamp, o nonce, o hash do corpo da requisição e a assinatura são gerados automaticamente. A SK é usada apenas para assinar localmente, não é enviada na requisição nem armazenada. A visualização não envia a requisição; o botão de acesso envia uma requisição real. Se o resultado for desconhecido, consulte antes de tentar novamente. Não há novas tentativas automáticas. O acesso pelo navegador deve atender aos requisitos de CORS, IP e credenciais do Sandbox.
+
+<Tip>
+Para testar este endpoint, envie o exemplo de requisição para a Base URL do Sandbox `https://ebanking-openapi-sandbox.pagsmile.com.br` com sua AK/SK de Sandbox. Assine cada requisição conforme descrito em [Ambientes e credenciais](/pt-br/environments-and-credentials#assinatura-de-requisições-à-api).
+</Tip>
+
+
+<Accordion title="Correções em relação ao documento original (6)" icon="clipboard-check">
+Esta página foi conferida com o código-fonte da Pagsmile Open API em 2026-11-10. Cada alteração abaixo está marcada na página com um selo que mostra o seu ID.
+
+| ID | Alteração | Local | Texto do documento original | Texto atualizado |
+| --- | --- | --- | --- | --- |
+| api-3-F01 | Complementado (ausente no original) | Request parameters | ID do QR Code; obtido em `data.qr_code_id` na resposta de geração do QR Code | ID do QR Code; obtido em `data.qr_code_id` na resposta de geração do QR Code. Use o ID sem alterações e sem espaços nas extremidades. Ele deve conter 25 ou 26 caracteres: um prefixo de oito dígitos com data e hora UTC válidas no formato YYMMDDHH, seguido de 17 ou 18 caracteres hexadecimais (0–9, a–f ou A–F). |
+| api-3-F02 | Complementado (ausente no original) | Permissions and account ownership | ACCOUNT, ou USER com o header da conta-alvo. As requisições devem seguir as orientações de Ambientes e credenciais. | Use credenciais ACCOUNT para a conta vinculada, ou credenciais USER com `X-ISPB` e `X-Account-Number` para uma conta autorizada pertencente a esse USER. Credenciais PLATFORM não são aceitas. Com credenciais ACCOUNT, omita os dois headers de conta ou envie ambos com valores correspondentes à conta vinculada. O QR Code deve pertencer à conta selecionada; caso contrário, a resposta retorna o code de negócio `4004004` com a mensagem `QR code not found`. As requisições devem seguir as orientações de Ambientes e credenciais. |
+| api-3-F03 | Corrigido (não correspondia ao código) | Response fields | Transação mais recente associada ao QR Code; pode ser null se não houver transações. | A transação concluída mais recente associada ao QR Code, ordenada pelo horário de início. É retornada somente quando o status de pagamento do QR Code está concluído e o recebedor da transação corresponde à conta selecionada. Pode ser null quando essas condições não são atendidas ou nenhuma transação concluída correspondente é encontrada. A consulta abrange transações iniciadas desde 24 horas antes da hora de criação UTC codificada no ID do QR Code até o momento atual. |
+| api-3-F04 | Corrigido (não correspondia ao código) | Responses — Request succeeded | `{ "code": 200, "message": "success", "data": { "qr_code_id": "example-qr_code_id", "merchant_order_id": "example-merchant_order_id", "is_paid": false, "qr_code_type": 0, "last_txn": { "payee": {}, "payer": {}, "txn_id": "example-txn_id", "settlement_id": "example-settlement_id", "merchant_order_id": "example-merchant_order_id", "txn_status": 0, "source_type": 0, "amount": "10.00", "memo": "example-memo", "credit_fee": "example-credit_fee", "debit_fee": "example-debit_fee", "currency": "BRL", "rejection_reason": "example-rejection_reason", "created_at": 0, "completed_at": 0, "pix_details": {}, "ted_details": {}, "original_settlement_id": "example-original_settlement_id" }, "qr_code_memo": "example-qr_code_memo", "qr_code_payload_base64": "example-qr_code_payload_base64", "created_at": 0 }, "time": 1791792000000 }` | `{ "code": 200, "message": "success", "data": { "qr_code_id": "26060802faf735091eb74c929a", "merchant_order_id": "260608_example_order", "is_paid": false, "qr_code_type": 12, "last_txn": null, "qr_code_memo": "Example QR code", "qr_code_payload_base64": "MDAwMjAxMDEwMjEyMjY3NzAwMTRici5nb3YuYmNiLnBpeDI1NTVleGFtcGxlLmNvbS9waXgvdjIvMTIzNDU2NzgtMTIzNC0xMjM0LTEyMzQtMTIzNDU2Nzg5MDEyNTIwNDAwMDA1MzAzOTg2NTQwNTEwLjAwNTgwMkJSNTkxM0VYQU1QTEUgUEFZRUU2MDA5U0FPIFBBVUxPNjIwNzA1MDMqKio2MzA0OUM3MA==", "created_at": 1780884000000, "error": null, "result": null }, "time": 1791792000000 }` |
+| api-3-F06 | Complementado (ausente no original) | Responses — after response examples | Os exemplos ilustram a estrutura da resposta. Os valores de message e do status de negócio devem ser obtidos da resposta efetiva. Para outros erros de parâmetros, permissões e serviço, consulte Catálogo de erros. Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados. | Os exemplos ilustram a estrutura da resposta. Os valores de message e do status de negócio devem ser obtidos da resposta efetiva. Para outros erros de parâmetros, permissões e serviço, consulte Catálogo de erros. Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados. Neste endpoint, `qr_code_id` ausente ou vazio retorna `4000` (`Field qr_code_id is required`); um ID de QR Code com formato inválido retorna `400` (`qr_code_id is invalid`); e um QR Code inexistente ou que não pertence à conta selecionada retorna `4004004` (`QR code not found`). Uma falha na consulta do QR Code ou da transação associada pode retornar `4003014`, com uma mensagem que identifica a consulta que falhou. Uma conexão temporariamente indisponível pode retornar `501`. As mensagens podem depender do idioma da resposta; use o valor real de `message`. |
+| api-3-F07 | Complementado (ausente no original) | Responses — transport handling | Consulte os exemplos de resposta pelo `code` de negócio no JSON. Verifique o status HTTP e o code de negócio separadamente. Uma resposta HTTP 200 também pode retornar um erro de negócio. | Consulte os exemplos de resposta pelo `code` de negócio no JSON. Verifique o status HTTP e o code de negócio separadamente. Uma resposta HTTP 200 também pode retornar um erro de negócio. Se o corpo não puder ser decodificado como JSON, inclusive por um tipo de campo incompatível, a requisição poderá retornar HTTP 400 com um erro em texto simples; não presuma que todo corpo de erro seja JSON. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "qr_code_id": "replace-with-qr-code-id"
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/qr_code/details' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${ACCOUNT_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Requisição bem-sucedida
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "qr_code_id": "26060802faf735091eb74c929a",
+    "merchant_order_id": "260608_example_order",
+    "is_paid": false,
+    "qr_code_type": 12,
+    "last_txn": null,
+    "qr_code_memo": "Example QR code",
+    "qr_code_payload_base64": "MDAwMjAxMDEwMjEyMjY3NzAwMTRici5nb3YuYmNiLnBpeDI1NTVleGFtcGxlLmNvbS9waXgvdjIvMTIzNDU2NzgtMTIzNC0xMjM0LTEyMzQtMTIzNDU2Nzg5MDEyNTIwNDAwMDA1MzAzOTg2NTQwNTEwLjAwNTgwMkJSNTkxM0VYQU1QTEUgUEFZRUU2MDA5U0FPIFBBVUxPNjIwNzA1MDMqKio2MzA0OUM3MA==",
+    "created_at": 1780884000000,
+    "error": null,
+    "result": null
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Falha na requisição ou validação
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 Erro do sistema
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

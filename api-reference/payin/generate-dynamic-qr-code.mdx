@@ -1,0 +1,198 @@
+---
+title: "Generate dynamic QR code"
+description: "Generate a dynamic Pix QR code with an amount and validity period for the target account. The payer can scan it to pay."
+api: "POST /v3/qr_code/generate/dynamic"
+keywords: ["/v3/qr_code/generate/dynamic"]
+---
+
+## Behavior and handling
+
+Generate a dynamic Pix QR code with an amount and validity period for the target account. The payer can scan it to pay. Generating a QR code does not mean funds have been credited to the account.
+
+Validity period in seconds; defaults to 7200 seconds if omitted or set to `0`. Negative values are rejected. <Badge color="blue" size="sm">Added · api-1-F01</Badge> You must provide both the payer name and document number or omit both. See the parameter table for payer_verify usage.
+
+For QR code generation errors, missing notifications, or unconfirmed credits to the account, see [Error scenarios in the incoming payment module](/api-reference/payin/overview).
+
+## Permissions and account ownership
+
+ACCOUNT, or USER with the target account header. Requests must follow [Environments & Credentials](/environments-and-credentials). The target account must be active, allow incoming payments and not be undergoing closure. Its holder document, document type and account type must be present and valid, and the holder name must use ASCII characters; whitespace is allowed <Badge color="blue" size="sm">Added · api-1-F05</Badge>
+
+## Request parameters
+
+<ParamField body="amount" type="string" required>
+Decimal amount string; the value must be greater than 0 and have at most two decimal places (for example, 10.00); 0, negative numbers, and 10.555 are not accepted
+</ParamField>
+
+<ParamField body="city" type="string" required>
+City; must not be empty; at most 15 ASCII characters after normalization. The system trims leading and trailing whitespace, collapses consecutive whitespace, converts accented letters, and converts the text to uppercase. Values that exceed the length limit or contain characters that cannot be converted are rejected. Recommended value: `SAO PAULO`
+</ParamField>
+
+<ParamField body="expires" type="integer">
+Validity period in seconds; defaults to 7200 seconds if omitted or set to `0`. Negative values are rejected <Badge color="blue" size="sm">Added · api-1-F01</Badge>
+</ParamField>
+
+<ParamField body="payer_name" type="string">
+**Required:** Provide as a pair. Provide together with `payer_document_id` or omit both. When `payer_verify` is `true`, the name must use ASCII characters; whitespace is allowed. Accented and other non-ASCII characters are rejected <Badge color="blue" size="sm">Added · api-1-F03</Badge>
+</ParamField>
+
+<ParamField body="payer_document_id" type="string">
+**Required:** Provide as a pair. Provide together with payer_name; this endpoint checks that the length is 11 or 14 but does not verify the authenticity of the document
+</ParamField>
+
+<ParamField body="payer_verify" type="boolean">
+**Required:** No (not enforced at this layer). Whether to include the specified payer's information in QR code creation. Defaults to `false`. Payer information is included only when this is `true` and both `payer_name` and `payer_document_id` are provided; otherwise it is not included. The paired-field validation still applies when this is `false` <Badge color="blue" size="sm">Added · api-1-F02</Badge>
+</ParamField>
+
+<ParamField body="merchant_order_id" type="string" required>
+Merchant order ID; only English letters, digits, hyphens, and underscores are allowed. The first six characters must be a valid `YYMMDD` UTC date. The date must overlap the window within ±1 hour of the current UTC time. An ID that is already reserved is rejected with `merchant_order_id already exists`; resubmitting does not return the original QR code as an idempotent success. If the result is unknown, query the original operation first. Do not blindly resubmit with a new ID <Badge color="blue" size="sm">Added · api-1-F06</Badge>
+</ParamField>
+
+<ParamField body="pix_key" type="string" required>
+Pix key value. The key must be active and belong to the target account. Its registered account number, holder document number and document type must match the target account <Badge color="blue" size="sm">Added · api-1-F04</Badge>
+</ParamField>
+
+<ParamField body="pix_key_type" type="integer">
+**Required:** No (not enforced at this layer). Pix key type. Values: 0 UNSPECIFIED; 1 CPF; 2 CNPJ; 3 EMAIL; 4 PHONE; 5 EVP
+</ParamField>
+
+<ParamField body="memo" type="string">
+**Required:** No (not enforced at this layer). Transaction note
+</ParamField>
+
+<ParamField body="reuseable" type="string">
+**Required:** Not supported. This version does not use this field to control QR code reuse
+</ParamField>
+
+## cURL request example
+
+The example uses ACCOUNT-level credentials. Enter the actual parameters and generate the signature from the final body.json. <Badge color="orange" size="sm">Corrected · api-1-F09</Badge>
+
+## Response fields
+
+Field paths start at the response root. `[]` indicates an array element. Amounts use decimal strings. Enum values are defined separately for each field. The structure below describes a success response. A null value or 0 alone does not indicate that processing is complete.
+
+<ResponseField name="code" type="integer">
+Business result code. A value of 200 indicates success. Business errors are returned in this field. It is not the HTTP status code.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Business result description. On failure, use this with code to determine the cause.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Data object in a successful response. Can be null in an error response.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Response time as a UTC Unix timestamp in milliseconds.
+</ResponseField>
+
+<ResponseField name="data.payload_base64" type="string">
+Base64-encoded QR code payment payload.
+</ResponseField>
+
+<ResponseField name="data.payload_image_base64" type="string">
+Base64-encoded QR code image; the generation endpoint does not currently populate this field and returns an empty string.
+</ResponseField>
+
+<ResponseField name="data.qr_code_id" type="string">
+QR code ID.
+</ResponseField>
+
+<ResponseField name="data.merchant_order_id" type="string">
+Caller's merchant order ID.
+</ResponseField>
+
+## Responses
+
+View response examples by the business `code` in the JSON response. Check the HTTP status and business code separately. An HTTP 200 response can also return a business error. <Badge color="orange" size="sm">Corrected · api-1-F08</Badge>
+
+| `code` | Meaning | Recommended action |
+| --- | --- | --- |
+| `200` | Request succeeded | Check the response-root `code` and read `data`. A successful response means the QR code was generated; it does not confirm a payment or credit to the account. Save `qr_code_id` and `merchant_order_id` <Badge color="orange" size="sm">Corrected · api-1-F10</Badge> |
+| `400` | Request or validation failed | Parameter issue. Check and correct the request parameters. |
+| `500` | System error | Log the response and confirm the business result first. |
+
+The examples illustrate the response structure. Use the actual response for message and business status values. See [Error Catalog](/api-reference/error-catalog) for other parameter, permission, and service errors. This section does not imply that the endpoint returns only these three code values.
+
+<Tip>
+To try this endpoint, send the request example to the Sandbox base URL `https://ebanking-openapi-sandbox.pagsmile.com.br` with your Sandbox AK/SK. Sign every request as described in [Environments & Credentials](/environments-and-credentials#api-request-signing).
+</Tip>
+
+
+<Accordion title="Corrections to the source document (9)" icon="clipboard-check">
+This page was checked against the Pagsmile Open API source code on 2026-11-10. Each change below is marked in the page with a badge that shows its ID.
+
+| ID | Change | Location | Source document text | Updated text |
+| --- | --- | --- | --- | --- |
+| api-1-F01 | Added (missing in the source) | Request parameters / expires | Validity period in seconds; defaults to 7200 seconds if omitted | Validity period in seconds; defaults to 7200 seconds if omitted or set to 0. Negative values are rejected |
+| api-1-F02 | Added (missing in the source) | Request parameters / payer_verify | Whether to pass verification information for the specified payer | Whether to include the specified payer's information in QR code creation. Defaults to false. Payer information is included only when this is true and both payer_name and payer_document_id are provided; otherwise it is not included. The paired-field validation still applies when this is false |
+| api-1-F03 | Added (missing in the source) | Request parameters / payer_name | Provide together with payer_document_id or omit both | Provide together with payer_document_id or omit both. When payer_verify is true, the name must use ASCII characters; whitespace is allowed. Accented and other non-ASCII characters are rejected |
+| api-1-F04 | Added (missing in the source) | Request parameters / pix_key | Pix key value | Pix key value. The key must be active and belong to the target account. Its registered account number, holder document number and document type must match the target account |
+| api-1-F05 | Added (missing in the source) | Permissions and account ownership / account prerequisites | Requests must follow Environments & Credentials. | Requests must follow Environments & Credentials. The target account must be active, allow incoming payments and not be undergoing closure. Its holder document, document type and account type must be present and valid, and the holder name must use ASCII characters; whitespace is allowed |
+| api-1-F06 | Added (missing in the source) | Request parameters / merchant_order_id | Merchant order ID; only English letters, digits, hyphens, and underscores are allowed. The first six characters must be a valid YYMMDD UTC date. The date must overlap the window within ±1 hour of the current UTC time. If the result is unknown, query the original operation first. Do not blindly resubmit with a new ID | Merchant order ID; only English letters, digits, hyphens, and underscores are allowed. The first six characters must be a valid YYMMDD UTC date. The date must overlap the window within ±1 hour of the current UTC time. An ID that is already reserved is rejected with merchant_order_id already exists; resubmitting does not return the original QR code as an idempotent success. If the result is unknown, query the original operation first. Do not blindly resubmit with a new ID |
+| api-1-F08 | Corrected (did not match the code) | Responses / successful JSON example | "payload_image_base64": "example-payload_image_base64", | "payload_image_base64": "", |
+| api-1-F09 | Corrected (did not match the code) | cURL request example / ORDER_ID | `ORDER_ID="$(date +%y%m%d%H%M%S)$(openssl rand -hex 3 \| python3 -c 'import sys; print(str(int(sys.stdin.read().strip(),16)%1000000).zfill(6))')"` | `ORDER_ID="$(date -u +%y%m%d%H%M%S)$(openssl rand -hex 3 \| python3 -c 'import sys; print(str(int(sys.stdin.read().strip(),16)%1000000).zfill(6))')"` |
+| api-1-F10 | Corrected (did not match the code) | Responses / successful response recommended action | Read data and determine the result using the business status defined for this endpoint. | Check the response-root code and read data. A successful response means the QR code was generated; it does not confirm a payment or credit to the account. Save qr_code_id and merchant_order_id |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+ORDER_ID="$(date -u +%y%m%d%H%M%S)$(openssl rand -hex 3 | python3 -c 'import sys; print(str(int(sys.stdin.read().strip(),16)%1000000).zfill(6))')"
+cat > body.json <<JSON
+{
+  "amount": "10.00",
+  "expires": 86400,
+  "city": "Gulgowskiportiu",
+  "merchant_order_id": "${ORDER_ID}",
+  "pix_key": "58837705000148",
+  "pix_key_type": 2,
+  "memo": "qrcode autotest"
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/qr_code/generate/dynamic' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${ACCOUNT_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Request succeeded
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "payload_base64": "example-payload_base64",
+    "payload_image_base64": "",
+    "qr_code_id": "example-qr_code_id",
+    "merchant_order_id": "example-merchant_order_id"
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Request or validation failed
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 System error
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

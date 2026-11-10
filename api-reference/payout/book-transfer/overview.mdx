@@ -1,0 +1,33 @@
+---
+title: "Book Transfer"
+description: "Make an internal transfer between accounts at the same institution."
+---
+
+Make an internal transfer between accounts at the same institution. The payee ISPB must match the payer account's ISPB, and the payer and payee accounts must be different. The payee must be an active internal account, available to receive payments and not undergoing closure. Its account number, branch, account type, and document number and type must match the account and its holder. <Badge color="blue" size="sm">Added · payout-book-transfer-F01</Badge>
+
+## API operations
+
+Use `ACCOUNT` credentials for the payer account, or `USER` credentials with both `X-ISPB` and `X-Account-Number` selecting an authorized account. `PLATFORM` credentials cannot call these operations. With `ACCOUNT` credentials, omit both account-targeting headers or send both with values matching the credential's account. Follow [Environments & Credentials](/environments-and-credentials) for request signing. <Badge color="blue" size="sm">Added · payout-book-transfer-F02</Badge>
+
+| Operation | POST path |
+| --- | --- |
+| [Initiate internal transfer](/api-reference/payout/book-transfer/initiate-internal-transfer) | `/v3/transfers/internal` |
+| [Get payment status](/api-reference/payout/get-payment-status) | `/v3/transfers/status/check` |
+| [Get payment details](/api-reference/payout/get-payment-details) | `/v3/transfers/details` |
+
+## Call sequence
+
+Enter the payee account at the same institution and transfer details → Initiate internal transfer → Save `data.txn_id` and the original `merchant_order_id` → Get payment status and details using `txn_id`. A successful initiation accepts the transfer for asynchronous processing and returns `data.txn_status` = 5 (`TXN_STATUS_PROCESSING`); it does not confirm that funds have been transferred. An immediate status or details query may report that the transaction is not yet found. Query again rather than initiating another transfer. For a details query during this initial period, also include the original `merchant_order_id`; at least one of `txn_id` or `settlement_id` is still required. <Badge color="blue" size="sm">Added · payout-book-transfer-F03</Badge>
+
+Create and retain the `merchant_order_id` before initiating the transfer. It is required, permits only English letters, digits, hyphens, and underscores, and must begin with a valid YYMMDD UTC date whose day overlaps the window within ±1 hour of the current UTC time. Reusing an existing order ID is rejected as a duplicate rather than replaying the original success response. If the initiation result is unknown, check the original operation as described in [Error scenarios in the outgoing payment module](/api-reference/payout/overview); do not blindly resend it with a new order ID. <Badge color="blue" size="sm">Added · payout-book-transfer-F04</Badge>
+
+<Accordion title="Corrections to the source document (4)" icon="clipboard-check">
+This page was checked against the Pagsmile Open API source code on 2026-11-10. Each change below is marked in the page with a badge that shows its ID.
+
+| ID | Change | Location | Source document text | Updated text |
+| --- | --- | --- | --- | --- |
+| payout-book-transfer-F01 | Added (missing in the source) | Introduction / supported account scope | Make an internal transfer between accounts at the same institution. | Make an internal transfer between accounts at the same institution. The payee ISPB must match the payer account's ISPB, and the payer and payee accounts must be different. The payee must be an active internal account, available to receive payments and not undergoing closure. Its account number, branch, account type, and document number and type must match the account and its holder. |
+| payout-book-transfer-F02 | Added (missing in the source) | API operations / account context prerequisite | Make an internal transfer between accounts at the same institution. | Make an internal transfer between accounts at the same institution. Use ACCOUNT credentials for the payer account, or USER credentials with both `X-ISPB` and `X-Account-Number` selecting an authorized account. PLATFORM credentials cannot call these operations. With ACCOUNT credentials, omit both account-targeting headers or send both with values matching the credential's account. Follow Environments & Credentials for request signing. |
+| payout-book-transfer-F03 | Added (missing in the source) | Call sequence / acceptance and query timing | Enter the payee account at the same institution and transfer details → Initiate internal transfer → Save the transaction ID → Get payment status and details. | Enter the payee account at the same institution and transfer details → Initiate internal transfer → Save `data.txn_id` and the original `merchant_order_id` → Get payment status and details using `txn_id`. A successful initiation accepts the transfer for asynchronous processing and returns `data.txn_status` = 5 (`TXN_STATUS_PROCESSING`); it does not confirm that funds have been transferred. An immediate status or details query may report that the transaction is not yet found. Query again rather than initiating another transfer. For a details query during this initial period, also include the original `merchant_order_id`; at least one of `txn_id` or `settlement_id` is still required. |
+| payout-book-transfer-F04 | Added (missing in the source) | Call sequence / merchant order ID and unknown-result handling | Enter the payee account at the same institution and transfer details → Initiate internal transfer → Save the transaction ID → Get payment status and details. | Enter the payee account at the same institution and transfer details → Initiate internal transfer → Save the transaction ID → Get payment status and details. Create and retain the `merchant_order_id` before initiating the transfer. It is required, permits only English letters, digits, hyphens, and underscores, and must begin with a valid YYMMDD UTC date whose day overlaps the window within ±1 hour of the current UTC time. Reusing an existing order ID is rejected as a duplicate rather than replaying the original success response. If the initiation result is unknown, check the original operation as described in Error scenarios in the outgoing payment module; do not blindly resend it with a new order ID. |
+</Accordion>

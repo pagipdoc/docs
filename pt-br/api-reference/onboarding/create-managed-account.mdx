@@ -1,0 +1,79 @@
+---
+title: "Criar conta gerenciada"
+description: "Use o mesmo endpoint POST para criar MOR, VA ou PA. Selecione abaixo a descrição da requisição conforme o tipo de conta."
+---
+
+## Funcionamento e tratamento
+
+Use o mesmo endpoint POST para criar MOR, VA ou PA. Selecione abaixo a descrição da requisição conforme o tipo de conta.
+
+| Tipo de conta | Requisitos para abertura de conta | Descrição da requisição |
+| --- | --- | --- |
+| MOR: conta operacional | Reutilize os dados de conformidade aprovados da MA superior. A MA deve ter um registro de conformidade com status `APPROVED` ou `FORCE_APPROVED`. Não envie `compliance_mode`, `compliance_payload`, `provider_session_info`, `return_url` nem `linked_account` <Badge color="blue" size="sm">Complementado · api-36-F01</Badge> | [Criar MOR](/pt-br/api-reference/onboarding/create-mor-account) |
+| VA: conta gerenciada | A MA superior é determinada pelas credenciais USER; envie os dados do titular da própria VA | [Criar VA](/pt-br/api-reference/onboarding/create-va-account) |
+| PA: conta de pagamento | Especifique `linked_account` com `ispb` e `account_number` da conta superior; envie os dados do titular da própria PA. A conta superior deve ser a MA `ACTIVE` do titular das credenciais `USER` ou uma VA `ACTIVE` diretamente subordinada a essa MA, com uma conta bancária válida e `ACTIVE`. MOR e PA não podem ser selecionadas como conta superior <Badge color="blue" size="sm">Complementado · api-36-F02</Badge> | [Criar PA](/pt-br/api-reference/onboarding/create-pa-account) |
+
+Use as credenciais USER do usuário titular da MA. Não inclua o header da conta bancária. O usuário titular deve ter a funcionalidade de contas gerenciadas habilitada e possuir exatamente uma MA válida com status ACTIVE.
+
+## Campos da resposta
+
+Os caminhos dos campos partem da raiz da resposta. `[]` indica um elemento de array. Os valores monetários usam strings decimais. Os enums são interpretados conforme cada campo. A estrutura abaixo representa os dados de uma resposta de sucesso. Um valor nulo ou 0, por si só, não indica a conclusão da operação.
+
+<Accordion title="Expandir tabela de campos da resposta">
+| Campo | Tipo | Significado |
+| --- | --- | --- |
+| `code` | integer | Código de resultado de negócio; 200 indica sucesso. Os erros de negócio são retornados neste campo, que não equivale ao código de status HTTP. |
+| `message` | string | Descrição do resultado de negócio; em caso de falha, analise esta descrição junto com o campo code para identificar a causa. |
+| `data` | object | Objeto de dados da resposta de sucesso; pode ser null em respostas de erro. |
+| `time` | integer | Horário da resposta, em timestamp Unix UTC em milissegundos. |
+| `data.reference_id` | string | ID de referência do recurso fornecido pelo solicitante ao criar a conta gerenciada. Salve-o e mantenha-o inalterado, junto com os parâmetros originais da requisição, nas novas tentativas técnicas da mesma solicitação de abertura de conta. Reutilizá-lo em outra solicitação de criação pode causar rejeição. Gere novamente os headers de assinatura a cada tentativa. <Badge color="blue" size="sm">Complementado · api-36-F04</Badge> |
+| `data.model` | integer | Modelo de conta gerenciada. Enum: 0 VA_ACCOUNT_MODEL_UNSPECIFIED; 1 VA_ACCOUNT_MODEL_MOR; 2 VA_ACCOUNT_MODEL_VA; 3 VA_ACCOUNT_MODEL_PA. |
+| `data.status` | integer | Status de negócio atual, interpretado conforme os valores do enum listados neste campo. Enum: 0 MANAGED_ACCOUNT_STATUS_V3_UNSPECIFIED; 1 MANAGED_ACCOUNT_STATUS_V3_PENDING; 2 MANAGED_ACCOUNT_STATUS_V3_ACTIVE; 3 MANAGED_ACCOUNT_STATUS_V3_FROZEN; 4 MANAGED_ACCOUNT_STATUS_V3_CLOSED; 5 MANAGED_ACCOUNT_STATUS_V3_REJECTED; 6 MANAGED_ACCOUNT_STATUS_V3_EXPIRED; 7 MANAGED_ACCOUNT_STATUS_V3_PENDING_SUBMISSION. |
+| `data.verification_url` | string | Link de acesso à verificação de identidade; pode estar vazio quando a verificação externa não for necessária ou o link ainda não tiver sido gerado. |
+</Accordion>
+
+## Respostas
+
+Consulte os exemplos de resposta pelo `code` de negócio no JSON. Verifique o status HTTP e o code de negócio separadamente. Uma resposta HTTP 200 também pode retornar um erro de negócio.
+
+| `code` | Significado | Ação recomendada |
+| --- | --- | --- |
+| `200` | Requisição bem-sucedida<br />As respostas de sucesso são apresentadas por tipo de conta. Veja os exemplos de 200 para [MOR](/pt-br/api-reference/onboarding/create-mor-account), [VA](/pt-br/api-reference/onboarding/create-va-account) e [PA](/pt-br/api-reference/onboarding/create-pa-account). | Leia data e avalie o resultado do processamento conforme o status de negócio deste endpoint. |
+| `400` | Falha na requisição ou validação | Problema nos parâmetros. Verifique e corrija os parâmetros da requisição. |
+| `500` | Erro do sistema | Registre a resposta e confirme primeiro o resultado de negócio. |
+
+Os exemplos ilustram a estrutura da resposta. Os valores de message e do status de negócio devem ser obtidos da resposta efetiva. Para outros erros de parâmetros, permissões e serviço, consulte [Catálogo de erros](/pt-br/api-reference/error-catalog). Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados.
+
+A criação de contas gerenciadas está sujeita à tarifa de abertura de conta configurada. Uma falha na cobrança da tarifa retorna um erro de negócio mesmo quando o status HTTP é `200`. O `code` `4001999` indica saldo insuficiente; adicione recursos e repita a mesma requisição com o mesmo `reference_id`. O `code` `4004004` pode indicar ausência de configuração da tarifa; entre em contato com o suporte. Uma configuração inválida da tarifa pode retornar `code` `400`, e a indisponibilidade temporária da configuração pode retornar `code` `501`. Use `message` para distinguir essas condições de outros erros com o mesmo `code` e não considere a chamada com falha como abertura de conta concluída. <Badge color="blue" size="sm">Complementado · api-36-F03</Badge>
+
+
+<Accordion title="Correções em relação ao documento original (4)" icon="clipboard-check">
+Esta página foi conferida com o código-fonte da Pagsmile Open API em 2026-11-10. Cada alteração abaixo está marcada na página com um selo que mostra o seu ID.
+
+| ID | Alteração | Local | Texto do documento original | Texto atualizado |
+| --- | --- | --- | --- | --- |
+| api-36-F01 | Complementado (ausente no original) | Behavior and handling / MOR operating account row | Reutilize os dados de conformidade da MA à qual a conta pertence. Não envie o modo de conformidade nem os dados do titular | Reutilize os dados de conformidade aprovados da MA superior. A MA deve ter um registro de conformidade com status APPROVED ou FORCE_APPROVED. Não envie compliance_mode, compliance_payload, provider_session_info, return_url nem linked_account |
+| api-36-F02 | Complementado (ausente no original) | Behavior and handling / PA payment account row | Especifique a MA/VA superior; envie os dados do titular da própria PA | Especifique linked_account com ispb e account_number da conta superior; envie os dados do titular da própria PA. A conta superior deve ser a MA ACTIVE do titular das credenciais USER ou uma VA ACTIVE diretamente subordinada a essa MA, com uma conta bancária válida e ACTIVE. MOR e PA não podem ser selecionadas como conta superior |
+| api-36-F03 | Complementado (ausente no original) | Responses / final explanatory paragraph; append an account-opening fee paragraph | Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados. | Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados. A criação de contas gerenciadas está sujeita à tarifa de abertura de conta configurada. Uma falha na cobrança da tarifa retorna um erro de negócio mesmo quando o status HTTP é 200. O code 4001999 indica saldo insuficiente; adicione recursos e repita a mesma requisição com o mesmo reference_id. O code 4004004 pode indicar ausência de configuração da tarifa; entre em contato com o suporte. Uma configuração inválida da tarifa pode retornar code 400, e a indisponibilidade temporária da configuração pode retornar code 501. Use message para distinguir essas condições de outros erros com o mesmo code e não considere a chamada com falha como abertura de conta concluída. |
+| api-36-F04 | Complementado (ausente no original) | Response fields / data.reference_id meaning cell | ID de referência do recurso fornecido pelo solicitante ao criar a conta gerenciada. | ID de referência do recurso fornecido pelo solicitante ao criar a conta gerenciada. Salve-o e mantenha-o inalterado, junto com os parâmetros originais da requisição, nas novas tentativas técnicas da mesma solicitação de abertura de conta. Reutilizá-lo em outra solicitação de criação pode causar rejeição. Gere novamente os headers de assinatura a cada tentativa. |
+</Accordion>
+
+<ResponseExample>
+```json 400 Falha na requisição ou validação
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 Erro do sistema
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

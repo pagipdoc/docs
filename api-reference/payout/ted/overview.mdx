@@ -1,0 +1,34 @@
+---
+title: "TED"
+description: "Initiate a TED payment using a bank account."
+---
+
+Initiate a TED payment to a bank different from the payer's bank using the payee's bank account details. <Badge color="blue" size="sm">Added · payout-ted-F01</Badge>
+
+## API operations
+
+| Operation | POST path |
+| --- | --- |
+| [Initiate TED payment](/api-reference/payout/ted/initiate-ted-payment) | `/v3/transfers/ted/bank-account` |
+| [Get payment status](/api-reference/payout/get-payment-status) | `/v3/transfers/status/check` |
+| [Get payment details](/api-reference/payout/get-payment-details) | `/v3/transfers/details` |
+
+### Permissions and account ownership
+
+Use `ACCOUNT` credentials for the payer account, or `USER` credentials with both `X-ISPB` and `X-Account-Number` identifying an account owned by that `USER`. `PLATFORM` credentials cannot call these operations. With `ACCOUNT` credentials, omit both account-targeting headers or supply both with values matching the credential's account. For this flow, keep the payer account context when querying status and details. Requests must follow [Environments & Credentials](/environments-and-credentials). <Badge color="blue" size="sm">Added · payout-ted-F03</Badge>
+
+## Call sequence
+
+Enter the payee bank account and payment details → Initiate TED payment → Save `data.txn_id` from the successful response → Use this ID as `txn_id` to get payment status and details.
+
+A successful submission accepts the payment for asynchronous processing and returns `data.txn_status` as `5` (`TXN_STATUS_PROCESSING`); it does not confirm completion. An early status or details query may not find the transaction yet. Check the original transaction again rather than treating that result as proof that the payment failed. If the submission result is unknown, follow [Error scenarios in the outgoing payment module](/api-reference/payout/overview) before resubmitting. Reusing an already reserved `merchant_order_id` returns a duplicate error; changing the ID can create another payment. <Badge color="blue" size="sm">Added · payout-ted-F02</Badge>
+
+<Accordion title="Corrections to the source document (3)" icon="clipboard-check">
+This page was checked against the Pagsmile Open API source code on 2026-11-10. Each change below is marked in the page with a badge that shows its ID.
+
+| ID | Change | Location | Source document text | Updated text |
+| --- | --- | --- | --- | --- |
+| payout-ted-F01 | Added (missing in the source) | Introductory description | Initiate a TED payment using a bank account. | Initiate a TED payment to a bank different from the payer's bank using the payee's bank account details. |
+| payout-ted-F02 | Added (missing in the source) | Call sequence — replace the existing sequence and add handling guidance immediately below it | Enter the payee bank account and payment details → Initiate TED payment → Save the transaction ID → Get payment status and details. | Enter the payee bank account and payment details → Initiate TED payment → Save `data.txn_id` from the successful response → Use this ID as `txn_id` to get payment status and details. A successful submission accepts the payment for asynchronous processing and returns `data.txn_status` as 5 (`TXN_STATUS_PROCESSING`); it does not confirm completion. An early status or details query may not find the transaction yet. Check the original transaction again rather than treating that result as proof that the payment failed. If the submission result is unknown, follow Error scenarios in the outgoing payment module before resubmitting. Reusing an already reserved `merchant_order_id` returns a duplicate error; changing the ID can create another payment. |
+| payout-ted-F03 | Added (missing in the source) | New Permissions and account ownership section between API operations and Call sequence | — | ### Permissions and account ownership Use ACCOUNT credentials for the payer account, or USER credentials with both `X-ISPB` and `X-Account-Number` identifying an account owned by that USER. PLATFORM credentials cannot call these operations. With ACCOUNT credentials, omit both account-targeting headers or supply both with values matching the credential's account. For this flow, keep the payer account context when querying status and details. Requests must follow Environments & Credentials. |
+</Accordion>

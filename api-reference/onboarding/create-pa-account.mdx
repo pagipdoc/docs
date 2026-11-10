@@ -1,0 +1,1416 @@
+---
+title: "Create PA payment account"
+description: "Create a PA payment account for an individual (CPF) or legal entity (CNPJ). Specify the MA it belongs to or a VA under that MA as the parent."
+api: "POST /v3/onboarding/managed_accounts/create"
+keywords: ["/v3/onboarding/managed_accounts/create"]
+---
+
+## Behavior and handling
+
+Create a PA payment account for an individual (CPF) or legal entity (CNPJ). Specify the MA it belongs to or a VA under that MA as the parent.
+
+## Permissions and account ownership
+
+Use the parent MA's USER credentials without a bank account header. The owning user must have the managed account feature enabled and exactly one valid MA with ACTIVE status. Requests must follow [Environments & Credentials](/environments-and-credentials).
+
+You must submit linked_account for a PA in all compliance modes. The selected parent account must have `ACTIVE` status and meet the account ownership requirements. The configured account opening fee is charged in BRL to this direct parent account after the verification session is created and before the account creation request is accepted. CPF applicants use the KYC fee and CNPJ applicants use the KYB fee. The parent must have enough available funds. If the fee result is uncertain, retry with the same `reference_id`; do not create a new request solely because no response was received. <Badge color="blue" size="sm">Added · create-pa-F19</Badge>
+
+The selected parent account must have `ACTIVE` status and meet the account ownership requirements. The parent’s bound bank account must also be `ACTIVE` and must not have closure in progress. A VA parent and its owning MA must both have valid active bank account bindings. <Badge color="blue" size="sm">Added · create-pa-F22</Badge>
+
+## Request parameters
+
+PA supports the following compliance information submission methods. Select a submission method and account applicant to view the parameters and examples.
+
+**Account onboarding mode**
+
+- mode1: Hosted link (customer provides additional information through the review link)
+- mode2: API submission (submit detailed information in the request)
+
+**Account applicant**
+
+- Legal entity (CNPJ)
+- Individual (CPF)
+
+The enabled configuration determines which applicant types are eligible. Client reference data is an optional supplement for API submission. The PA parent account is not an account onboarding mode and is always required.
+
+<ParamField body="reference_id" type="string" required>
+Must not be empty after trimming leading and trailing whitespace. Generate and save the value; the code does not enforce UUID format. Keep the value unchanged for technical retries of the same account opening request. For a retry, keep the owning USER, `linked_account`, `model`, `compliance_mode`, applicant document type and tax ID, `trading_name`, and `notification_email` unchanged. Reusing a `reference_id` for incompatible account details can fail; a `reference_id` is not an update operation. <Badge color="blue" size="sm">Added · create-pa-F17</Badge>
+</ParamField>
+
+<ParamField body="model" type="integer" required>
+Fixed at 3 (PA)
+</ParamField>
+
+<ParamField body="compliance_mode" type="integer" required>
+mode1: Hosted link; mode2: API submission: CPF/CNPJ
+</ParamField>
+
+<ParamField body="compliance_payload" type="object" required>
+Account applicant information; see this table for the basic fields. In mode 2, personal information, business information, and client reference data are all nested in this object.
+</ParamField>
+
+<ParamField body="compliance_payload.document_type" type="integer" required>
+↳ For VA, the value is fixed at `2` (legal entity, CNPJ). For PA, it can be `1` (individual, CPF) or `2` (legal entity, CNPJ)
+</ParamField>
+
+<ParamField body="compliance_payload.tax_id" type="string" required>
+↳ CPF: 11 digits, regex `^\d{11}$`. CNPJ: the first 12 characters are letters or digits, and the last 2 are digits, regex `^[0-9A-Z]{12}\d{2}$`; the code is converted to uppercase. Leading and trailing whitespace is trimmed. Punctuation and internal spaces are not accepted. Only the format is validated here, not the authenticity of the tax ID or its check digits
+</ParamField>
+
+<ParamField body="compliance_payload.legal_name" type="string" required>
+↳ Individual's name or legal business name; must not be empty after trimming leading and trailing whitespace
+</ParamField>
+
+<ParamField body="trading_name" type="string">
+Public-facing trade name
+</ParamField>
+
+<ParamField body="notification_email" type="string">
+Notification email address; the Open API layer does not currently validate email format. Trim leading and trailing whitespace before submission
+</ParamField>
+
+The information required for the selected account onboarding mode is shown below. Basic applicant information belongs in compliance_payload. In hosted link mode, return_url is a top-level request body field.
+
+<Accordion title="mode1: Hosted link · top-level field: return_url" id="managed-hosted-pa">
+Submit basic applicant information and a return URL. Then use the returned review link to provide detailed information. You do not need to enter detailed personal or business information again in the request.
+
+<ParamField body="return_url" type="string">
+**Required:** Required in mode 1. Must not be empty after trimming leading and trailing whitespace; the Open API layer does not currently validate the URL format or HTTPS protocol; the URL must meet the downstream review service's requirements
+</ParamField>
+</Accordion>
+
+<Accordion title="mode2: API submission of personal information (CPF) · compliance_payload.user_data" id="managed-personal-pa">
+Used only for PA with the individual (CPF) applicant type in API submission mode. In the table, "Yes" means required. "As required by the review template" means the endpoint does not enforce the requirement uniformly, but the review may require submission. Use the date and image formats specified by the template.
+
+<ParamField body="compliance_payload.user_data" type="object">
+↳ **Required:** Required in mode 2 for CPF. Detailed personal information; fields marked "Yes" below must not be empty after trimming leading and trailing whitespace. Provide other fields as required by the review template
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.name" type="object" required>
+Name; includes the following required subfields
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.name.first_name" type="string" required>
+First name; must not be empty after trimming leading and trailing whitespace
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.name.middle_name" type="string">
+**Required:** As required by the review template. Middle name
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.name.last_name" type="string" required>
+Last name; must not be empty after trimming leading and trailing whitespace
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.date_of_birth" type="string" required>
+Date of birth; must not be empty after trimming leading and trailing whitespace; string. Open API does not currently validate the date format. Use the format specified by the verification template
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.identity" type="object" required>
+Identity document information; includes the following required subfields
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.identity.country_code" type="string">
+**Required:** As required by the review template. Country code
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.identity.document_type" type="string" required>
+Document type; must not be empty after trimming leading and trailing whitespace; string. Enter a document type accepted by the verification template. Do not substitute the top-level integer enum
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.identity.document_front" type="string" required>
+Identity document front image data; must not be empty after trimming leading and trailing whitespace. Provide image content as specified by the verification template. The endpoint currently checks only that the required value is not empty and does not uniformly enforce a URL format
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.identity.document_back" type="string" required>
+Identity document back image data; must not be empty after trimming leading and trailing whitespace. Provide image content as specified by the verification template. The endpoint currently checks only that the required value is not empty and does not uniformly enforce a URL format
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.address" type="object">
+**Required:** As required by the review template. Address object
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.address.full_address" type="string">
+**Required:** As required by the review template. Full address text
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.address.address_street_1" type="string">
+**Required:** As required by the review template. Street address line 1
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.address.address_street_2" type="string">
+**Required:** As required by the review template. Street address line 2
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.address.address_city" type="string">
+**Required:** As required by the review template. City
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.address.address_state" type="string">
+**Required:** As required by the review template. State/province
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.address.address_zip_code" type="string">
+**Required:** As required by the review template. Postal code
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.address.address_country" type="string">
+**Required:** As required by the review template. Country of the address
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.selfie" type="string" required>
+Selfie image data; must not be empty after trimming leading and trailing whitespace. Provide image content as specified by the verification template. The endpoint currently checks only that the required value is not empty and does not uniformly enforce a URL format
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.address_proof_document" type="string" required>
+Proof of address image data; must not be empty after trimming leading and trailing whitespace. Provide image content as specified by the verification template. The endpoint currently checks only that the required value is not empty and does not uniformly enforce a URL format
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.additional_fields" type="object[]">
+**Required:** As required by the review template. Additional information item; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.additional_fields[].key" type="string">
+**Required:** As required by the review template. Additional information key name. Leading and trailing whitespace is trimmed. An item with an empty key is not submitted. Nonempty keys are submitted with the corresponding additional information. <Badge color="blue" size="sm">Added · create-pa-F13</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.additional_fields[].label" type="string">
+**Required:** As required by the review template. Additional information display name; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.additional_fields[].answer_type" type="string">
+**Required:** As required by the review template. Additional information answer type; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.additional_fields[].string_value" type="string">
+**Required:** As required by the review template. Single text answer; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.additional_fields[].string_values" type="string[]">
+**Required:** As required by the review template. Multiple text answers; array of strings, not a single comma-separated string; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.additional_fields[].file" type="object">
+**Required:** As required by the review template. File content; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.additional_fields[].file.file" type="string">
+**Required:** As required by the review template. File content; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.additional_fields[].file.file_name" type="string">
+**Required:** As required by the review template. File name; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.additional_fields[].file.content_type" type="string">
+**Required:** As required by the review template. File MIME type; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.additional_fields[].files" type="object[]">
+**Required:** As required by the review template. File list; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.additional_fields[].files[].file" type="string">
+**Required:** As required by the review template. File content; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.additional_fields[].files[].file_name" type="string">
+**Required:** As required by the review template. File name; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.additional_fields[].files[].content_type" type="string">
+**Required:** As required by the review template. File MIME type; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.user_data.additional_fields[].metadata" type="object">
+**Required:** As required by the review template. Additional information metadata key-value map; JSON object mapping string keys to string values; use the structure specified by the template's additional information requirements
+</ParamField>
+</Accordion>
+
+<Accordion title="mode2: Submit business information via API (CNPJ) · compliance_payload.business_data" id="managed-business-pa">
+Used only for this applicant type in API submission mode. In the table, "Yes" means required. "As required by the review template" means the endpoint does not enforce the requirement uniformly, but the review may require submission. Use the date and image formats specified by the template.
+
+<ParamField body="compliance_payload.business_data" type="object">
+↳ **Required:** Required in mode 2 for CNPJ. Detailed business information; the endpoint explicitly requires a nonempty trade name. Provide other fields as required by the review template. Do not assume the review is complete based solely on the trade name. `entity_type`, `business_model`, `business_industries`, `platform_url`, and `additional_fields` (including all its nested fields) are accepted but not submitted for business verification by this endpoint. Do not rely on these fields to satisfy verification requirements. <Badge color="blue" size="sm">Added · create-pa-F07</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.trading_name" type="string" required>
+Trade name; must not be empty after trimming leading and trailing whitespace
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.address" type="object">
+**Required:** As required by the review template. Address object
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.address.full_address" type="string">
+**Required:** As required by the review template. Full address text
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.address.address_street_1" type="string">
+**Required:** As required by the review template. Street address line 1
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.address.address_street_2" type="string">
+**Required:** As required by the review template. Street address line 2
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.address.address_city" type="string">
+**Required:** As required by the review template. City
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.address.address_state" type="string">
+**Required:** As required by the review template. State/province
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.address.address_zip_code" type="string">
+**Required:** As required by the review template. Postal code
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.address.address_country" type="string">
+**Required:** As required by the review template. Country of the address
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.ubo_list" type="object[]">
+**Required:** As required by the review template. Ultimate beneficial owners. `document_type` and `tax_id` are accepted but not submitted for business verification. An item is also not submitted when `name`, `birth_date`, and `address` are all empty after trimming. Ownership percentage alone does not make the item eligible for submission. <Badge color="blue" size="sm">Added · create-pa-F03</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.ubo_list[].name" type="string">
+**Required:** As required by the review template. Name
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.ubo_list[].document_type" type="integer">
+**Required:** As required by the review template. Document type; 1 (individual, CPF), 2 (legal entity, CNPJ). This does not verify the authenticity of the tax ID
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.ubo_list[].tax_id" type="string">
+**Required:** As required by the review template. Entity tax ID
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.ubo_list[].ownership_percentage" type="string">
+**Required:** As required by the review template. Ownership percentage; JSON string. Provide the ownership percentage as a parseable number and the share count as an integer. The value may be omitted if downstream conversion fails. Do not treat it as a valid submitted ownership percentage or share count
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.ubo_list[].birth_date" type="string">
+**Required:** As required by the review template. Date of birth; string. Open API does not currently validate the date format. Use the format required by the applicable verification template
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.ubo_list[].address" type="object">
+**Required:** As required by the review template. Address object
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.ubo_list[].address.full_address" type="string">
+**Required:** As required by the review template. Full address text
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.ubo_list[].address.address_street_1" type="string">
+**Required:** As required by the review template. Street address line 1
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.ubo_list[].address.address_street_2" type="string">
+**Required:** As required by the review template. Street address line 2
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.ubo_list[].address.address_city" type="string">
+**Required:** As required by the review template. City
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.ubo_list[].address.address_state" type="string">
+**Required:** As required by the review template. State/province
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.ubo_list[].address.address_zip_code" type="string">
+**Required:** As required by the review template. Postal code
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.ubo_list[].address.address_country" type="string">
+**Required:** As required by the review template. Country of the address
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.website" type="string">
+**Required:** As required by the review template. Business website
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.country_code" type="string">
+**Required:** As required by the review template. Country code
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.formation_date" type="string">
+**Required:** As required by the review template. Date of incorporation; string. Open API does not currently validate the date format. Use the format required by the applicable verification template
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.phone_numbers" type="string[]">
+**Required:** As required by the review template. List of phone numbers; array of strings, not a single comma-separated string
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.email_addresses" type="string[]">
+**Required:** As required by the review template. List of email addresses; array of strings, not a single comma-separated string
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.state_code" type="string">
+**Required:** As required by the review template. State/province code
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_entity_id" type="string">
+**Required:** As required by the review template. Business registration identifier
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers" type="object[]">
+**Required:** As required by the review template. Executives and related persons. `document_type`, `tax_id`, `identity` and all `identity` subfields are accepted but not submitted for business verification. An item is not submitted when `first_name`, `middle_name`, `last_name`, `birth_date`, `email`, `phone_number`, and `address` are all empty after trimming. Ownership, shares, roles, or additional fields alone do not make the item eligible for submission. <Badge color="blue" size="sm">Added · create-pa-F04</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].first_name" type="string">
+**Required:** As required by the review template. First name
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].middle_name" type="string">
+**Required:** As required by the review template. Middle name
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].last_name" type="string">
+**Required:** As required by the review template. Last name
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].birth_date" type="string">
+**Required:** As required by the review template. Date of birth; string. Open API does not currently validate the date format. Use the format required by the applicable verification template
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].ownership_percentage" type="string">
+**Required:** As required by the review template. Ownership percentage; JSON string. Provide the ownership percentage as a parseable number and the share count as an integer. The value may be omitted if downstream conversion fails. Do not treat it as a valid submitted ownership percentage or share count
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].shares_allocated" type="string">
+**Required:** As required by the review template. Number of shares allocated; JSON string. Provide the ownership percentage as a parseable number and the share count as an integer. The value may be omitted if downstream conversion fails. Do not treat it as a valid submitted ownership percentage or share count
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].roles" type="string[]">
+**Required:** As required by the review template. Role list; array of strings, not a single comma-separated string
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].email" type="string">
+**Required:** As required by the review template. Email
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].phone_number" type="string">
+**Required:** As required by the review template. Phone number
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].address" type="object">
+**Required:** As required by the review template. Address object
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].address.full_address" type="string">
+**Required:** As required by the review template. Full address text
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].address.address_street_1" type="string">
+**Required:** As required by the review template. Street address line 1
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].address.address_street_2" type="string">
+**Required:** As required by the review template. Street address line 2
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].address.address_city" type="string">
+**Required:** As required by the review template. City
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].address.address_state" type="string">
+**Required:** As required by the review template. State/province
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].address.address_zip_code" type="string">
+**Required:** As required by the review template. Postal code
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].address.address_country" type="string">
+**Required:** As required by the review template. Country of the address
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].document_type" type="integer">
+**Required:** As required by the review template. Document type; 1 (individual, CPF), 2 (legal entity, CNPJ). This does not verify the authenticity of the tax ID
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].tax_id" type="string">
+**Required:** As required by the review template. Entity tax ID
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].identity" type="object">
+**Required:** As required by the review template. Identity document information
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].identity.country_code" type="string">
+**Required:** As required by the review template. Country code
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].identity.document_type" type="string">
+**Required:** As required by the review template. Document type; string containing a document type accepted by the verification template used; do not substitute a top-level integer enum value
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].identity.tax_id" type="string">
+**Required:** As required by the review template. Entity tax ID
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].identity.document_front" type="string">
+Identity document front image data. This optional field is not checked for a nonempty value and is not submitted for business verification by this endpoint. Do not rely on it to provide an officer’s identity document. <Badge color="orange" size="sm">Corrected · create-pa-F01</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].identity.document_back" type="string">
+Identity document back image data. This optional field is not checked for a nonempty value and is not submitted for business verification by this endpoint. Do not rely on it to provide an officer’s identity document. <Badge color="orange" size="sm">Corrected · create-pa-F02</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].additional_fields" type="object[]">
+**Required:** As required by the review template. Additional information item; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].additional_fields[].key" type="string">
+**Required:** As required by the review template. Additional information key name. Leading and trailing whitespace is trimmed. An item with an empty key is not submitted. For repeated keys, the last item replaces earlier items. <Badge color="blue" size="sm">Added · create-pa-F14</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].additional_fields[].label" type="string">
+**Required:** As required by the review template. Additional information display name; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].additional_fields[].answer_type" type="string">
+**Required:** As required by the review template. Additional information answer type; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].additional_fields[].string_value" type="string">
+**Required:** As required by the review template. Single text answer; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].additional_fields[].string_values" type="string[]">
+**Required:** As required by the review template. Multiple text answers; array of strings, not a single comma-separated string; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].additional_fields[].file" type="object">
+**Required:** As required by the review template. File content; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].additional_fields[].file.file" type="string">
+**Required:** As required by the review template. File content; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].additional_fields[].file.file_name" type="string">
+**Required:** As required by the review template. File name; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].additional_fields[].file.content_type" type="string">
+**Required:** As required by the review template. File MIME type; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].additional_fields[].files" type="object[]">
+**Required:** As required by the review template. File list; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].additional_fields[].files[].file" type="string">
+**Required:** As required by the review template. File content; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].additional_fields[].files[].file_name" type="string">
+**Required:** As required by the review template. File name; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].additional_fields[].files[].content_type" type="string">
+**Required:** As required by the review template. File MIME type; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.officers[].additional_fields[].metadata" type="object">
+**Required:** As required by the review template. Additional information metadata key-value map; JSON object mapping string keys to string values; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies" type="object[]">
+**Required:** As required by the review template. Associated company list. `relationship_type` and `reference_id` are accepted but are not submitted for business verification by this endpoint. Do not rely on these fields to describe or identify the relationship in the verification request. <Badge color="blue" size="sm">Added · create-pa-F05</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].name" type="string">
+**Required:** As required by the review template. Name
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].trading_name" type="string">
+**Required:** As required by the review template. Trade name
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].tax_identification_number" type="string">
+**Required:** As required by the review template. Tax registration number
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].website" type="string">
+**Required:** As required by the review template. Business website
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].formation_date" type="string">
+**Required:** As required by the review template. Date of incorporation; string. Open API does not currently validate the date format. Use the format required by the applicable verification template
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].country_code" type="string">
+**Required:** As required by the review template. Country code
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].state_code" type="string">
+**Required:** As required by the review template. State/province code
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].business_entity_id" type="string">
+**Required:** As required by the review template. Business registration identifier
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].addresses" type="object[]">
+**Required:** As required by the review template. Address list
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].addresses[].full_address" type="string">
+**Required:** As required by the review template. Full address text
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].addresses[].address_street_1" type="string">
+**Required:** As required by the review template. Street address line 1
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].addresses[].address_street_2" type="string">
+**Required:** As required by the review template. Street address line 2
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].addresses[].address_city" type="string">
+**Required:** As required by the review template. City
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].addresses[].address_state" type="string">
+**Required:** As required by the review template. State/province
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].addresses[].address_zip_code" type="string">
+**Required:** As required by the review template. Postal code
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].addresses[].address_country" type="string">
+**Required:** As required by the review template. Country of the address
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].phone_numbers" type="string[]">
+**Required:** As required by the review template. List of phone numbers; array of strings, not a single comma-separated string
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].email_addresses" type="string[]">
+**Required:** As required by the review template. List of email addresses; array of strings, not a single comma-separated string
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].ownership_percentage" type="string">
+**Required:** As required by the review template. Ownership percentage; JSON string. Provide the ownership percentage as a parseable number and the share count as an integer. The value may be omitted if downstream conversion fails. Do not treat it as a valid submitted ownership percentage or share count
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].shares_allocated" type="string">
+**Required:** As required by the review template. Number of shares allocated; JSON string. Provide the ownership percentage as a parseable number and the share count as an integer. The value may be omitted if downstream conversion fails. Do not treat it as a valid submitted ownership percentage or share count
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].relationship_type" type="string">
+**Required:** As required by the review template. Company relationship type
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].roles" type="string[]">
+**Required:** As required by the review template. Role list; array of strings, not a single comma-separated string
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].reference_id" type="string">
+**Required:** As required by the review template. Associated business identifier
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].additional_fields" type="object[]">
+**Required:** As required by the review template. Additional information item; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].additional_fields[].key" type="string">
+**Required:** As required by the review template. Additional information key name. Leading and trailing whitespace is trimmed. An item with an empty key is not submitted. For repeated keys, the last item replaces earlier items. <Badge color="blue" size="sm">Added · create-pa-F15</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].additional_fields[].label" type="string">
+**Required:** As required by the review template. Additional information display name; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].additional_fields[].answer_type" type="string">
+**Required:** As required by the review template. Additional information answer type; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].additional_fields[].string_value" type="string">
+**Required:** As required by the review template. Single text answer; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].additional_fields[].string_values" type="string[]">
+**Required:** As required by the review template. Multiple text answers; array of strings, not a single comma-separated string; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].additional_fields[].file" type="object">
+**Required:** As required by the review template. File content; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].additional_fields[].file.file" type="string">
+**Required:** As required by the review template. File content; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].additional_fields[].file.file_name" type="string">
+**Required:** As required by the review template. File name; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].additional_fields[].file.content_type" type="string">
+**Required:** As required by the review template. File MIME type; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].additional_fields[].files" type="object[]">
+**Required:** As required by the review template. File list; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].additional_fields[].files[].file" type="string">
+**Required:** As required by the review template. File content; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].additional_fields[].files[].file_name" type="string">
+**Required:** As required by the review template. File name; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].additional_fields[].files[].content_type" type="string">
+**Required:** As required by the review template. File MIME type; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.related_companies[].additional_fields[].metadata" type="object">
+**Required:** As required by the review template. Additional information metadata key-value map; JSON object mapping string keys to string values; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_documents" type="object[]">
+**Required:** As required by the review template. Business documents
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_documents[].document_type" type="string">
+**Required:** As required by the review template. Document type; string containing a document type accepted by the verification template used; do not substitute a top-level integer enum value
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_documents[].file" type="string">
+**Required:** Required when submitting this file item. Standard Base64 content of the business document; can include a data:...;base64, prefix; maximum decoded size of 50 MiB; do not provide a file URL
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_documents[].file_name" type="string">
+**Required:** Required when submitting this file item. File name; must not be empty after trimming leading and trailing whitespace
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_documents[].content_type" type="string">
+**Required:** As required by the review template. File MIME type; the current business document mapping does not send this field; you cannot use it in place of file content or the file name
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_documents[].additional_fields" type="object[]">
+**Required:** As required by the review template. Additional information item; use the structure specified by the template's additional information requirements. This field and all its nested fields is accepted in the request but is not submitted for business verification by this endpoint. Do not rely on it to satisfy verification requirements. <Badge color="blue" size="sm">Added · create-pa-F06</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_documents[].additional_fields[].key" type="string">
+**Required:** As required by the review template. Client reference data/additional information key name; use the structure specified by the template's additional information requirements. This field and all its nested fields is accepted in the request but is not submitted for business verification by this endpoint. Do not rely on it to satisfy verification requirements. <Badge color="blue" size="sm">Added · create-pa-F06</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_documents[].additional_fields[].label" type="string">
+**Required:** As required by the review template. Additional information display name; use the structure specified by the template's additional information requirements. This field and all its nested fields is accepted in the request but is not submitted for business verification by this endpoint. Do not rely on it to satisfy verification requirements. <Badge color="blue" size="sm">Added · create-pa-F06</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_documents[].additional_fields[].answer_type" type="string">
+**Required:** As required by the review template. Additional information answer type; use the structure specified by the template's additional information requirements. This field and all its nested fields is accepted in the request but is not submitted for business verification by this endpoint. Do not rely on it to satisfy verification requirements. <Badge color="blue" size="sm">Added · create-pa-F06</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_documents[].additional_fields[].string_value" type="string">
+**Required:** As required by the review template. Single text answer; use the structure specified by the template's additional information requirements. This field and all its nested fields is accepted in the request but is not submitted for business verification by this endpoint. Do not rely on it to satisfy verification requirements. <Badge color="blue" size="sm">Added · create-pa-F06</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_documents[].additional_fields[].string_values" type="string[]">
+**Required:** As required by the review template. Multiple text answers; array of strings, not a single comma-separated string; use the structure specified by the template's additional information requirements. This field and all its nested fields is accepted in the request but is not submitted for business verification by this endpoint. Do not rely on it to satisfy verification requirements. <Badge color="blue" size="sm">Added · create-pa-F06</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_documents[].additional_fields[].file" type="object">
+**Required:** As required by the review template. File content; use the structure specified by the template's additional information requirements. This field and all its nested fields is accepted in the request but is not submitted for business verification by this endpoint. Do not rely on it to satisfy verification requirements. <Badge color="blue" size="sm">Added · create-pa-F06</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_documents[].additional_fields[].file.file" type="string">
+**Required:** As required by the review template. File content; use the structure specified by the template's additional information requirements. This field and all its nested fields is accepted in the request but is not submitted for business verification by this endpoint. Do not rely on it to satisfy verification requirements. <Badge color="blue" size="sm">Added · create-pa-F06</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_documents[].additional_fields[].file.file_name" type="string">
+**Required:** As required by the review template. File name; use the structure specified by the template's additional information requirements. This field and all its nested fields is accepted in the request but is not submitted for business verification by this endpoint. Do not rely on it to satisfy verification requirements. <Badge color="blue" size="sm">Added · create-pa-F06</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_documents[].additional_fields[].file.content_type" type="string">
+**Required:** As required by the review template. File MIME type; use the structure specified by the template's additional information requirements. This field and all its nested fields is accepted in the request but is not submitted for business verification by this endpoint. Do not rely on it to satisfy verification requirements. <Badge color="blue" size="sm">Added · create-pa-F06</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_documents[].additional_fields[].files" type="object[]">
+**Required:** As required by the review template. File list; use the structure specified by the template's additional information requirements. This field and all its nested fields is accepted in the request but is not submitted for business verification by this endpoint. Do not rely on it to satisfy verification requirements. <Badge color="blue" size="sm">Added · create-pa-F06</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_documents[].additional_fields[].files[].file" type="string">
+**Required:** As required by the review template. File content; use the structure specified by the template's additional information requirements. This field and all its nested fields is accepted in the request but is not submitted for business verification by this endpoint. Do not rely on it to satisfy verification requirements. <Badge color="blue" size="sm">Added · create-pa-F06</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_documents[].additional_fields[].files[].file_name" type="string">
+**Required:** As required by the review template. File name; use the structure specified by the template's additional information requirements. This field and all its nested fields is accepted in the request but is not submitted for business verification by this endpoint. Do not rely on it to satisfy verification requirements. <Badge color="blue" size="sm">Added · create-pa-F06</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_documents[].additional_fields[].files[].content_type" type="string">
+**Required:** As required by the review template. File MIME type; use the structure specified by the template's additional information requirements. This field and all its nested fields is accepted in the request but is not submitted for business verification by this endpoint. Do not rely on it to satisfy verification requirements. <Badge color="blue" size="sm">Added · create-pa-F06</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_documents[].additional_fields[].metadata" type="object">
+**Required:** As required by the review template. Additional information metadata key-value map; JSON object mapping string keys to string values; use the structure specified by the template's additional information requirements. This field and all its nested fields is accepted in the request but is not submitted for business verification by this endpoint. Do not rely on it to satisfy verification requirements. <Badge color="blue" size="sm">Added · create-pa-F06</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.entity_type" type="string">
+**Required:** As required by the review template. Business entity type
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_model" type="string">
+**Required:** As required by the review template. Business model
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.business_industries" type="string[]">
+**Required:** As required by the review template. List of industries the business operates in; array of strings, not a single comma-separated string
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.platform_url" type="string">
+**Required:** As required by the review template. Platform URL
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.additional_fields" type="object[]">
+**Required:** As required by the review template. Additional information item; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.additional_fields[].key" type="string">
+**Required:** As required by the review template. Client reference data/additional information key name; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.additional_fields[].label" type="string">
+**Required:** As required by the review template. Additional information display name; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.additional_fields[].answer_type" type="string">
+**Required:** As required by the review template. Additional information answer type; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.additional_fields[].string_value" type="string">
+**Required:** As required by the review template. Single text answer; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.additional_fields[].string_values" type="string[]">
+**Required:** As required by the review template. Multiple text answers; array of strings, not a single comma-separated string; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.additional_fields[].file" type="object">
+**Required:** As required by the review template. File content; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.additional_fields[].file.file" type="string">
+**Required:** As required by the review template. File content; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.additional_fields[].file.file_name" type="string">
+**Required:** As required by the review template. File name; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.additional_fields[].file.content_type" type="string">
+**Required:** As required by the review template. File MIME type; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.additional_fields[].files" type="object[]">
+**Required:** As required by the review template. File list; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.additional_fields[].files[].file" type="string">
+**Required:** As required by the review template. File content; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.additional_fields[].files[].file_name" type="string">
+**Required:** As required by the review template. File name; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.additional_fields[].files[].content_type" type="string">
+**Required:** As required by the review template. File MIME type; use the structure specified by the template's additional information requirements
+</ParamField>
+
+<ParamField body="compliance_payload.business_data.additional_fields[].metadata" type="object">
+**Required:** As required by the review template. Additional information metadata key-value map; JSON object mapping string keys to string values; use the structure specified by the template's additional information requirements
+</ParamField>
+</Accordion>
+
+<Accordion title="mode2: API submission of client reference data (optional) · compliance_payload.client_reference_data" id="managed-reference-pa">
+You can provide this data according to the configured template in API submission mode for both individuals and legal entities. In other modes, you must not provide a nonempty array.
+
+<ParamField body="compliance_payload.client_reference_data" type="object[]">
+↳ **Required:** No, only for mode 2. Array of `{ "key": "…", "value": "…" }` entries. The downstream service merges entries by key. The order is not guaranteed to have any business meaning. You must not submit a non-empty array in other modes. The downstream service validates allowed keys against the applicable compliance template
+</ParamField>
+
+<ParamField body="compliance_payload.client_reference_data[].key" type="string">
+**Required:** Required when submitting this entry. Key name for client reference data or additional information; must not be empty after trimming leading and trailing whitespace. The key must be unique, must not be system-reserved, and must be in the selected template's allowlist. Reserved keys: `account_number`, `account_type`, `business_data_ref`, `business_profile_id`, `client_reference_id`, `legal_document_id`, `legal_document_type`, `legal_name`, `merchant_id`, `request_id`, `session_id`, `template_id`, `user_id`, `user_profile_id`. <Badge color="blue" size="sm">Added · create-pa-F16</Badge>
+</ParamField>
+
+<ParamField body="compliance_payload.client_reference_data[].value" type="string">
+**Required:** Required when submitting this entry. Client reference data value; must not be empty after trimming leading and trailing whitespace
+</ParamField>
+</Accordion>
+
+<Accordion title="PA · parent account (required in all modes) · top-level field: linked_account" id="managed-parent-pa">
+Submit this object only for PA. The parent can be the ACTIVE MA that owns the PA or an eligible ACTIVE VA under that MA. You must not submit this object for MOR or VA.
+
+<ParamField body="linked_account" type="object">
+**Required:** Required for PA. `ispb` and `account_number` must both be non-empty strings. Preserve leading zeros. Account ownership and status checks must also pass. You must not submit this object for MOR or VA
+</ParamField>
+
+<ParamField body="linked_account.ispb" type="string">
+↳ **Required:** Required for PA. Bank participant identifier of the parent MA/VA. Must not be empty after trimming leading and trailing whitespace. Preserve leading zeros. Use the actual parent account value. This selector does not enforce a length or a digits-only regular expression
+</ParamField>
+
+<ParamField body="linked_account.account_number" type="string">
+↳ **Required:** Required for PA. Account number of the parent MA/VA. Must not be empty after trimming leading and trailing whitespace. Preserve leading zeros. Must be provided together with ispb. The target must be the ACTIVE MA that owns the PA or an eligible ACTIVE VA under that MA
+</ParamField>
+</Accordion>
+
+## cURL request example
+
+The example fields match the request parameter table for the account onboarding mode selected on this page. They include optional fields and fields required by the review template. Replace the example values according to your review template and remove optional fields that do not apply. Then generate the signature from the raw contents of the final body.json. The example does not represent information that can pass review as is.
+
+<Accordion title="cURL · Selected account onboarding mode · Individual (CPF)">
+</Accordion>
+
+<Accordion title="cURL · Selected account onboarding mode · Legal entity (CNPJ)">
+</Accordion>
+
+<Accordion title="cURL · Selected account onboarding mode · Individual (CPF)">
+Optional arrays use one element to show their structure. metadata uses example key-value pairs to show the mapping. Populate client_reference_data.key and additional_fields according to the template allowlist. For additional answers, keep only the applicable string_value, string_values, file, or files. You must replace file contents with the required documents. Use Base64 for legal entity document file values.
+</Accordion>
+
+<Accordion title="cURL · Selected account onboarding mode · Legal entity (CNPJ)">
+Optional arrays use one element to show their structure. metadata uses example key-value pairs to show the mapping. Populate client_reference_data.key and additional_fields according to the template allowlist. For additional answers, keep only the applicable string_value, string_values, file, or files. You must replace file contents with the required documents. Use Base64 for legal entity document file values.
+</Accordion>
+
+## Response fields
+
+Field paths start at the response root. `[]` indicates an array element. Amounts use decimal strings. Enum values are defined separately for each field. The structure below describes a success response. A null value or 0 alone does not indicate that processing is complete.
+
+<ResponseField name="code" type="integer">
+Business result code. A value of 200 indicates success. Business errors are returned in this field. It is not the HTTP status code.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Business result description. On failure, use this with code to determine the cause.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Data object in a successful response. Can be null in an error response.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Response time as a UTC Unix timestamp in milliseconds.
+</ResponseField>
+
+<ResponseField name="data.reference_id" type="string">
+Resource reference ID supplied by the caller when creating the managed account.
+</ResponseField>
+
+<ResponseField name="data.model" type="integer">
+Managed account model. Enum: 0 VA_ACCOUNT_MODEL_UNSPECIFIED; 1 VA_ACCOUNT_MODEL_MOR; 2 VA_ACCOUNT_MODEL_VA; 3 VA_ACCOUNT_MODEL_PA.
+</ResponseField>
+
+<ResponseField name="data.status" type="integer">
+Current business status, interpreted using the enum values listed for this field. Enum: `0` `MANAGED_ACCOUNT_STATUS_V3_UNSPECIFIED`; `1` `MANAGED_ACCOUNT_STATUS_V3_PENDING`; `2` `MANAGED_ACCOUNT_STATUS_V3_ACTIVE`; `3` `MANAGED_ACCOUNT_STATUS_V3_FROZEN`; `4` `MANAGED_ACCOUNT_STATUS_V3_CLOSED`; `5` `MANAGED_ACCOUNT_STATUS_V3_REJECTED`; `6` `MANAGED_ACCOUNT_STATUS_V3_EXPIRED`; `7` `MANAGED_ACCOUNT_STATUS_V3_PENDING_SUBMISSION`. A new hosted-link PA normally returns `1` (`PENDING`), even while the compliance review is waiting for submission. This endpoint does not currently map that waiting state to `7` (`PENDING_SUBMISSION`). <Badge color="blue" size="sm">Added · create-pa-F18</Badge>
+</ResponseField>
+
+<ResponseField name="data.verification_url" type="string">
+Identity verification URL. Can be empty if external verification is not required or the URL has not yet been generated.
+</ResponseField>
+
+## Responses
+
+View response examples by the business `code` in the JSON response. Check the HTTP status and business code separately. An HTTP 200 response can also return a business error.
+
+| `code` | Meaning | Recommended action |
+| --- | --- | --- |
+| `200` | Request succeeded<br />Only the structure is shown. The server response determines the actual fields and account opening status. | Read data and determine the result using the business status defined for this endpoint. |
+| `400` | Request or validation failed | Parameter issue. Check and correct the request parameters. |
+| `500` | System error | Log the response and confirm the business result first. |
+
+The examples illustrate the response structure. Use the actual response for message and business status values. See [Error Catalog](/api-reference/error-catalog) for other parameter, permission, and service errors. For account opening fee failures: `4001999` means insufficient balance—add funds and retry with the same `reference_id`; `4001013` can mean the `reference_id` was used for incompatible account details—use a new `reference_id` only for a genuinely different request; `4004004` can mean the fee configuration was not found—contact support; `400` can mean the fee configuration is invalid—contact support; `501` can mean the fee configuration is temporarily unavailable or the fee result could not be confirmed—retry later with the same `reference_id`. Read `message` to distinguish these cases. <Badge color="blue" size="sm">Added · create-pa-F20</Badge> This section does not imply that the endpoint returns only these three code values.
+
+## Sandbox access example
+
+Use the actual response as the source of truth for transaction or resource information, processing status, and error information.
+
+`X-Client-ID` uses the AK you enter. The timestamp, nonce, request body hash, and signature are generated automatically. SK is used only for local signing. It is not included in the request or stored. Previewing does not send a request. The access button submits a real request. If the result is unknown, query first. Requests are not retried automatically. Browser access must meet Sandbox CORS, IP, and credential requirements.
+
+<Tip>
+To try this endpoint, send the request example to the Sandbox base URL `https://ebanking-openapi-sandbox.pagsmile.com.br` with your Sandbox AK/SK. Sign every request as described in [Environments & Credentials](/environments-and-credentials#api-request-signing).
+</Tip>
+
+
+<Accordion title="Corrections to the source document (16)" icon="clipboard-check">
+This page was checked against the Pagsmile Open API source code on 2026-11-10. Each change below is marked in the page with a badge that shows its ID.
+
+| ID | Change | Location | Source document text | Updated text |
+| --- | --- | --- | --- | --- |
+| create-pa-F01 | Corrected (did not match the code) | Request parameters / mode2: CNPJ | Identity document front image data; provide image content as specified by the verification template; this endpoint only checks that the required value is nonempty and does not enforce a URL format for all templates | Identity document front image data. This optional field is not checked for a nonempty value and is not submitted for business verification by this endpoint. Do not rely on it to provide an officer’s identity document. |
+| create-pa-F02 | Corrected (did not match the code) | Request parameters / mode2: CNPJ | Identity document back image data; provide image content as specified by the verification template; this endpoint only checks that the required value is nonempty and does not enforce a URL format for all templates | Identity document back image data. This optional field is not checked for a nonempty value and is not submitted for business verification by this endpoint. Do not rely on it to provide an officer’s identity document. |
+| create-pa-F03 | Added (missing in the source) | Request parameters / mode2: CNPJ | Ultimate beneficial owners | Ultimate beneficial owners. document_type and tax_id are accepted but not submitted for business verification. An item is also not submitted when name, birth_date, and address are all empty after trimming. Ownership percentage alone does not make the item eligible for submission. |
+| create-pa-F04 | Added (missing in the source) | Request parameters / mode2: CNPJ | Executives and related persons | Executives and related persons. document_type, tax_id, identity and all identity subfields are accepted but not submitted for business verification. An item is not submitted when first_name, middle_name, last_name, birth_date, email, phone_number, and address are all empty after trimming. Ownership, shares, roles, or additional fields alone do not make the item eligible for submission. |
+| create-pa-F05 | Added (missing in the source) | Request parameters / mode2: CNPJ | Associated company list | Associated company list. relationship_type and reference_id are accepted but are not submitted for business verification by this endpoint. Do not rely on these fields to describe or identify the relationship in the verification request. |
+| create-pa-F06 | Added (missing in the source) | Request parameters / mode2: CNPJ | Additional information item; use the structure specified by the template's additional information requirements | Additional information item; use the structure specified by the template's additional information requirements. This field and all its nested fields are accepted in the request but are not submitted for business verification by this endpoint. Do not rely on it to satisfy verification requirements. |
+| create-pa-F07 | Added (missing in the source) | Request parameters / mode2: CNPJ | Detailed business information; the endpoint explicitly requires a nonempty trade name. Provide other fields as required by the review template. Do not assume the review is complete based solely on the trade name | Detailed business information; the endpoint explicitly requires a nonempty trade name. Provide other fields as required by the review template. Do not assume the review is complete based solely on the trade name. entity_type, business_model, business_industries, platform_url, and additional_fields (including all its nested fields) are accepted but not submitted for business verification by this endpoint. Do not rely on these fields to satisfy verification requirements. |
+| create-pa-F13 | Added (missing in the source) | Request parameters / additional information | Client reference data/additional information key name; use the structure specified by the template's additional information requirements | Additional information key name. Leading and trailing whitespace is trimmed. An item with an empty key is not submitted. Nonempty keys are submitted with the corresponding additional information. |
+| create-pa-F14 | Added (missing in the source) | Request parameters / additional information | Client reference data/additional information key name; use the structure specified by the template's additional information requirements | Additional information key name. Leading and trailing whitespace is trimmed. An item with an empty key is not submitted. For repeated keys, the last item replaces earlier items. |
+| create-pa-F15 | Added (missing in the source) | Request parameters / additional information | Client reference data/additional information key name; use the structure specified by the template's additional information requirements | Additional information key name. Leading and trailing whitespace is trimmed. An item with an empty key is not submitted. For repeated keys, the last item replaces earlier items. |
+| create-pa-F16 | Added (missing in the source) | Request parameters / client reference data | Key name for client reference data or additional information; must not be empty after trimming leading and trailing whitespace. The key must be unique, must not be system-reserved, and must be in the selected template's allowlist | Key name for client reference data or additional information; must not be empty after trimming leading and trailing whitespace. The key must be unique, must not be system-reserved, and must be in the selected template's allowlist. Reserved keys: `account_number`, `account_type`, `business_data_ref`, `business_profile_id`, `client_reference_id`, `legal_document_id`, `legal_document_type`, `legal_name`, `merchant_id`, `request_id`, `session_id`, `template_id`, `user_id`, `user_profile_id`. |
+| create-pa-F17 | Added (missing in the source) | Request parameters / idempotency | Must not be empty after trimming leading and trailing whitespace. Generate and save the value; the code does not enforce UUID format. Keep the value unchanged for technical retries of the same account opening request | Must not be empty after trimming leading and trailing whitespace. Generate and save the value; the code does not enforce UUID format. Keep the value unchanged for technical retries of the same account opening request. For a retry, keep the owning USER, linked_account, model, compliance_mode, applicant document type and tax ID, trading_name, and notification_email unchanged. Reusing a reference_id for incompatible account details can fail; a reference_id is not an update operation. |
+| create-pa-F18 | Added (missing in the source) | Response fields | Current business status, interpreted using the enum values listed for this field. Enum: 0 MANAGED_ACCOUNT_STATUS_V3_UNSPECIFIED; 1 MANAGED_ACCOUNT_STATUS_V3_PENDING; 2 MANAGED_ACCOUNT_STATUS_V3_ACTIVE; 3 MANAGED_ACCOUNT_STATUS_V3_FROZEN; 4 MANAGED_ACCOUNT_STATUS_V3_CLOSED; 5 MANAGED_ACCOUNT_STATUS_V3_REJECTED; 6 MANAGED_ACCOUNT_STATUS_V3_EXPIRED; 7 MANAGED_ACCOUNT_STATUS_V3_PENDING_SUBMISSION. | Current business status, interpreted using the enum values listed for this field. Enum: 0 MANAGED_ACCOUNT_STATUS_V3_UNSPECIFIED; 1 MANAGED_ACCOUNT_STATUS_V3_PENDING; 2 MANAGED_ACCOUNT_STATUS_V3_ACTIVE; 3 MANAGED_ACCOUNT_STATUS_V3_FROZEN; 4 MANAGED_ACCOUNT_STATUS_V3_CLOSED; 5 MANAGED_ACCOUNT_STATUS_V3_REJECTED; 6 MANAGED_ACCOUNT_STATUS_V3_EXPIRED; 7 MANAGED_ACCOUNT_STATUS_V3_PENDING_SUBMISSION. A new hosted-link PA normally returns 1 (PENDING), even while the compliance review is waiting for submission. This endpoint does not currently map that waiting state to 7 (PENDING_SUBMISSION). |
+| create-pa-F19 | Added (missing in the source) | Permissions and account ownership / account opening fee | The selected parent account must have ACTIVE status and meet the account ownership requirements. | The selected parent account must have ACTIVE status and meet the account ownership requirements. The configured account opening fee is charged in BRL to this direct parent account after the verification session is created and before the account creation request is accepted. CPF applicants use the KYC fee and CNPJ applicants use the KYB fee. The parent must have enough available funds. If the fee result is uncertain, retry with the same reference_id; do not create a new request solely because no response was received. |
+| create-pa-F20 | Added (missing in the source) | Responses / account opening fee errors | See Error Catalog for other parameter, permission, and service errors. | See Error Catalog for other parameter, permission, and service errors. For account opening fee failures: 4001999 means insufficient balance—add funds and retry with the same reference_id; 4001013 can mean the reference_id was used for incompatible account details—use a new reference_id only for a genuinely different request; 4004004 can mean the fee configuration was not found—contact support; 400 can mean the fee configuration is invalid—contact support; 501 can mean the fee configuration is temporarily unavailable or the fee result could not be confirmed—retry later with the same reference_id. Read message to distinguish these cases. |
+| create-pa-F22 | Added (missing in the source) | Permissions and account ownership / parent availability | The selected parent account must have ACTIVE status and meet the account ownership requirements. | The selected parent account must have ACTIVE status and meet the account ownership requirements. The parent’s bound bank account must also be ACTIVE and must not have closure in progress. A VA parent and its owning MA must both have valid active bank account bindings. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "reference_id": "pa-demo-001",
+  "model": 3,
+  "compliance_mode": 1,
+  "compliance_payload": {
+    "document_type": 1,
+    "tax_id": "00000000000",
+    "legal_name": "Demo Subject"
+  },
+  "return_url": "https://merchant.example.test/return",
+  "trading_name": "Demo Company",
+  "notification_email": "contact@example.test",
+  "linked_account": {
+    "ispb": "replace-with-parent-ispb",
+    "account_number": "replace-with-parent-account"
+  }
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/onboarding/managed_accounts/create' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${USER_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "reference_id": "pa-demo-001",
+  "model": 3,
+  "compliance_mode": 1,
+  "compliance_payload": {
+    "document_type": 2,
+    "tax_id": "00000000000000",
+    "legal_name": "Demo Company"
+  },
+  "return_url": "https://merchant.example.test/return",
+  "trading_name": "Demo Company",
+  "notification_email": "contact@example.test",
+  "linked_account": {
+    "ispb": "replace-with-parent-ispb",
+    "account_number": "replace-with-parent-account"
+  }
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/onboarding/managed_accounts/create' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${USER_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "reference_id": "pa-demo-001",
+  "model": 3,
+  "compliance_mode": 2,
+  "compliance_payload": {
+    "document_type": 1,
+    "tax_id": "00000000000",
+    "legal_name": "Demo Subject",
+    "user_data": {
+      "name": {
+        "first_name": "Demo",
+        "middle_name": "replace-with-middle-name",
+        "last_name": "Subject"
+      },
+      "date_of_birth": "1990-01-15",
+      "identity": {
+        "country_code": "BR",
+        "document_type": "replace-with-document-type",
+        "document_front": "replace-with-document-front",
+        "document_back": "replace-with-document-back"
+      },
+      "address": {
+        "full_address": "replace-with-full-address",
+        "address_street_1": "replace-with-address-street-1",
+        "address_street_2": "replace-with-address-street-2",
+        "address_city": "replace-with-address-city",
+        "address_state": "SP",
+        "address_zip_code": "replace-with-address-zip-code",
+        "address_country": "BR"
+      },
+      "selfie": "replace-with-selfie",
+      "address_proof_document": "replace-with-address-proof-document",
+      "additional_fields": [
+        {
+          "key": "replace-with-key",
+          "label": "replace-with-label",
+          "answer_type": "replace-with-answer-type",
+          "string_value": "replace-with-string-value",
+          "string_values": [
+            "replace-with-string-values"
+          ],
+          "file": {
+            "file": "cmVwbGFjZS13aXRoLWFjdHVhbC1maWxl",
+            "file_name": "document.pdf",
+            "content_type": "application/pdf"
+          },
+          "files": [
+            {
+              "file": "cmVwbGFjZS13aXRoLWFjdHVhbC1maWxl",
+              "file_name": "document.pdf",
+              "content_type": "application/pdf"
+            }
+          ],
+          "metadata": {
+            "example_key": "replace-with-value"
+          }
+        }
+      ]
+    },
+    "client_reference_data": [
+      {
+        "key": "replace-with-template-allowed-key",
+        "value": "replace-with-reference-value"
+      }
+    ]
+  },
+  "trading_name": "Demo Company",
+  "notification_email": "contact@example.test",
+  "linked_account": {
+    "ispb": "replace-with-parent-ispb",
+    "account_number": "replace-with-parent-account"
+  }
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/onboarding/managed_accounts/create' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${USER_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "reference_id": "pa-demo-001",
+  "model": 3,
+  "compliance_mode": 2,
+  "compliance_payload": {
+    "document_type": 2,
+    "tax_id": "00000000000000",
+    "legal_name": "Demo Company",
+    "business_data": {
+      "trading_name": "Demo Company",
+      "address": {
+        "full_address": "replace-with-full-address",
+        "address_street_1": "replace-with-address-street-1",
+        "address_street_2": "replace-with-address-street-2",
+        "address_city": "replace-with-address-city",
+        "address_state": "SP",
+        "address_zip_code": "replace-with-address-zip-code",
+        "address_country": "BR"
+      },
+      "ubo_list": [
+        {
+          "name": "Demo Subject",
+          "document_type": 1,
+          "tax_id": "00000000000",
+          "ownership_percentage": "25",
+          "birth_date": "1990-01-15",
+          "address": {
+            "full_address": "replace-with-full-address",
+            "address_street_1": "replace-with-address-street-1",
+            "address_street_2": "replace-with-address-street-2",
+            "address_city": "replace-with-address-city",
+            "address_state": "SP",
+            "address_zip_code": "replace-with-address-zip-code",
+            "address_country": "BR"
+          }
+        }
+      ],
+      "website": "https://company.example.test",
+      "country_code": "BR",
+      "formation_date": "2020-01-15",
+      "phone_numbers": [
+        "+5511999999999"
+      ],
+      "email_addresses": [
+        "contact@example.test"
+      ],
+      "state_code": "SP",
+      "business_entity_id": "replace-with-business-entity-id",
+      "officers": [
+        {
+          "first_name": "Demo",
+          "middle_name": "replace-with-middle-name",
+          "last_name": "Subject",
+          "birth_date": "1990-01-15",
+          "ownership_percentage": "25",
+          "shares_allocated": "100",
+          "roles": [
+            "replace-with-roles"
+          ],
+          "email": "contact@example.test",
+          "phone_number": "+5511999999999",
+          "address": {
+            "full_address": "replace-with-full-address",
+            "address_street_1": "replace-with-address-street-1",
+            "address_street_2": "replace-with-address-street-2",
+            "address_city": "replace-with-address-city",
+            "address_state": "SP",
+            "address_zip_code": "replace-with-address-zip-code",
+            "address_country": "BR"
+          },
+          "document_type": 1,
+          "tax_id": "00000000000",
+          "identity": {
+            "country_code": "BR",
+            "document_type": "replace-with-document-type",
+            "tax_id": "00000000000",
+            "document_front": "replace-with-document-front",
+            "document_back": "replace-with-document-back"
+          },
+          "additional_fields": [
+            {
+              "key": "replace-with-key",
+              "label": "replace-with-label",
+              "answer_type": "replace-with-answer-type",
+              "string_value": "replace-with-string-value",
+              "string_values": [
+                "replace-with-string-values"
+              ],
+              "file": {
+                "file": "cmVwbGFjZS13aXRoLWFjdHVhbC1maWxl",
+                "file_name": "document.pdf",
+                "content_type": "application/pdf"
+              },
+              "files": [
+                {
+                  "file": "cmVwbGFjZS13aXRoLWFjdHVhbC1maWxl",
+                  "file_name": "document.pdf",
+                  "content_type": "application/pdf"
+                }
+              ],
+              "metadata": {
+                "example_key": "replace-with-value"
+              }
+            }
+          ]
+        }
+      ],
+      "related_companies": [
+        {
+          "name": "Demo Subject",
+          "trading_name": "Demo Company",
+          "tax_identification_number": "00000000000000",
+          "website": "https://company.example.test",
+          "formation_date": "2020-01-15",
+          "country_code": "BR",
+          "state_code": "SP",
+          "business_entity_id": "replace-with-business-entity-id",
+          "addresses": [
+            {
+              "full_address": "replace-with-full-address",
+              "address_street_1": "replace-with-address-street-1",
+              "address_street_2": "replace-with-address-street-2",
+              "address_city": "replace-with-address-city",
+              "address_state": "SP",
+              "address_zip_code": "replace-with-address-zip-code",
+              "address_country": "BR"
+            }
+          ],
+          "phone_numbers": [
+            "+5511999999999"
+          ],
+          "email_addresses": [
+            "contact@example.test"
+          ],
+          "ownership_percentage": "25",
+          "shares_allocated": "100",
+          "relationship_type": "replace-with-relationship-type",
+          "roles": [
+            "replace-with-roles"
+          ],
+          "reference_id": "replace-with-reference-id",
+          "additional_fields": [
+            {
+              "key": "replace-with-key",
+              "label": "replace-with-label",
+              "answer_type": "replace-with-answer-type",
+              "string_value": "replace-with-string-value",
+              "string_values": [
+                "replace-with-string-values"
+              ],
+              "file": {
+                "file": "cmVwbGFjZS13aXRoLWFjdHVhbC1maWxl",
+                "file_name": "document.pdf",
+                "content_type": "application/pdf"
+              },
+              "files": [
+                {
+                  "file": "cmVwbGFjZS13aXRoLWFjdHVhbC1maWxl",
+                  "file_name": "document.pdf",
+                  "content_type": "application/pdf"
+                }
+              ],
+              "metadata": {
+                "example_key": "replace-with-value"
+              }
+            }
+          ]
+        }
+      ],
+      "business_documents": [
+        {
+          "document_type": "replace-with-document-type",
+          "file": "cmVwbGFjZS13aXRoLWFjdHVhbC1maWxl",
+          "file_name": "document.pdf",
+          "content_type": "application/pdf",
+          "additional_fields": [
+            {
+              "key": "replace-with-key",
+              "label": "replace-with-label",
+              "answer_type": "replace-with-answer-type",
+              "string_value": "replace-with-string-value",
+              "string_values": [
+                "replace-with-string-values"
+              ],
+              "file": {
+                "file": "cmVwbGFjZS13aXRoLWFjdHVhbC1maWxl",
+                "file_name": "document.pdf",
+                "content_type": "application/pdf"
+              },
+              "files": [
+                {
+                  "file": "cmVwbGFjZS13aXRoLWFjdHVhbC1maWxl",
+                  "file_name": "document.pdf",
+                  "content_type": "application/pdf"
+                }
+              ],
+              "metadata": {
+                "example_key": "replace-with-value"
+              }
+            }
+          ]
+        }
+      ],
+      "entity_type": "replace-with-entity-type",
+      "business_model": "replace-with-business-model",
+      "business_industries": [
+        "replace-with-business-industries"
+      ],
+      "platform_url": "https://platform.example.test",
+      "additional_fields": [
+        {
+          "key": "replace-with-key",
+          "label": "replace-with-label",
+          "answer_type": "replace-with-answer-type",
+          "string_value": "replace-with-string-value",
+          "string_values": [
+            "replace-with-string-values"
+          ],
+          "file": {
+            "file": "cmVwbGFjZS13aXRoLWFjdHVhbC1maWxl",
+            "file_name": "document.pdf",
+            "content_type": "application/pdf"
+          },
+          "files": [
+            {
+              "file": "cmVwbGFjZS13aXRoLWFjdHVhbC1maWxl",
+              "file_name": "document.pdf",
+              "content_type": "application/pdf"
+            }
+          ],
+          "metadata": {
+            "example_key": "replace-with-value"
+          }
+        }
+      ]
+    },
+    "client_reference_data": [
+      {
+        "key": "replace-with-template-allowed-key",
+        "value": "replace-with-reference-value"
+      }
+    ]
+  },
+  "trading_name": "Demo Company",
+  "notification_email": "contact@example.test",
+  "linked_account": {
+    "ispb": "replace-with-parent-ispb",
+    "account_number": "replace-with-parent-account"
+  }
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/onboarding/managed_accounts/create' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${USER_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Request succeeded
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "reference_id": "pa-demo-001",
+    "model": 3,
+    "status": 1
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Request or validation failed
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 System error
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

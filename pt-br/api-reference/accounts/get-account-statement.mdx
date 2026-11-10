@@ -1,0 +1,359 @@
+---
+title: "Consultar extrato da conta"
+description: "Consulte os lançamentos do extrato da conta-alvo por intervalo de tempo para conferir recebimentos, pagamentos, devoluções e alterações de saldo associadas."
+api: "POST /v3/statements"
+keywords: ["/v3/statements"]
+---
+
+## Funcionamento e tratamento
+
+Consulte os lançamentos do extrato da conta-alvo por intervalo de tempo para conferir recebimentos, pagamentos, devoluções e alterações de saldo associadas.
+
+**Consultas paginadas**: Não envie cursor na primeira página. Nas páginas seguintes, use cursor e snapshot_timestamp retornados na página anterior. Mantenha a conta e os filtros inalterados. Encerre quando não houver um cursor válido. Os resultados são ordenados pela data e hora de início da transação em ordem decrescente, com o ID da transação também em ordem decrescente como critério de desempate. A paginação por cursor utiliza os dois valores; não construa um cursor apenas com o timestamp. <Badge color="blue" size="sm">Complementado · api-24-F21</Badge>
+
+**Consultar lançamentos ausentes no extrato**: Para não perder lançamentos recebidos com atraso ou registrados com data retroativa, recomendamos consultar novamente parte do intervalo já consultado na próxima rodada. <Badge color="orange" size="sm">Corrigido · api-24-F19</Badge> Elimine duplicatas pelo ID da transação e confira as alterações nos registros. Defina o intervalo de nova consulta conforme o acordo de negócio.
+
+## Permissões e titularidade da conta
+
+Use credenciais `ACCOUNT` para a conta vinculada a elas, ou credenciais `USER` com `X-ISPB` e `X-Account-Number` para selecionar uma conta de titularidade desse usuário. Com credenciais `ACCOUNT`, omita os dois headers da conta ou envie ambos com valores correspondentes à conta vinculada; eles não permitem selecionar outra conta. Credenciais `PLATFORM` não são aceitas. <Badge color="blue" size="sm">Complementado · api-24-F01</Badge> As requisições devem seguir as orientações de [Ambientes e credenciais](/pt-br/environments-and-credentials).
+
+## Parâmetros da requisição
+
+<ParamField body="page_size" type="integer">
+Se informado, deve ser de 1 a 100. O padrão é 20 quando omitido. <Badge color="blue" size="sm">Complementado · api-24-F02</Badge>
+</ParamField>
+
+<ParamField body="txn_id" type="string">
+**Obrigatório:** Não (não obrigatório nesta camada). ID da transação
+</ParamField>
+
+<ParamField body="funds_type" type="integer">
+**Obrigatório:** Não (não obrigatório nesta camada). Direção do lançamento. Valores: `0 UNSPECIFIED`; `1 CREDIT`; `2 DEBIT`. Quando omitido ou definido como `0`, seleciona as duas direções. `CREDIT` seleciona registros em que a conta-alvo é a do recebedor e a transação subjacente está `COMPLETED`. `DEBIT` seleciona registros em que a conta-alvo é a do pagador, sem restringir a transações concluídas. Sem filtro de direção, a mesma restrição a transações concluídas se aplica aos recebimentos, enquanto os pagamentos podem ter outros status. Atualmente, outros valores inteiros se comportam como `UNSPECIFIED` em vez de serem rejeitados. <Badge color="blue" size="sm">Complementado · api-24-F11</Badge>
+</ParamField>
+
+<ParamField body="start_date" type="integer" required>
+Timestamp Unix em milissegundos, como inteiro diferente de zero e menor que `end_date`. Use um valor positivo para aplicar um limite inferior de `initiated_at`, incluindo o limite inicial. Valores negativos passam pela verificação de valor diferente de zero, mas não aplicam um limite inferior de tempo. <Badge color="orange" size="sm">Corrigido · api-24-F22</Badge>
+</ParamField>
+
+<ParamField body="end_date" type="integer" required>
+Timestamp Unix em milissegundos, como inteiro diferente de zero e maior que `start_date`. Use um valor positivo para aplicar um limite superior de `initiated_at`, incluindo o limite final. Valores negativos passam pela verificação de valor diferente de zero, mas não aplicam um limite de `end_date`. O limite superior efetivo de `snapshot_timestamp` continua se aplicando. <Badge color="orange" size="sm">Corrigido · api-24-F23</Badge>
+</ParamField>
+
+<ParamField body="settlement_id" type="string">
+**Obrigatório:** Não (não obrigatório nesta camada). ID de liquidação da transação
+</ParamField>
+
+<ParamField body="transaction_type" type="integer">
+Se omitido ou definido como `0`, não restringe o tipo e consulta `PAYMENT`, `REFUND` e `DISPUTE`. Valores aceitos: `0 UNSPECIFIED`; `1 PAYMENT`; `2 REFUND`; `6 DISPUTE`. Os valores `3 TRANSFER`, `4 WITHDRAWAL`, `5 DEPOSIT` e outros valores não suportados são rejeitados com o code de negócio `400` e a mensagem `txn_type is invalid`. <Badge color="orange" size="sm">Corrigido · api-24-F03</Badge>
+</ParamField>
+
+<ParamField body="snapshot_timestamp" type="integer">
+Limite superior do snapshot em milissegundos Unix. Se omitido ou definido como `0` ou um valor negativo, o padrão é o horário Unix atual do servidor em milissegundos. Reutilize o valor retornado nas páginas seguintes. Os registros devem ter `initiated_at` menor que o limite efetivamente utilizado. Não se trata de um snapshot de isolamento do banco de dados. <Badge color="blue" size="sm">Complementado · api-24-F04</Badge>
+</ParamField>
+
+<ParamField body="cursor" type="object">
+Use o cursor retornado na página anterior. Mantenha a conta, os filtros e o snapshot inalterados. A paginação por cursor só é aplicada quando `timestamp` é maior que `0` e `id` não está vazio; caso contrário, o cursor é ignorado e a consulta começa sem um limite de cursor. Encerre a varredura para a frente quando nenhum cursor válido for retornado. <Badge color="blue" size="sm">Complementado · api-24-F05</Badge>
+</ParamField>
+
+<ParamField body="cursor.timestamp" type="integer">
+↳ **Obrigatório:** Obrigatório ao usar cursor. Timestamp Unix em milissegundos, como inteiro maior que 0; use em conjunto com id
+</ParamField>
+
+<ParamField body="cursor.id" type="string">
+↳ **Obrigatório:** Obrigatório ao usar cursor. ID da transação do cursor, não vazio; use o valor retornado sem alterações
+</ParamField>
+
+<ParamField body="cursor.direction" type="integer">
+↳ Opcional. Valores: `0 UNSPECIFIED`; `1 FORWARD`; `2 BACKWARD`. Quando omitido ou definido como `0`, usa paginação para a frente. Somente `2` seleciona a paginação para trás; atualmente, outros valores inteiros usam paginação para a frente em vez de serem rejeitados. Use `1` para consultas para a frente e reutilize o cursor retornado sem alterações. <Badge color="blue" size="sm">Complementado · api-24-F06</Badge>
+</ParamField>
+
+## Exemplo de requisição cURL
+
+O exemplo usa credenciais de nível ACCOUNT. Preencha os parâmetros reais e gere a assinatura com base no body.json final.
+
+Os horários inicial e final do exemplo usam valores em milissegundos. Envie sempre `start_date` e `end_date` como timestamps Unix em milissegundos; não substitua por segundos ou outra unidade acordada. <Badge color="orange" size="sm">Corrigido · api-24-F16</Badge>
+
+## Campos da resposta
+
+Os caminhos dos campos partem da raiz da resposta. `[]` indica um elemento de array. Os valores monetários usam strings decimais. Os enums são interpretados conforme cada campo. A estrutura abaixo representa os dados de uma resposta de sucesso. Um valor nulo ou 0, por si só, não indica a conclusão da operação.
+
+<ResponseField name="code" type="integer">
+Código de resultado de negócio; 200 indica sucesso. Os erros de negócio são retornados neste campo, que não equivale ao código de status HTTP.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Descrição do resultado de negócio; em caso de falha, analise esta descrição junto com o campo code para identificar a causa.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Objeto de dados da resposta de sucesso; pode ser null em respostas de erro.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Horário da resposta, em timestamp Unix UTC em milissegundos.
+</ResponseField>
+
+<ResponseField name="data.statements" type="array">
+Lista de lançamentos do extrato da conta.
+</ResponseField>
+
+<ResponseField name="data.statements[].txn_id" type="string">
+ID da transação.
+</ResponseField>
+
+<ResponseField name="data.statements[].amount" type="string">
+Valor da transação, como string decimal.
+</ResponseField>
+
+<ResponseField name="data.statements[].memo" type="string">
+Observação da transação.
+</ResponseField>
+
+<ResponseField name="data.statements[].created_at" type="integer">
+Data e hora de início da transação, em timestamp Unix UTC em milissegundos. Apesar do nome do campo, este valor corresponde a `initiated_at`, e não à data e hora de criação do registro no banco de dados. Um timestamp de início ausente é representado como `0`. <Badge color="orange" size="sm">Corrigido · api-24-F07</Badge>
+</ResponseField>
+
+<ResponseField name="data.statements[].settlement_id" type="string">
+ID da transação de liquidação. Para TED, fica vazio até a liquidação atingir `SETTLED`. Também pode ficar vazio quando não há um identificador de liquidação disponível. <Badge color="blue" size="sm">Complementado · api-24-F08</Badge>
+</ResponseField>
+
+<ResponseField name="data.statements[].payment_method" type="integer">
+Forma de pagamento. Enum: 0 PAYMENT_METHOD_UNSPECIFIED; 1 PAYMENT_METHOD_PIX; 2 PAYMENT_METHOD_CARD; 3 PAYMENT_METHOD_TED; 4 PAYMENT_METHOD_BOLETO; 5 PAYMENT_METHOD_BOOK.
+</ResponseField>
+
+<ResponseField name="data.statements[].payment_variant" type="integer">
+Variante da forma de pagamento. Enum: 0 PAYMENT_VARIANT_UNSPECIFIED; 1 PAYMENT_VARIANT_PIX_MANUAL; 2 PAYMENT_VARIANT_PIX_KEY; 3 PAYMENT_VARIANT_STATIC_QRCODE; 4 PAYMENT_VARIANT_DYNAMIC_QRCODE; 5 PAYMENT_VARIANT_AUTO_PIX; 6 PAYMENT_VARIANT_TED_MANUAL; 7 PAYMENT_VARIANT_BOOK_MANUAL; 8 PAYMENT_VARIANT_BOLETO; 9 PAYMENT_VARIANT_DYNAMIC_BILLING; 10 PAYMENT_VARIANT_DYNAMIC_BOLETO.
+</ResponseField>
+
+<ResponseField name="data.statements[].is_credit" type="boolean">
+Indica se é um crédito em conta. A implementação atual determina esse valor comparando o número do documento do recebedor com o da entidade autenticada.
+</ResponseField>
+
+<ResponseField name="data.statements[].txn_status" type="integer">
+Status da transação. Enum: `0 TXN_STATUS_UNSPECIFIED`; `1 TXN_STATUS_PENDING`; `2 TXN_STATUS_COMPLETED`; `3 TXN_STATUS_FAILED`; `4 TXN_STATUS_CANCELLED`; `5 TXN_STATUS_PROCESSING`; `6 TXN_STATUS_REFUNDED`; `7 TXN_STATUS_PARTIALLY_REFUNDED`; `8 TXN_STATUS_DISPUTED`. Para lançamentos `PAYMENT`, este é o status do pagamento apresentado ao cliente, e não um status separado de liquidação. Para lançamentos `DISPUTE`, os estados pendente e em processamento são retornados como `5 PROCESSING`; concluído corresponde a `2 COMPLETED` e falha corresponde a `3 FAILED`. <Badge color="blue" size="sm">Complementado · api-24-F12</Badge>
+</ResponseField>
+
+<ResponseField name="data.statements[].payee" type="object">
+Dados do recebedor.
+</ResponseField>
+
+<ResponseField name="data.statements[].payee.name" type="string">
+Nome.
+</ResponseField>
+
+<ResponseField name="data.statements[].payee.document_id" type="string">
+Número do documento do participante da transação, que pode ser mascarado conforme a configuração do comerciante.
+</ResponseField>
+
+<ResponseField name="data.statements[].payee.document_type" type="integer">
+Tipo de documento. Enum: 0 DOCUMENT_TYPE_UNSPECIFIED; 1 DOCUMENT_TYPE_CPF; 2 DOCUMENT_TYPE_CNPJ.
+</ResponseField>
+
+<ResponseField name="data.statements[].payee.bank_account" type="string">
+Número da conta.
+</ResponseField>
+
+<ResponseField name="data.statements[].payee.bank_account_type" type="integer">
+Tipo de conta bancária. Enum: 0 BANK_ACCOUNT_TYPE_UNSPECIFIED; 1 BANK_ACCOUNT_TYPE_CHECKING; 2 BANK_ACCOUNT_TYPE_SALARY; 3 BANK_ACCOUNT_TYPE_SAVINGS; 4 BANK_ACCOUNT_TYPE_PAYMENT; 5 BANK_ACCOUNT_TYPE_TRANSCTIONAL_PI; 7 BANK_ACCOUNT_TYPE_DEPOSIT; 6 BANK_ACCOUNT_TYPE_GUARANTEED.
+</ResponseField>
+
+<ResponseField name="data.statements[].payee.bank_branch" type="string">
+Código da agência bancária.
+</ResponseField>
+
+<ResponseField name="data.statements[].payee.bank_code" type="string">
+ISPB do banco.
+</ResponseField>
+
+<ResponseField name="data.statements[].payee.bank_name" type="string">
+Nome do banco.
+</ResponseField>
+
+<ResponseField name="data.statements[].payer" type="object">
+Dados do pagador.
+</ResponseField>
+
+<ResponseField name="data.statements[].payer.name" type="string">
+Nome.
+</ResponseField>
+
+<ResponseField name="data.statements[].payer.document_id" type="string">
+Número do documento do participante da transação, que pode ser mascarado conforme a configuração do comerciante.
+</ResponseField>
+
+<ResponseField name="data.statements[].payer.document_type" type="integer">
+Tipo de documento. Enum: 0 DOCUMENT_TYPE_UNSPECIFIED; 1 DOCUMENT_TYPE_CPF; 2 DOCUMENT_TYPE_CNPJ.
+</ResponseField>
+
+<ResponseField name="data.statements[].payer.bank_account" type="string">
+Número da conta.
+</ResponseField>
+
+<ResponseField name="data.statements[].payer.bank_account_type" type="integer">
+Tipo de conta bancária. Enum: 0 BANK_ACCOUNT_TYPE_UNSPECIFIED; 1 BANK_ACCOUNT_TYPE_CHECKING; 2 BANK_ACCOUNT_TYPE_SALARY; 3 BANK_ACCOUNT_TYPE_SAVINGS; 4 BANK_ACCOUNT_TYPE_PAYMENT; 5 BANK_ACCOUNT_TYPE_TRANSCTIONAL_PI; 7 BANK_ACCOUNT_TYPE_DEPOSIT; 6 BANK_ACCOUNT_TYPE_GUARANTEED.
+</ResponseField>
+
+<ResponseField name="data.statements[].payer.bank_branch" type="string">
+Código da agência bancária.
+</ResponseField>
+
+<ResponseField name="data.statements[].payer.bank_code" type="string">
+ISPB do banco.
+</ResponseField>
+
+<ResponseField name="data.statements[].payer.bank_name" type="string">
+Nome do banco.
+</ResponseField>
+
+<ResponseField name="data.statements[].txn_type" type="integer">
+Tipo de transação. Enum: 0 TXN_TYPE_UNSPECIFIED; 1 TXN_TYPE_PAYMENT; 2 TXN_TYPE_REFUND; 3 TXN_TYPE_TRANSFER; 4 TXN_TYPE_WITHDRAWAL; 5 TXN_TYPE_DEPOSIT; 6 TXN_TYPE_DISPUTE.
+</ResponseField>
+
+<ResponseField name="data.statements[].parent_txn_id" type="string">
+ID da transação original vinculada.
+</ResponseField>
+
+<ResponseField name="data.statements[].parent_settlement_id" type="string">
+ID da liquidação vinculada à transação original.
+</ResponseField>
+
+<ResponseField name="data.snapshot_timestamp" type="integer">
+Limite superior de tempo usado nesta consulta. Reutilize esse valor nas consultas seguintes por cursor. Não há garantia de isolamento por snapshot.
+</ResponseField>
+
+<ResponseField name="data.cursor" type="object">
+Cursor da próxima página; pode ser null quando não houver próximo cursor.
+</ResponseField>
+
+<ResponseField name="data.cursor.timestamp" type="integer">
+Timestamp do cursor, em milissegundos Unix UTC.
+</ResponseField>
+
+<ResponseField name="data.cursor.id" type="string">
+Identificador do registro do cursor.
+</ResponseField>
+
+<ResponseField name="data.cursor.direction" type="integer">
+Direção do cursor. Enum: 0 PAGINATION_DIRECTION_UNSPECIFIED; 1 PAGINATION_DIRECTION_FORWARD; 2 PAGINATION_DIRECTION_BACKWARD.
+</ResponseField>
+
+<ResponseField name="data.page" type="object">
+Informações de paginação. A consulta atual de lançamentos do extrato usa cursor e não preenche o objeto de paginação, que pode ser null.
+</ResponseField>
+
+<ResponseField name="data.page.page" type="integer">
+Número da página na estrutura compartilhada de paginação. Não é retornado como valor aninhado neste endpoint porque `data.page` é `null`. <Badge color="orange" size="sm">Corrigido · api-24-F25</Badge>
+</ResponseField>
+
+<ResponseField name="data.page.total" type="integer">
+Número total de registros.
+</ResponseField>
+
+<ResponseField name="data.page.page_size" type="integer">
+Número de registros por página.
+</ResponseField>
+
+<ResponseField name="data.page.total_pages" type="integer">
+Número total de páginas.
+</ResponseField>
+
+## Respostas
+
+Consulte os exemplos de resposta pelo `code` de negócio no JSON. Verifique o status HTTP e o `code` de negócio separadamente. Um JSON malformado pode retornar HTTP `400` com um erro de interpretação em `text/plain`, em vez do envelope JSON de resposta de negócio; confira o `Content-Type` da resposta antes de interpretá-la como JSON. <Badge color="blue" size="sm">Complementado · api-24-F18</Badge> Uma resposta HTTP 200 também pode retornar um erro de negócio. <Badge color="orange" size="sm">Corrigido · api-24-F15</Badge>
+
+| `code` | Significado | Ação recomendada |
+| --- | --- | --- |
+| `200` | Requisição bem-sucedida | Leia data e avalie o resultado do processamento conforme o status de negócio deste endpoint. |
+| `400` | Falha na requisição ou validação | Problema nos parâmetros. Verifique e corrija os parâmetros da requisição. |
+| `500` | Erro do sistema | Registre a resposta e confirme primeiro o resultado de negócio. |
+
+Os exemplos ilustram a estrutura da resposta. Os valores de message e do status de negócio devem ser obtidos da resposta efetiva. Para outros erros de parâmetros, permissões e serviço, consulte [Catálogo de erros](/pt-br/api-reference/error-catalog). Esta seção não indica que o endpoint retorna apenas os três valores de `code` apresentados. Limites de data inválidos retornam o code de negócio `4001` com a mensagem `Invalid start_date or end_date value`; `page_size` inválido retorna `4001` com a mensagem `Invalid page_size value`. Um `transaction_type` não suportado retorna `400` com a mensagem `txn_type is invalid`. Uma falha ao consultar os lançamentos pode retornar `4003014` com a mensagem `Unable to retrieve transactions at this time`; uma falha de comunicação com o serviço de consulta de transações retorna `501` com a mensagem `Service temporarily unavailable, please try again later`. As mensagens podem ser traduzidas; use `code` para classificar o erro. <Badge color="blue" size="sm">Complementado · api-24-F17</Badge>
+
+<Tip>
+Para testar este endpoint, envie o exemplo de requisição para a Base URL do Sandbox `https://ebanking-openapi-sandbox.pagsmile.com.br` com sua AK/SK de Sandbox. Assine cada requisição conforme descrito em [Ambientes e credenciais](/pt-br/environments-and-credentials#assinatura-de-requisições-à-api).
+</Tip>
+
+
+<Accordion title="Correções em relação ao documento original (19)" icon="clipboard-check">
+Esta página foi conferida com o código-fonte da Pagsmile Open API em 2026-11-10. Cada alteração abaixo está marcada na página com um selo que mostra o seu ID.
+
+| ID | Alteração | Local | Texto do documento original | Texto atualizado |
+| --- | --- | --- | --- | --- |
+| api-24-F01 | Complementado (ausente no original) | Permissions and account ownership | ACCOUNT, ou USER com o header da conta-alvo. | Use credenciais ACCOUNT para a conta vinculada a elas, ou credenciais USER com `X-ISPB` e `X-Account-Number` para selecionar uma conta de titularidade desse usuário. Com credenciais ACCOUNT, omita os dois headers da conta ou envie ambos com valores correspondentes à conta vinculada; eles não permitem selecionar outra conta. Credenciais PLATFORM não são aceitas. |
+| api-24-F02 | Complementado (ausente no original) | Request parameters | Se informado, deve ser de 1 a 100 | Se informado, deve ser de 1 a 100. O padrão é 20 quando omitido. |
+| api-24-F03 | Corrigido (não correspondia ao código) | Request parameters | Se omitido ou definido como 0, não restringe o tipo e consulta PAYMENT, REFUND e DISPUTE. O suporte à consulta dos demais valores do enum compartilhado não é garantido. Valores: 0 UNSPECIFIED; 1 PAYMENT; 2 REFUND; 3 TRANSFER; 4 WITHDRAWAL; 5 DEPOSIT; 6 DISPUTE | Se omitido ou definido como 0, não restringe o tipo e consulta PAYMENT, REFUND e DISPUTE. Valores aceitos: 0 UNSPECIFIED; 1 PAYMENT; 2 REFUND; 6 DISPUTE. Os valores 3 TRANSFER, 4 WITHDRAWAL, 5 DEPOSIT e outros valores não suportados são rejeitados com o code de negócio 400 e a mensagem `txn_type is invalid`. |
+| api-24-F04 | Complementado (ausente no original) | Request parameters | Limite superior do snapshot em milissegundos Unix. Reutilize o valor retornado nas páginas seguintes. Os registros devem ter initiated_at menor que esse valor. Não se trata de um snapshot de isolamento do banco de dados | Limite superior do snapshot em milissegundos Unix. Se omitido ou definido como 0 ou um valor negativo, o padrão é o horário Unix atual do servidor em milissegundos. Reutilize o valor retornado nas páginas seguintes. Os registros devem ter initiated_at menor que o limite efetivamente utilizado. Não se trata de um snapshot de isolamento do banco de dados. |
+| api-24-F05 | Complementado (ausente no original) | Request parameters | Use o cursor retornado na página anterior. Mantenha a conta, os filtros e o snapshot inalterados. Encerre a varredura para a frente quando nenhum cursor válido for retornado | Use o cursor retornado na página anterior. Mantenha a conta, os filtros e o snapshot inalterados. A paginação por cursor só é aplicada quando timestamp é maior que 0 e id não está vazio; caso contrário, o cursor é ignorado e a consulta começa sem um limite de cursor. Encerre a varredura para a frente quando nenhum cursor válido for retornado. |
+| api-24-F06 | Complementado (ausente no original) | Request parameters | Preencha conforme os dados reais da operação. A validade depende das validações do servidor e dos sistemas subsequentes. Valores: 0 UNSPECIFIED; 1 FORWARD; 2 BACKWARD | Opcional. Valores: 0 UNSPECIFIED; 1 FORWARD; 2 BACKWARD. Quando omitido ou definido como 0, usa paginação para a frente. Somente 2 seleciona a paginação para trás; atualmente, outros valores inteiros usam paginação para a frente em vez de serem rejeitados. Use 1 para consultas para a frente e reutilize o cursor retornado sem alterações. |
+| api-24-F07 | Corrigido (não correspondia ao código) | Response fields | Data e hora de criação, em timestamp Unix UTC em milissegundos. Pode ser 0 se a criação não ocorreu ou se a data e hora não foram informadas. | Data e hora de início da transação, em timestamp Unix UTC em milissegundos. Apesar do nome do campo, este valor corresponde a initiated_at, e não à data e hora de criação do registro no banco de dados. Um timestamp de início ausente é representado como 0. |
+| api-24-F08 | Complementado (ausente no original) | Response fields | ID da transação de liquidação. | ID da transação de liquidação. Para TED, fica vazio até a liquidação atingir SETTLED. Também pode ficar vazio quando não há um identificador de liquidação disponível. |
+| api-24-F11 | Complementado (ausente no original) | Request parameters | Direção do lançamento. Valores: 0 UNSPECIFIED; 1 CREDIT; 2 DEBIT | Direção do lançamento. Valores: 0 UNSPECIFIED; 1 CREDIT; 2 DEBIT. Quando omitido ou definido como 0, seleciona as duas direções. CREDIT seleciona registros em que a conta-alvo é a do recebedor e a transação subjacente está COMPLETED. DEBIT seleciona registros em que a conta-alvo é a do pagador, sem restringir a transações concluídas. Sem filtro de direção, a mesma restrição a transações concluídas se aplica aos recebimentos, enquanto os pagamentos podem ter outros status. Atualmente, outros valores inteiros se comportam como UNSPECIFIED em vez de serem rejeitados. |
+| api-24-F12 | Complementado (ausente no original) | Response fields | Status da transação. Enum: 0 TXN_STATUS_UNSPECIFIED; 1 TXN_STATUS_PENDING; 2 TXN_STATUS_COMPLETED; 3 TXN_STATUS_FAILED; 4 TXN_STATUS_CANCELLED; 5 TXN_STATUS_PROCESSING; 6 TXN_STATUS_REFUNDED; 7 TXN_STATUS_PARTIALLY_REFUNDED; 8 TXN_STATUS_DISPUTED. | Status da transação. Enum: 0 TXN_STATUS_UNSPECIFIED; 1 TXN_STATUS_PENDING; 2 TXN_STATUS_COMPLETED; 3 TXN_STATUS_FAILED; 4 TXN_STATUS_CANCELLED; 5 TXN_STATUS_PROCESSING; 6 TXN_STATUS_REFUNDED; 7 TXN_STATUS_PARTIALLY_REFUNDED; 8 TXN_STATUS_DISPUTED. Para lançamentos PAYMENT, este é o status do pagamento apresentado ao cliente, e não um status separado de liquidação. Para lançamentos DISPUTE, os estados pendente e em processamento são retornados como 5 PROCESSING; concluído corresponde a 2 COMPLETED e falha corresponde a 3 FAILED. |
+| api-24-F15 | Corrigido (não correspondia ao código) | Responses: Request succeeded | `{ "code": 200, "message": "success", "data": { "statements": [], "snapshot_timestamp": 0, "cursor": { "timestamp": 0, "id": "example-id", "direction": 0 }, "page": { "page": 0, "page_size": 0, "total": 0, "total_pages": 0 } }, "time": 1791792000000 }` | `{ "code": 200, "message": "success", "data": { "statements": [], "snapshot_timestamp": 1791792000000, "cursor": null, "page": null, "error": null, "result": null }, "time": 1791792000000 }` |
+| api-24-F16 | Corrigido (não correspondia ao código) | cURL request example | A unidade de tempo deve ser a mesma acordada com o serviço de transações integrado. | Envie sempre start_date e end_date como timestamps Unix em milissegundos; não substitua por segundos ou outra unidade acordada. |
+| api-24-F17 | Complementado (ausente no original) | Responses: endpoint-specific errors after the final paragraph | Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados. | Esta seção não indica que o endpoint retorna apenas os três valores de code apresentados. Limites de data inválidos retornam o code de negócio 4001 com a mensagem `Invalid start_date or end_date value`; page_size inválido retorna 4001 com a mensagem `Invalid page_size value`. Um transaction_type não suportado retorna 400 com a mensagem `txn_type is invalid`. Uma falha ao consultar os lançamentos pode retornar 4003014 com a mensagem `Unable to retrieve transactions at this time`; uma falha de comunicação com o serviço de consulta de transações retorna 501 com a mensagem `Service temporarily unavailable, please try again later`. As mensagens podem ser traduzidas; use code para classificar o erro. |
+| api-24-F18 | Complementado (ausente no original) | Responses: protocol errors before response examples | Verifique o status HTTP e o code de negócio separadamente. | Verifique o status HTTP e o code de negócio separadamente. Um JSON malformado pode retornar HTTP 400 com um erro de interpretação em text/plain, em vez do envelope JSON de resposta de negócio; confira o Content-Type da resposta antes de interpretá-la como JSON. |
+| api-24-F19 | Corrigido (não correspondia ao código) | Behavior and handling | Para não perder lançamentos recebidos com atraso ou registrados posteriormente, recomendamos consultar novamente parte do intervalo já consultado na próxima rodada. | Para não perder lançamentos recebidos com atraso ou registrados com data retroativa, recomendamos consultar novamente parte do intervalo já consultado na próxima rodada. |
+| api-24-F21 | Complementado (ausente no original) | Behavior and handling: after paginated queries | Encerre quando não houver um cursor válido. | Encerre quando não houver um cursor válido. Os resultados são ordenados pela data e hora de início da transação em ordem decrescente, com o ID da transação também em ordem decrescente como critério de desempate. A paginação por cursor utiliza os dois valores; não construa um cursor apenas com o timestamp. |
+| api-24-F22 | Corrigido (não correspondia ao código) | Request parameters | Timestamp Unix em milissegundos, como inteiro diferente de zero e menor que end_date; filtro por initiated_at, incluindo o limite inicial | Timestamp Unix em milissegundos, como inteiro diferente de zero e menor que end_date. Use um valor positivo para aplicar um limite inferior de initiated_at, incluindo o limite inicial. Valores negativos passam pela verificação de valor diferente de zero, mas não aplicam um limite inferior de tempo. |
+| api-24-F23 | Corrigido (não correspondia ao código) | Request parameters | Timestamp Unix em milissegundos, como inteiro diferente de zero e maior que start_date; inclui o limite final e também está sujeito ao limite superior de snapshot_timestamp | Timestamp Unix em milissegundos, como inteiro diferente de zero e maior que start_date. Use um valor positivo para aplicar um limite superior de initiated_at, incluindo o limite final. Valores negativos passam pela verificação de valor diferente de zero, mas não aplicam um limite de end_date. O limite superior efetivo de snapshot_timestamp continua se aplicando. |
+| api-24-F25 | Corrigido (não correspondia ao código) | Response fields | Informações de paginação. A consulta atual de lançamentos do extrato usa cursor e não preenche o objeto de paginação, que pode ser null. | Número da página na estrutura compartilhada de paginação. Não é retornado como valor aninhado neste endpoint porque data.page é null. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "start_date": 1791724800000,
+  "end_date": 1791811200000,
+  "page_size": 20
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/statements' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${ACCOUNT_AK}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Requisição bem-sucedida
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "statements": [],
+    "snapshot_timestamp": 1791792000000,
+    "cursor": null,
+    "page": null,
+    "error": null,
+    "result": null
+  },
+  "time": 1791792000000
+}
+```
+
+```json 400 Falha na requisição ou validação
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 Erro do sistema
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

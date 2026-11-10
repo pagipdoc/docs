@@ -1,0 +1,196 @@
+---
+title: "Check account closure eligibility"
+description: "This endpoint performs a read-only check of whether the target account is eligible for closure at the time of the check. It returns the result and reasons."
+api: "POST /v3/bank_account/close/precheck"
+keywords: ["/v3/bank_account/close/precheck"]
+---
+
+## Behavior and handling
+
+This endpoint performs a read-only check of whether the target account is eligible for closure at the time of the check. It returns the result and reasons. If the eligibility check reaches an unsupported master account, an invalid account status, or an account with a closure already running, it returns `eligible=false` with the blocking reason `ACCOUNT_TYPE_NOT_SUPPORTED`, `ACCOUNT_INVALID_STATUS`, or `ACCOUNT_CLOSING`, respectively, and does not run the remaining checks. Authentication or account-scope validation may reject the request before an eligibility result is available. <Badge color="blue" size="sm">Added · bank-account-close-precheck-F03</Badge> It does not create a closure operation or delete Pix keys. Passing the precheck does not guarantee that subsequent closure succeeds.
+
+## Permissions and account ownership
+
+Use v3 AK/SK signature authentication. We recommend using shared USER credentials from the owning Master and specifying the target account through `X-ISPB` and `X-Account-Number`. Account-level credentials can only operate on their authorized account. This endpoint does not support PLATFORM credentials. The account_number in the request must match the authentication context. The authentication context determines the ISPB; do not send it separately in the request JSON.
+
+This endpoint supports MOR, VA, and PA managed accounts. It does not support MA_MOR master accounts. The account must be ACTIVE when a merchant initiates a new closure request. After account closure, do not rely on revoked account credentials. You must use authorized shared USER credentials to query the original operation.
+
+## Request parameters
+
+<ParamField body="account_number" type="string" required>
+Target account number, 1 to 32 digits. Preserve leading zeros. Must match the target account number in the authentication context and fall within the scope of the currently authorized Master.
+</ParamField>
+
+<ParamField body="auto_delete_active_pix_keys" type="boolean">
+Default: `false`. Set `true` to evaluate eligibility on the assumption that active Pix keys may be deleted during a later closure request. When `false`, existing active keys produce `ACTIVE_PIX_KEYS`. The precheck does not delete keys or save this permission; send the flag again in the closure request if automatic deletion is intended. <Badge color="orange" size="sm">Corrected · bank-account-close-precheck-F01</Badge>
+</ParamField>
+
+## cURL request example
+
+The example uses shared USER credentials. The account number in the request JSON must match the target account header. Generate the signature from the final body.json. <Badge color="orange" size="sm">Corrected · bank-account-close-precheck-F05</Badge>
+
+## Response fields
+
+Field paths start at the response root. `[]` indicates an array element. Amounts use decimal strings. Enum values are defined separately for each field. The structure below describes a success response. A null value or 0 alone does not indicate that processing is complete.
+
+<ResponseField name="code" type="integer">
+Business result code. A value of 200 indicates success. Business errors are returned in this field. It is not the HTTP status code.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Business result description. On failure, use this with code to determine the cause.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Data object in a successful response. Can be null in an error response.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Response time as a UTC Unix timestamp in milliseconds.
+</ResponseField>
+
+<ResponseField name="data.eligibility" type="object">
+Account closure eligibility check result.
+</ResponseField>
+
+<ResponseField name="data.eligibility.eligible" type="boolean">
+Whether the account meets the current eligibility check conditions. This does not mean the account is already closed.
+</ResponseField>
+
+<ResponseField name="data.eligibility.reasons" type="array">
+List of reasons for a failed check, waiting, or an exception. An empty list alone does not mean the process is complete.
+</ResponseField>
+
+<ResponseField name="data.eligibility.reasons[].code" type="string">
+Stable reason code. Blocking reasons include `NON_ZERO_BALANCE`, `FROZEN_BALANCE`, `ACTIVE_PIX_KEYS`, `OPEN_CHILD_ACCOUNTS`, `OPEN_MED_CASE`, `OPEN_INFRACTION`, and `UNPAID_BILL`. Waiting reasons include `PENDING_PAYMENT`, `PENDING_REFUND`, `PENDING_DISPUTE`, `PENDING_MED_REFUND`, `PENDING_CHILD_CREATION`, and `PENDING_BILLING`. `BILLING_RESULT_UNKNOWN` requires operations review. `MED_QUERY_UNAVAILABLE`, `USER_QUERY_UNAVAILABLE`, `TRANSACTION_QUERY_UNAVAILABLE`, `BALANCE_QUERY_UNAVAILABLE`, and `PIX_KEYS_QUERY_UNAVAILABLE` indicate that a dependency check could not be confirmed; they do not count as passing checks. The actual response is authoritative. <Badge color="blue" size="sm">Added · bank-account-close-precheck-F02</Badge>
+</ResponseField>
+
+<ResponseField name="data.eligibility.reasons[].message" type="string">
+Reason description.
+</ResponseField>
+
+<ResponseField name="data.eligibility.reasons[].step" type="string">
+Processing step that produced this reason.
+</ResponseField>
+
+<ResponseField name="data.eligibility.reasons[].kind" type="integer">
+Account closure reason category. Enum: 0 ACCOUNT_CLOSURE_ISSUE_KIND_UNSPECIFIED; 1 ACCOUNT_CLOSURE_ISSUE_KIND_WAITING; 2 ACCOUNT_CLOSURE_ISSUE_KIND_BLOCKING; 3 ACCOUNT_CLOSURE_ISSUE_KIND_RETRYABLE; 4 ACCOUNT_CLOSURE_ISSUE_KIND_MANUAL.
+</ResponseField>
+
+<ResponseField name="data.eligibility.reasons[].count" type="integer">
+Total number of associated business records. If the check fails, you must not interpret 0 as a passing result.
+</ResponseField>
+
+<ResponseField name="data.eligibility.reasons[].references" type="array or null">
+Reserved list of associated business record IDs, represented as an array of strings or `null`. This precheck currently does not populate record IDs and returns `null` for this field. Use `code`, `message`, `kind`, and `count` to interpret the reason. <Badge color="orange" size="sm">Corrected · bank-account-close-precheck-F04</Badge>
+</ResponseField>
+
+<ResponseField name="data.eligibility.checked_at" type="integer">
+Time of this precheck, in UTC Unix milliseconds. A successful response includes the current check timestamp, including when the account is ineligible. It is not an account closure or completion timestamp. <Badge color="orange" size="sm">Corrected · bank-account-close-precheck-F09</Badge>
+</ResponseField>
+
+<ResponseField name="data.eligibility.active_pix_key_deletion_required" type="boolean">
+Whether existing Pix keys need to be deleted. This does not mean deletion is complete.
+</ResponseField>
+
+## Responses
+
+The following example shows the structure. Identifiers and timestamps are sample values. <Badge color="orange" size="sm">Corrected · bank-account-close-precheck-F04</Badge> Evaluate the HTTP status and the JSON business code separately. Successfully decoded requests with business errors, including code `400` or `500`, can return HTTP `200`. A malformed JSON body instead returns HTTP `400` with a plain-text error, not the JSON envelope shown below. The `200`, `400`, and `500` example labels refer to JSON business codes, not guaranteed HTTP statuses. <Badge color="blue" size="sm">Added · bank-account-close-precheck-F07</Badge> For business errors, see [Error Catalog](/api-reference/error-catalog). For this endpoint, a missing, nonnumeric, overlength, or mismatched `account_number` is rejected with code `4004003` (Permission denied), not necessarily code `400`. Code `4004003` can also indicate account-scope denial; an unavailable precheck can return code `501`. Eligibility failures are different: they can return code `200` with `eligible=false` and reasons. <Badge color="blue" size="sm">Added · bank-account-close-precheck-F06</Badge>
+
+| `code` | Meaning | Recommended action |
+| --- | --- | --- |
+| `200` | Request succeeded | Read eligibility to determine the check result. |
+| `400` | Request or validation failed | Parameter issue. Check and correct the request parameters. |
+| `500` | System error | Log the response and confirm the business result first. |
+
+<Tip>
+To try this endpoint, send the request example to the Sandbox base URL `https://ebanking-openapi-sandbox.pagsmile.com.br` with your Sandbox AK/SK. Sign every request as described in [Environments & Credentials](/environments-and-credentials#api-request-signing).
+</Tip>
+
+Browser access must meet Sandbox CORS, IP, and credential requirements. Requests with shared USER credentials require CORS to allow `X-ISPB` and `X-Account-Number` as well as the signing headers. If the browser rejects the preflight request, use cURL or server-to-server access until the Sandbox CORS configuration permits both target-account headers. <Badge color="blue" size="sm">Added · bank-account-close-precheck-F08</Badge>
+
+
+<Accordion title="Corrections to the source document (9)" icon="clipboard-check">
+This page was checked against the Pagsmile Open API source code on 2026-11-10. Each change below is marked in the page with a badge that shows its ID.
+
+| ID | Change | Location | Source document text | Updated text |
+| --- | --- | --- | --- | --- |
+| bank-account-close-precheck-F01 | Corrected (did not match the code) | Request parameters | Default: false. true allows active Pix keys to be deleted after the eligibility check passes. The precheck does not actually delete them. | Default: false. Set true to evaluate eligibility on the assumption that active Pix keys may be deleted during a later closure request. When false, existing active keys produce ACTIVE_PIX_KEYS. The precheck does not delete keys or save this permission; send the flag again in the closure request if automatic deletion is intended. |
+| bank-account-close-precheck-F02 | Added (missing in the source) | Response fields | Stable reason code. Common values include NON_ZERO_BALANCE, FROZEN_BALANCE, ACTIVE_PIX_KEYS, OPEN_CHILD_ACCOUNTS, OPEN_MED_CASE, PENDING_PAYMENT, PENDING_REFUND, and UNPAID_BILL. The actual response is authoritative. | Stable reason code. Blocking reasons include NON_ZERO_BALANCE, FROZEN_BALANCE, ACTIVE_PIX_KEYS, OPEN_CHILD_ACCOUNTS, OPEN_MED_CASE, OPEN_INFRACTION, and UNPAID_BILL. Waiting reasons include PENDING_PAYMENT, PENDING_REFUND, PENDING_DISPUTE, PENDING_MED_REFUND, PENDING_CHILD_CREATION, and PENDING_BILLING. BILLING_RESULT_UNKNOWN requires operations review. MED_QUERY_UNAVAILABLE, USER_QUERY_UNAVAILABLE, TRANSACTION_QUERY_UNAVAILABLE, BALANCE_QUERY_UNAVAILABLE, and PIX_KEYS_QUERY_UNAVAILABLE indicate that a dependency check could not be confirmed; they do not count as passing checks. The actual response is authoritative. |
+| bank-account-close-precheck-F03 | Added (missing in the source) | Behavior and handling | It returns the result and reasons. | It returns the result and reasons. If the eligibility check reaches an unsupported master account, an invalid account status, or an account with a closure already running, it returns eligible=false with the blocking reason ACCOUNT_TYPE_NOT_SUPPORTED, ACCOUNT_INVALID_STATUS, or ACCOUNT_CLOSING, respectively, and does not run the remaining checks. Authentication or account-scope validation may reject the request before an eligibility result is available. |
+| bank-account-close-precheck-F04 | Corrected (did not match the code) | Response fields | List of associated business record IDs that the caller is authorized to view. Can be truncated. | Reserved list of associated business record IDs, represented as an array of strings or null. This precheck currently does not populate record IDs and returns null for this field. Use code, message, kind, and count to interpret the reason. |
+| bank-account-close-precheck-F05 | Corrected (did not match the code) | cURL request example | `cat > body.json <<'JSON' { "account_number": "replace-with-account-number", "auto_delete_active_pix_keys": false } JSON` | `# Set TARGET_ACCOUNT_NUMBER to the actual account number (1 to 32 digits). cat > body.json <<JSON { "account_number": "${TARGET_ACCOUNT_NUMBER}", "auto_delete_active_pix_keys": false } JSON` |
+| bank-account-close-precheck-F06 | Added (missing in the source) | Responses | For business errors, see Error Catalog. | For business errors, see Error Catalog. For this endpoint, a missing, nonnumeric, overlength, or mismatched account_number is rejected with code 4004003 (Permission denied), not necessarily code 400. Code 4004003 can also indicate account-scope denial; an unavailable precheck can return code 501. Eligibility failures are different: they can return code 200 with eligible=false and reasons. |
+| bank-account-close-precheck-F07 | Added (missing in the source) | Responses | Evaluate the HTTP status and the JSON business code separately. | Evaluate the HTTP status and the JSON business code separately. Successfully decoded requests with business errors, including code 400 or 500, can return HTTP 200. A malformed JSON body instead returns HTTP 400 with a plain-text error, not the JSON envelope shown below. The 200, 400, and 500 example labels refer to JSON business codes, not guaranteed HTTP statuses. |
+| bank-account-close-precheck-F08 | Added (missing in the source) | Sandbox access example | Browser access must meet Sandbox CORS, IP, and credential requirements. | Browser access must meet Sandbox CORS, IP, and credential requirements. Requests with shared USER credentials require CORS to allow X-ISPB and X-Account-Number as well as the signing headers. If the browser rejects the preflight request, use cURL or server-to-server access until the Sandbox CORS configuration permits both target-account headers. |
+| bank-account-close-precheck-F09 | Corrected (did not match the code) | Response fields | Time of the most recent check, in UTC Unix milliseconds. The value can be 0 if the check has not occurred or the time is not provided. | Time of this precheck, in UTC Unix milliseconds. A successful response includes the current check timestamp, including when the account is ineligible. It is not an account closure or completion timestamp. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+# Set TARGET_ACCOUNT_NUMBER to the actual account number (1 to 32 digits).
+cat > body.json <<JSON
+{
+  "account_number": "${TARGET_ACCOUNT_NUMBER}",
+  "auto_delete_active_pix_keys": false
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/bank_account/close/precheck' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${USER_AK}" \
+  --header "X-ISPB: ${TARGET_ISPB}" \
+  --header "X-Account-Number: ${TARGET_ACCOUNT_NUMBER}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Request succeeded
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "eligibility": {
+      "eligible": false,
+      "reasons": [
+        {
+          "code": "NON_ZERO_BALANCE",
+          "message": "Account balance must be exactly zero before closure",
+          "step": "CHECK_BALANCE",
+          "kind": 2,
+          "count": 1,
+          "references": null
+        }
+      ],
+      "checked_at": 1792713600000,
+      "active_pix_key_deletion_required": false
+    }
+  },
+  "time": 1792713600000
+}
+```
+
+```json 400 Request or validation failed
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 System error
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>

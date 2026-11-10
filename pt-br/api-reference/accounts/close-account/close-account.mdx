@@ -1,0 +1,249 @@
+---
+title: "Encerrar conta"
+description: "Envie uma solicitação de encerramento de conta gerenciada para receber um identificador persistente da operação e o andamento real no momento."
+api: "POST /v3/bank_account/close"
+keywords: ["/v3/bank_account/close"]
+---
+
+## Funcionamento e tratamento
+
+Envie uma solicitação de encerramento de conta gerenciada para receber um identificador persistente da operação e o andamento real no momento. Após a aceitação da solicitação, novas atividades de pagamento ficam restritas, mesmo com `account_status` em `ACTIVE`. As obrigações de negócio existentes continuam sendo verificadas. Se a operação passar para `REJECTED`, sua restrição temporária de encerramento é removida sem alterar o status da conta bancária. <Badge color="blue" size="sm">Complementado · bank-account-close-F03</Badge> Não há garantia de conclusão síncrona. Verifique primeiro a elegibilidade para encerramento e os motivos. Salve o operation_id para consultar os próximos estados.
+
+### Verificações antes de iniciar
+
+O saldo e os recursos bloqueados devem estar zerados. Resolva as pendências de pagamentos, devoluções, disputas, MED/notificações de infração, tarifas e obrigações de subcontas. Se houver chaves Pix ativas, exclua-as primeiro ou defina explicitamente auto_delete_active_pix_keys=true. Uma falha na consulta a uma dependência não é considerada aprovação na verificação.
+
+### Idempotência e avaliação de resultados
+
+Reutilize o mesmo idempotency_key para a mesma intenção de encerramento. Não troque a chave e reenvie a solicitação sem verificar a situação em caso de espera ou falha de rede. `WAITING` indica espera pela conclusão de obrigações de negócio existentes ou pela confirmação das informações de elegibilidade. Também pode exigir verificação manual. Avalie `reasons[].kind` e `next_action` antes de decidir as próximas ações. <Badge color="orange" size="sm">Corrigido · bank-account-close-F01</Badge> `CLOSED` indica que a conta bancária foi encerrada, mas ainda pode haver tarefas de limpeza em andamento. A limpeza encerra a identidade da conta gerenciada, atualiza a seleção da conta padrão, exclui as chaves Pix, remove os limites e as configurações de tarifas da conta, desativa as assinaturas de webhooks da conta e revoga as credenciais de conta. Um erro na limpeza não reabre a conta; avalie `reasons` e `next_action` enquanto o processamento é retomado. <Badge color="blue" size="sm">Complementado · bank-account-close-F08</Badge> COMPLETED indica que todo o processamento foi concluído. REJECTED indica que a conta ainda não foi encerrada. O sucesso HTTP ou da consulta de negócio não substitui a avaliação do estado de encerramento.
+
+## Permissões e titularidade da conta
+
+Use autenticação por assinatura v3 com AK/SK. Recomendamos usar as credenciais USER compartilhadas da conta master à qual a conta pertence e informar a conta-alvo nos headers `X-ISPB` e `X-Account-Number`. As credenciais de conta só podem operar na conta para a qual têm autorização. Este endpoint não aceita credenciais PLATFORM. O account_number da requisição deve corresponder ao contexto de autenticação. O ISPB é determinado pelo contexto de autenticação e não deve ser enviado separadamente no JSON da requisição.
+
+Este endpoint aceita contas gerenciadas MOR, VA e PA. Não aceita contas master MA_MOR. Para que o comerciante inicie uma nova solicitação de encerramento, a conta deve estar no estado `ACTIVE`. Com credenciais `USER` compartilhadas, a identidade gerenciada da conta-alvo e a conta master à qual pertence também devem estar em `ACTIVE`, com vínculos bancários válidos. Para uma `PA` vinculada a uma `VA`, essa `VA` superior deve atender às mesmas condições. <Badge color="blue" size="sm">Complementado · bank-account-close-F09</Badge> Após o encerramento da conta, não dependa das credenciais de conta revogadas. Use credenciais USER compartilhadas com a devida permissão para consultar a operação original.
+
+## Parâmetros da requisição
+
+<ParamField body="account_number" type="string" required>
+Número da conta-alvo, de 1 a 32 dígitos. Preserve os zeros à esquerda. Deve corresponder ao número da conta-alvo no contexto de autenticação e pertencer ao escopo da conta master autorizada.
+</ParamField>
+
+<ParamField body="reason" type="integer" required>
+Motivo do encerramento: 1 MERCHANT_REQUESTED, solicitação do comerciante; 2 USER_OFFBOARDING, saída do usuário; 3 COMPLIANCE_EXIT, encerramento por motivos de conformidade. O valor 0 e outros valores não são aceitos.
+</ParamField>
+
+<ParamField body="idempotency_key" type="string" required>
+String que não seja composta apenas por espaços em branco, com no máximo 128 bytes. As chaves têm como escopo o usuário titular autenticado, abrangendo suas contas e credenciais. A mesma chave com o mesmo ISPB, número da conta, motivo e opção de exclusão retorna a operação original com o andamento atual. Uma intenção diferente com a mesma chave nesse escopo gera conflito. Reutilizar a chave de uma operação `REJECTED` retorna essa operação; após resolver os motivos, use uma nova chave para uma nova solicitação de encerramento. Se o resultado for desconhecido, consulte primeiro e mantenha a chave e a intenção originais ao reenviar. <Badge color="blue" size="sm">Complementado · bank-account-close-F02</Badge>
+</ParamField>
+
+<ParamField body="auto_delete_active_pix_keys" type="boolean">
+Padrão: false. O valor true permite excluir chaves Pix ativas após a aprovação na verificação de elegibilidade. A verificação não exclui as chaves.
+</ParamField>
+
+## Exemplo de requisição cURL
+
+O exemplo usa credenciais `USER` compartilhadas. Antes de executá-lo, substitua `replace-with-account-number` em `body.json` pelo mesmo número de conta de 1 a 32 dígitos usado em `TARGET_ACCOUNT_NUMBER`. Substitua `replace-with-idempotency-key` pela sua própria chave que não seja composta apenas por espaços em branco, com no máximo 128 bytes, e calcule o hash e a assinatura com base no arquivo resultante. <Badge color="orange" size="sm">Corrigido · bank-account-close-F12</Badge> O número da conta no JSON da requisição deve corresponder ao informado no header da conta-alvo. Gere a assinatura com base na versão final de `body.json`, incluindo os bytes exatos e a quebra de linha final. Inclua os headers `X-ISPB` e `X-Account-Number` enviados nos headers canônicos assinados. Para cada envio, gere um novo nonce e um timestamp Unix em milissegundos com diferença máxima de 5 minutos em relação ao horário do servidor, e recalcule o hash do corpo e a assinatura. Mantenha o `idempotency_key` de negócio ao tentar novamente a requisição original. <Badge color="blue" size="sm">Complementado · bank-account-close-F11</Badge>
+
+## Campos da resposta
+
+Os caminhos dos campos partem da raiz da resposta. `[]` indica um elemento de array. Os valores monetários usam strings decimais. Os enums são interpretados conforme cada campo. A estrutura abaixo representa os dados de uma resposta de sucesso. Um valor nulo ou 0, por si só, não indica a conclusão da operação.
+
+<ResponseField name="code" type="integer">
+Código de resultado de negócio; 200 indica sucesso. Os erros de negócio são retornados neste campo, que não equivale ao código de status HTTP.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+Descrição do resultado de negócio; em caso de falha, analise esta descrição junto com o campo code para identificar a causa.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+Objeto de dados da resposta de sucesso; pode ser null em respostas de erro.
+</ResponseField>
+
+<ResponseField name="time" type="integer">
+Horário da resposta, em timestamp Unix UTC em milissegundos.
+</ResponseField>
+
+<ResponseField name="data.operation" type="object">
+Operação de encerramento da conta e andamento real.
+</ResponseField>
+
+<ResponseField name="data.operation.operation_id" type="string">
+ID da operação de encerramento da conta; usado para consultar a mesma operação posteriormente.
+</ResponseField>
+
+<ResponseField name="data.operation.ispb" type="string">
+Código ISPB do banco.
+</ResponseField>
+
+<ResponseField name="data.operation.account_number" type="string">
+Número da conta.
+</ResponseField>
+
+<ResponseField name="data.operation.account_status" type="integer">
+Status da conta bancária. Enum: 0 BANK_ACCOUNT_STATUS_UNSPECIFIED; 1 BANK_ACCOUNT_STATUS_ACTIVE; 2 BANK_ACCOUNT_STATUS_INACTIVE; 3 BANK_ACCOUNT_STATUS_BLOCKED; 4 BANK_ACCOUNT_STATUS_CLOSED.
+</ResponseField>
+
+<ResponseField name="data.operation.status" type="integer">
+Status de negócio atual, interpretado conforme os valores do enum deste campo. Enum: 0 ACCOUNT_CLOSURE_STATUS_UNSPECIFIED; 1 ACCOUNT_CLOSURE_STATUS_CHECKING; 2 ACCOUNT_CLOSURE_STATUS_WAITING; 3 ACCOUNT_CLOSURE_STATUS_DELETING_KEYS; 4 ACCOUNT_CLOSURE_STATUS_CLOSED; 5 ACCOUNT_CLOSURE_STATUS_COMPLETED; 6 ACCOUNT_CLOSURE_STATUS_REJECTED.
+</ResponseField>
+
+<ResponseField name="data.operation.current_step" type="string">
+Etapa atual do processamento; não é um percentual de progresso.
+</ResponseField>
+
+<ResponseField name="data.operation.reasons" type="array">
+Lista de motivos de reprovação na verificação, espera ou exceção. Uma lista vazia, por si só, não indica que o processo foi concluído.
+</ResponseField>
+
+<ResponseField name="data.operation.reasons[].code" type="string">
+Código estável do motivo. Valores comuns incluem `NON_ZERO_BALANCE`, `FROZEN_BALANCE`, `ACTIVE_PIX_KEYS`, `OPEN_CHILD_ACCOUNTS`, `OPEN_MED_CASE`, `PENDING_PAYMENT`, `PENDING_REFUND` e `UNPAID_BILL`. Outros valores possíveis incluem `OPEN_INFRACTION`, `PENDING_MED_REFUND`, `PENDING_CHILD_CREATION`, `PENDING_BILLING`, `BILLING_RESULT_UNKNOWN`, `PENDING_DISPUTE`, `MED_QUERY_UNAVAILABLE`, `USER_QUERY_UNAVAILABLE`, `TRANSACTION_QUERY_UNAVAILABLE`, `BALANCE_QUERY_UNAVAILABLE`, `PIX_KEYS_QUERY_UNAVAILABLE`, `DEPENDENCY_UNAVAILABLE`, `ACCOUNT_TYPE_NOT_SUPPORTED`, `ACCOUNT_INVALID_STATUS`, `PIX_KEY_RESULT_UNKNOWN`, `ELIGIBILITY_AFTER_KEY_DELETION`, `ELIGIBILITY_RESULT_INVALID`, `CLEANUP_FAILED`, `CLEANUP_STATE_INVALID` e `CLOSURE_SOURCE_INVALID`. Avalie `kind` e `next_action` junto com o código. Considere os valores retornados na resposta. <Badge color="blue" size="sm">Complementado · bank-account-close-F06</Badge>
+</ResponseField>
+
+<ResponseField name="data.operation.reasons[].message" type="string">
+Descrição do motivo.
+</ResponseField>
+
+<ResponseField name="data.operation.reasons[].step" type="string">
+Etapa do processamento que gerou esse motivo.
+</ResponseField>
+
+<ResponseField name="data.operation.reasons[].kind" type="integer">
+Categoria do motivo de encerramento da conta. Enum: 0 ACCOUNT_CLOSURE_ISSUE_KIND_UNSPECIFIED; 1 ACCOUNT_CLOSURE_ISSUE_KIND_WAITING; 2 ACCOUNT_CLOSURE_ISSUE_KIND_BLOCKING; 3 ACCOUNT_CLOSURE_ISSUE_KIND_RETRYABLE; 4 ACCOUNT_CLOSURE_ISSUE_KIND_MANUAL.
+</ResponseField>
+
+<ResponseField name="data.operation.reasons[].count" type="integer">
+Número de registros associados nas verificações que contam registros. Para `NON_ZERO_BALANCE` e `FROZEN_BALANCE`, `1` indica uma condição de saldo não atendida, e não uma contagem de registros. `ACTIVE_PIX_KEYS` e erros de dependência ou processamento podem retornar `0` mesmo sem aprovação na verificação. Nunca interprete `0`, por si só, como aprovação. <Badge color="orange" size="sm">Corrigido · bank-account-close-F04</Badge>
+</ResponseField>
+
+<ResponseField name="data.operation.reasons[].references" type="array">
+Identificadores dos registros de negócio associados, quando fornecidos. Este campo pode ser `null`. As verificações atuais de encerramento retornam contagens e motivos sem preencher os identificadores dos registros; não exija um array preenchido neste campo. <Badge color="blue" size="sm">Complementado · bank-account-close-F05</Badge>
+</ResponseField>
+
+<ResponseField name="data.operation.updated_at" type="integer">
+Data e hora da última atualização, em timestamp Unix UTC em milissegundos. Pode ser 0 se não houve atualização ou se a data e hora não foram informadas.
+</ResponseField>
+
+<ResponseField name="data.operation.checked_at" type="integer">
+Horário da última verificação, em milissegundos Unix UTC. Pode ser 0 se a verificação não ocorreu ou se o horário não foi informado.
+</ResponseField>
+
+<ResponseField name="data.operation.next_action" type="integer">
+Próxima ação recomendada. Enum: 0 ACCOUNT_CLOSURE_NEXT_ACTION_UNSPECIFIED; 1 ACCOUNT_CLOSURE_NEXT_ACTION_WAIT_SYSTEM; 2 ACCOUNT_CLOSURE_NEXT_ACTION_RESOLVE_AND_REAPPLY; 3 ACCOUNT_CLOSURE_NEXT_ACTION_CONTACT_OPERATIONS; 4 ACCOUNT_CLOSURE_NEXT_ACTION_NONE.
+</ResponseField>
+
+<ResponseField name="data.operation.next_retry_at" type="integer">
+Horário do próximo processamento agendado pelo servidor. O valor 0 indica que não há processamento agendado, não significa conclusão e não dispara uma nova tentativa pela página. Timestamp Unix em milissegundos, em UTC. Pode ser 0 se o processamento ainda não tiver ocorrido ou se o horário não for informado.
+</ResponseField>
+
+<ResponseField name="data.operation.closed_at" type="integer">
+Horário do encerramento da conta bancária. É 0 se o encerramento ainda não tiver ocorrido. Timestamp Unix em milissegundos, em UTC. Pode ser 0 se o encerramento ainda não tiver ocorrido ou se o horário não for informado.
+</ResponseField>
+
+<ResponseField name="data.operation.completed_at" type="integer">
+Horário de conclusão. Pode ser 0 se a conclusão ainda não tiver ocorrido. Timestamp Unix em milissegundos, em UTC. Pode ser 0 se a conclusão ainda não tiver ocorrido ou se o horário não for informado.
+</ResponseField>
+
+## Respostas
+
+O exemplo a seguir mostra a estrutura. Os identificadores e horários são valores de demonstração. Avalie separadamente o status HTTP e o code de negócio no JSON. Para erros de negócio, consulte [Catálogo de erros](/pt-br/api-reference/error-catalog). Neste endpoint, `code` `4001013` pode indicar uma solicitação de encerramento existente ou um conflito de idempotência; não o interprete como conclusão. O código `4004008` pode indicar uma conta já encerrada, `4004010` uma conta inexistente e `501` indisponibilidade temporária do encerramento. O código `400` também pode indicar uma conta master não aceita. As respostas de erro de negócio têm `data=null`; portanto, mantenha o `operation_id` da resposta de sucesso original e consulte essa operação primeiro. <Badge color="blue" size="sm">Complementado · bank-account-close-F10</Badge>
+
+| `code` | Significado | Ação recomendada |
+| --- | --- | --- |
+| `200` | Requisição bem-sucedida | Salve operation_id e use operation.status, reasons e next_action para determinar as próximas ações. |
+| `400` | Falha na requisição ou validação | Problema nos parâmetros. Verifique e corrija os parâmetros da requisição. |
+| `500` | Erro do sistema | Registre a resposta e confirme primeiro o resultado de negócio. |
+
+<Tip>
+Para testar este endpoint, envie o exemplo de requisição para a Base URL do Sandbox `https://ebanking-openapi-sandbox.pagsmile.com.br` com sua AK/SK de Sandbox. Assine cada requisição conforme descrito em [Ambientes e credenciais](/pt-br/environments-and-credentials#assinatura-de-requisições-à-api).
+</Tip>
+
+
+<Accordion title="Correções em relação ao documento original (11)" icon="clipboard-check">
+Esta página foi conferida com o código-fonte da Pagsmile Open API em 2026-11-10. Cada alteração abaixo está marcada na página com um selo que mostra o seu ID.
+
+| ID | Alteração | Local | Texto do documento original | Texto atualizado |
+| --- | --- | --- | --- | --- |
+| bank-account-close-F01 | Corrigido (não correspondia ao código) | Idempotency and result evaluation | WAITING indica espera pela conclusão de obrigações de negócio existentes. | WAITING indica espera pela conclusão de obrigações de negócio existentes ou pela confirmação das informações de elegibilidade. Também pode exigir verificação manual. Avalie reasons[].kind e next_action antes de decidir as próximas ações. |
+| bank-account-close-F02 | Complementado (ausente no original) | Request parameters / idempotency | Não vazio, com no máximo 128 bytes. A mesma chave com a mesma conta, motivo e opção de exclusão retorna a operação original. A mesma chave com uma intenção diferente gera conflito. Se o resultado for desconhecido, consulte primeiro. Ao reenviar a requisição original, mantenha esta chave e a intenção inalteradas. | String que não seja composta apenas por espaços em branco, com no máximo 128 bytes. As chaves têm como escopo o usuário titular autenticado, abrangendo suas contas e credenciais. A mesma chave com o mesmo ISPB, número da conta, motivo e opção de exclusão retorna a operação original com o andamento atual. Uma intenção diferente com a mesma chave nesse escopo gera conflito. Reutilizar a chave de uma operação REJECTED retorna essa operação; após resolver os motivos, use uma nova chave para uma nova solicitação de encerramento. Se o resultado for desconhecido, consulte primeiro e mantenha a chave e a intenção originais ao reenviar. |
+| bank-account-close-F03 | Complementado (ausente no original) | Behavior and handling | Envie uma solicitação de encerramento de conta gerenciada para receber um identificador persistente da operação e o andamento real no momento. | Envie uma solicitação de encerramento de conta gerenciada para receber um identificador persistente da operação e o andamento real no momento. Após a aceitação da solicitação, novas atividades de pagamento ficam restritas, mesmo com account_status em ACTIVE. As obrigações de negócio existentes continuam sendo verificadas. Se a operação passar para REJECTED, sua restrição temporária de encerramento é removida sem alterar o status da conta bancária. |
+| bank-account-close-F04 | Corrigido (não correspondia ao código) | Response fields | Total de registros de negócio associados. Se a verificação falhar, o valor 0 não deve ser interpretado como aprovação. | Número de registros associados nas verificações que contam registros. Para NON_ZERO_BALANCE e FROZEN_BALANCE, 1 indica uma condição de saldo não atendida, e não uma contagem de registros. ACTIVE_PIX_KEYS e erros de dependência ou processamento podem retornar 0 mesmo sem aprovação na verificação. Nunca interprete 0, por si só, como aprovação. |
+| bank-account-close-F05 | Complementado (ausente no original) | Response fields | Lista de identificadores dos registros de negócio associados que o chamador tem permissão para visualizar. Pode ser truncada. | Identificadores dos registros de negócio associados, quando fornecidos. Este campo pode ser null. As verificações atuais de encerramento retornam contagens e motivos sem preencher os identificadores dos registros; não exija um array preenchido neste campo. |
+| bank-account-close-F06 | Complementado (ausente no original) | Response fields | Código estável do motivo. Valores comuns incluem NON_ZERO_BALANCE, FROZEN_BALANCE, ACTIVE_PIX_KEYS, OPEN_CHILD_ACCOUNTS, OPEN_MED_CASE, PENDING_PAYMENT, PENDING_REFUND e UNPAID_BILL. Considere os valores retornados na resposta. | Código estável do motivo. Valores comuns incluem NON_ZERO_BALANCE, FROZEN_BALANCE, ACTIVE_PIX_KEYS, OPEN_CHILD_ACCOUNTS, OPEN_MED_CASE, PENDING_PAYMENT, PENDING_REFUND e UNPAID_BILL. Outros valores possíveis incluem OPEN_INFRACTION, PENDING_MED_REFUND, PENDING_CHILD_CREATION, PENDING_BILLING, BILLING_RESULT_UNKNOWN, PENDING_DISPUTE, MED_QUERY_UNAVAILABLE, USER_QUERY_UNAVAILABLE, TRANSACTION_QUERY_UNAVAILABLE, BALANCE_QUERY_UNAVAILABLE, PIX_KEYS_QUERY_UNAVAILABLE, DEPENDENCY_UNAVAILABLE, ACCOUNT_TYPE_NOT_SUPPORTED, ACCOUNT_INVALID_STATUS, PIX_KEY_RESULT_UNKNOWN, ELIGIBILITY_AFTER_KEY_DELETION, ELIGIBILITY_RESULT_INVALID, CLEANUP_FAILED, CLEANUP_STATE_INVALID e CLOSURE_SOURCE_INVALID. Avalie kind e next_action junto com o código. Considere os valores retornados na resposta. |
+| bank-account-close-F08 | Complementado (ausente no original) | Idempotency and result evaluation | CLOSED indica que a conta bancária foi encerrada, mas ainda pode haver tarefas de limpeza em andamento. | CLOSED indica que a conta bancária foi encerrada, mas ainda pode haver tarefas de limpeza em andamento. A limpeza encerra a identidade da conta gerenciada, atualiza a seleção da conta padrão, exclui as chaves Pix, remove os limites e as configurações de tarifas da conta, desativa as assinaturas de webhooks da conta e revoga as credenciais de conta. Um erro na limpeza não reabre a conta; avalie reasons e next_action enquanto o processamento é retomado. |
+| bank-account-close-F09 | Complementado (ausente no original) | Permissions and account ownership | Para que o comerciante inicie uma nova solicitação de encerramento, a conta deve estar no estado ACTIVE. | Para que o comerciante inicie uma nova solicitação de encerramento, a conta deve estar no estado ACTIVE. Com credenciais USER compartilhadas, a identidade gerenciada da conta-alvo e a conta master à qual pertence também devem estar em ACTIVE, com vínculos bancários válidos. Para uma PA vinculada a uma VA, essa VA superior deve atender às mesmas condições. |
+| bank-account-close-F10 | Complementado (ausente no original) | Responses | Para erros de negócio, consulte Catálogo de erros. | Para erros de negócio, consulte Catálogo de erros. Neste endpoint, code 4001013 pode indicar uma solicitação de encerramento existente ou um conflito de idempotência; não o interprete como conclusão. O código 4004008 pode indicar uma conta já encerrada, 4004010 uma conta inexistente e 501 indisponibilidade temporária do encerramento. O código 400 também pode indicar uma conta master não aceita. As respostas de erro de negócio têm data=null; portanto, mantenha o operation_id da resposta de sucesso original e consulte essa operação primeiro. |
+| bank-account-close-F11 | Complementado (ausente no original) | cURL request example | Gere a assinatura com base na versão final de body.json. | Gere a assinatura com base na versão final de body.json, incluindo os bytes exatos e a quebra de linha final. Inclua os headers X-ISPB e X-Account-Number enviados nos headers canônicos assinados. Para cada envio, gere um novo nonce e um timestamp Unix em milissegundos com diferença máxima de 5 minutos em relação ao horário do servidor, e recalcule o hash do corpo e a assinatura. Mantenha o idempotency_key de negócio ao tentar novamente a requisição original. |
+| bank-account-close-F12 | Corrigido (não correspondia ao código) | cURL request example | O exemplo usa credenciais USER compartilhadas. | O exemplo usa credenciais USER compartilhadas. Antes de executá-lo, substitua replace-with-account-number em body.json pelo mesmo número de conta de 1 a 32 dígitos usado em TARGET_ACCOUNT_NUMBER. Substitua replace-with-idempotency-key pela sua própria chave que não seja composta apenas por espaços em branco, com no máximo 128 bytes, e calcule o hash e a assinatura com base no arquivo resultante. |
+</Accordion>
+
+<RequestExample>
+```bash cURL
+cat > body.json <<'JSON'
+{
+  "account_number": "replace-with-account-number",
+  "reason": 1,
+  "idempotency_key": "replace-with-idempotency-key",
+  "auto_delete_active_pix_keys": false
+}
+JSON
+
+curl --request POST \
+  'https://ebanking-openapi-sandbox.pagsmile.com.br/v3/bank_account/close' \
+  --header 'Content-Type: application/json' \
+  --header "X-Client-ID: ${USER_AK}" \
+  --header "X-ISPB: ${TARGET_ISPB}" \
+  --header "X-Account-Number: ${TARGET_ACCOUNT_NUMBER}" \
+  --header "X-Timestamp: ${TIMESTAMP_MS}" \
+  --header "X-Nonce: ${NONCE}" \
+  --header "X-Content-Hash: ${BODY_SHA256}" \
+  --header "X-Signature: ${SIGNATURE}" \
+  --data-binary @body.json
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 Requisição bem-sucedida
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "operation": {
+      "operation_id": "closure_demo_001",
+      "ispb": "37753531",
+      "account_number": "00012345",
+      "account_status": 1,
+      "status": 1,
+      "current_step": "CHECK_ELIGIBILITY",
+      "reasons": [],
+      "updated_at": 1792713600000,
+      "checked_at": 0,
+      "next_action": 1,
+      "next_retry_at": 1792713600000,
+      "closed_at": 0,
+      "completed_at": 0
+    }
+  },
+  "time": 1792713600000
+}
+```
+
+```json 400 Falha na requisição ou validação
+{
+  "code": 400,
+  "message": "Invalid parameter",
+  "data": null,
+  "time": 1791792000000
+}
+```
+
+```json 500 Erro do sistema
+{
+  "code": 500,
+  "message": "System error, please try again later",
+  "data": null,
+  "time": 1791792000000
+}
+```
+</ResponseExample>
